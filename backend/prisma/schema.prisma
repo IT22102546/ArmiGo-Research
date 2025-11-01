@@ -1,0 +1,1236 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// USER MANAGEMENT
+// ================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  INTERNAL_TEACHER
+  EXTERNAL_TEACHER
+  INTERNAL_STUDENT
+  EXTERNAL_STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+// ================================
+// SUBJECT MANAGEMENT
+// ================================
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String?  @unique
+  description String?
+  category    String?
+  medium      String?  // Language medium: English, Sinhala, Tamil
+  credits     Int?     // Credit hours
+  duration    Int?     // Duration in minutes
+  teacherId   String?  // Reference to teacher
+  teacher     User?    @relation("SubjectTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  imageUrl    String?  // Subject image URL
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("subjects")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole
+  status    UserStatus @default(ACTIVE)
+
+  // Profile information
+  avatar      String?
+  phone       String?
+  dateOfBirth DateTime?
+  bio         String?
+
+  // Authentication tracking
+  emailVerified          Boolean   @default(false)
+  lastLoginAt            DateTime?
+  lastLogoutAt           DateTime?
+  passwordResetToken     String?
+  passwordResetExpiresAt DateTime?
+
+  // Face recognition for AI monitoring
+  faceEncodingData String? // Encrypted face encoding for verification
+  faceImageUrl     String? // Profile face image for verification
+
+  // Audit fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  refreshTokens         RefreshToken[]
+  teacherProfile        TeacherProfile?
+  studentProfile        StudentProfile?
+  createdClasses        Class[]              @relation("ClassTeacher")
+  teachingSubjects      Subject[]            @relation("SubjectTeacher")
+  enrollments           Enrollment[]
+  examAttempts          ExamAttempt[]
+  payments              Payment[]
+  notifications         Notification[]
+  hostedSessions        VideoSession[]       @relation("SessionHost")
+  sessionParticipations SessionParticipant[]
+  auditLogs             AuditLog[]
+
+  // Publications
+  publicationPurchases PublicationPurchase[] @relation("PublicationPurchases")
+  publicationReviews   PublicationReview[]   @relation("PublicationReviews")
+
+  // Mutual Transfer
+  transferRequests  TransferRequest[] @relation("TransferRequester")
+  receivedTransfers TransferRequest[] @relation("TransferReceiver")
+  sentMessages      TransferMessage[] @relation("TransferMessageSender")
+
+  // Timetable
+  timetableEntries  Timetable[]       @relation("TimetableTeacher")
+  timetableChanges  TimetableChange[] @relation("ChangeCreator")
+  newTeacherChanges TimetableChange[] @relation(name: "newTeacherId", fields: [], references: [])
+
+  // Attendance
+  attendanceRecords   Attendance[]        @relation("AttendanceUser")
+  attendanceSummaries AttendanceSummary[] @relation("AttendanceSummary")
+
+  // Wallet
+  wallet Wallet? @relation("UserWallet")
+
+  // Temporary Access
+  temporaryAccess TemporaryAccess[] @relation("TemporaryAccessUser")
+  grantedAccess   TemporaryAccess[] @relation("AccessGrantor")
+
+  // Ownership tracking
+  createdExams          Exam[]          @relation("ExamCreator")
+  createdPublications   Publication[]   @relation("PublicationCreator")
+  createdVideoSessions  VideoSession[]  @relation("VideoSessionCreator")
+
+  @@map("users")
+}
+
+// Refresh Token Management for Security
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  revokedAt DateTime?
+  
+  // Device tracking for security
+  deviceId   String?
+  ipAddress  String?
+  userAgent  String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model TeacherProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Teacher specific information
+  employeeId     String? @unique
+  department     String?
+  specialization String?
+  experience     Int? // Years of experience
+  qualifications String?
+
+  // Teaching permissions
+  canCreateExams      Boolean @default(true)
+  canMonitorExams     Boolean @default(true)
+  canManageClasses    Boolean @default(true)
+  maxStudentsPerClass Int?
+
+  // Mutual transfer related
+  isExternal        Boolean @default(false)
+  sourceInstitution String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("teacher_profiles")
+}
+
+model StudentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Student specific information
+  studentId     String? @unique
+  grade         String?
+  academicYear  String?
+  guardianName  String?
+  guardianPhone String?
+  guardianEmail String?
+
+  // Academic tracking
+  currentGPA   Float?
+  totalCredits Int?
+
+  // Mutual transfer related
+  isExternal        Boolean @default(false)
+  sourceInstitution String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("student_profiles")
+}
+
+// ================================
+// CLASS MANAGEMENT
+// ================================
+
+enum ClassStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Class {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  subject     String
+  grade       String?
+  status      ClassStatus @default(DRAFT)
+
+  // Scheduling
+  startDate DateTime
+  endDate   DateTime
+  schedule  String // JSON string for recurring schedule
+
+  // Class settings
+  maxStudents      Int?
+  isPublic         Boolean @default(true)
+  requiresApproval Boolean @default(false)
+
+  // Online class settings - LIVE CLASS MANAGEMENT
+  meetingLink  String?  // Video conference link
+  recordingUrl String?  // Recording URL
+  materials    String?  // JSON string for class materials array
+  isLive       Boolean  @default(false) // Whether class is currently live
+  startedAt    DateTime? // When class was started by teacher
+  endedAt      DateTime? // When class was ended by teacher
+
+  // Recurring schedule support
+  isRecurring  Boolean  @default(false) // Whether class repeats
+  recurrence   String?  // JSON: {pattern: 'WEEKLY', daysOfWeek: [1,3,5], endDate: '...'}
+
+  // Payment
+  fees   Float?   @default(0)
+  isPaid Boolean? @default(false)
+
+  // Additional metadata
+  metadata String? // JSON string for additional data
+
+  // Teacher relation
+  teacherId String
+  teacher   User   @relation("ClassTeacher", fields: [teacherId], references: [id])
+
+  // Audit fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  enrollments   Enrollment[]
+  exams         Exam[]
+  videoSessions VideoSession[]
+
+  @@map("classes")
+}
+
+enum EnrollmentStatus {
+  PENDING
+  APPROVED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Enrollment {
+  id        String           @id @default(cuid())
+  classId   String
+  class     Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentId String
+  student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status    EnrollmentStatus @default(PENDING)
+
+  // Enrollment tracking
+  enrolledAt  DateTime  @default(now())
+  completedAt DateTime?
+  progress    Float     @default(0) // 0-100 percentage
+
+  // Payment tracking
+  isPaid    Boolean  @default(false)
+  paymentId String?
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([classId, studentId])
+  @@index([createdAt])
+  @@index([status])
+  @@map("enrollments")
+}
+
+// ================================
+// EXAM MANAGEMENT
+// ================================
+
+enum ExamType {
+  MULTIPLE_CHOICE
+  ESSAY
+  MIXED
+  PRACTICAL
+  FULL_ONLINE // Two parts: Part 1 (MCQ/matching/fill-in auto-marked), Part 2 (subjective)
+  HALF_ONLINE_HALF_UPLOAD // Part 1 online (auto-marked), Part 2 upload answers
+  FULL_UPLOAD // Both parts upload answers (no online answering)
+}
+
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Exam {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  type        ExamType
+  status      ExamStatus @default(DRAFT)
+
+  // Exam settings
+  duration        Int // Duration in minutes
+  totalMarks      Int
+  passingMarks    Int
+  attemptsAllowed Int @default(1)
+
+  // Enhanced exam format settings
+  part1Marks Int? // Marks for auto-marked part (MCQ/matching/fill-in)
+  part2Marks Int? // Marks for subjective part
+
+  // File upload settings (for HALF_ONLINE_HALF_UPLOAD and FULL_UPLOAD)
+  allowFileUpload    Boolean  @default(false)
+  maxFileSize        Int? // Size in MB
+  allowedFileTypes   String[] // ["pdf", "docx", "jpg", "png"]
+  uploadInstructions String?
+
+  // Windowed access (optional for backward compatibility)
+  windowStart           DateTime? // Students can only access during this window
+  windowEnd             DateTime?
+  lateSubmissionAllowed Boolean   @default(false)
+  latePenaltyPercent    Float?
+
+  // Ranking settings
+  enableRanking Boolean  @default(false)
+  rankingLevels String[] // ["ISLAND", "DISTRICT", "ZONE"]
+
+  // AI Monitoring settings (EXCLUDED FROM IMPLEMENTATION)
+  aiMonitoringEnabled      Boolean @default(false)
+  faceVerificationRequired Boolean @default(false)
+  browseLockEnabled        Boolean @default(false)
+
+  // Scheduling
+  startTime DateTime
+  endTime   DateTime
+  timeZone  String?
+
+  // Class relation
+  classId String
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  // Creator tracking
+  createdById String?
+  creator     User?  @relation("ExamCreator", fields: [createdById], references: [id])
+  subject     String @default("General") // Redundant but useful for filtering (derived from class)
+
+  // Instructions and resources
+  instructions     String?
+  allowedResources String? // JSON array of allowed resources
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  questions ExamQuestion[]
+  attempts  ExamAttempt[]
+  rankings  ExamRanking[]
+
+  @@map("exams")
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  ESSAY
+  FILL_BLANK
+  MATCHING // For matching pairs (left items to right items)
+}
+
+model ExamQuestion {
+  id     String @id @default(cuid())
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  type          QuestionType
+  question      String
+  options       String? // JSON array for multiple choice options
+  correctAnswer String?
+  matchingPairs String? // JSON for matching questions: [{"left": "A", "right": "1"}, ...]
+  points        Int          @default(1)
+  order         Int
+
+  // Part assignment (Part 1 = auto-marked, Part 2 = subjective)
+  examPart Int @default(1) // 1 or 2
+
+  // Rich content support
+  imageUrl      String?
+  videoUrl      String?
+  attachmentUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  answers ExamAnswer[]
+
+  @@map("exam_questions")
+}
+
+enum AttemptStatus {
+  STARTED
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+  FLAGGED
+}
+
+model ExamAttempt {
+  id        String @id @default(cuid())
+  examId    String
+  exam      Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  status        AttemptStatus @default(STARTED)
+  attemptNumber Int
+
+  // Timing
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  timeSpent   Int? // Time spent in minutes
+
+  // Scoring
+  totalScore Float?
+  part1Score Float? // Auto-marked part score
+  part2Score Float? // Subjective part score (teacher corrected)
+  maxScore   Float
+  percentage Float?
+  passed     Boolean?
+
+  // File uploads (for HALF_ONLINE_HALF_UPLOAD and FULL_UPLOAD)
+  uploadedFiles String[] // Array of S3 URLs
+  uploadedAt    DateTime?
+
+  // Teacher correction workflow
+  correctedBy     String? // Teacher user ID
+  correctedAt     DateTime?
+  correctionNotes String?
+
+  // Ranking
+  islandRank   Int?
+  districtRank Int?
+  zoneRank     Int?
+
+  // AI Monitoring data (NOT IMPLEMENTED)
+  faceVerificationScore   Float?
+  suspiciousActivityCount Int     @default(0)
+  monitoringData          String? // JSON data from AI monitoring
+  flaggedReasons          String? // JSON array of flagged reasons
+
+  // Browser/Device information
+  browserInfo String?
+  deviceInfo  String?
+  ipAddress   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  answers ExamAnswer[]
+
+  @@unique([examId, studentId, attemptNumber])
+  @@index([examId, studentId])
+  @@index([submittedAt])
+  @@index([status])
+  @@map("exam_attempts")
+}
+
+model ExamAnswer {
+  id         String       @id @default(cuid())
+  attemptId  String
+  attempt    ExamAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId String
+  question   ExamQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  answer        String
+  isCorrect     Boolean?
+  pointsAwarded Float?
+
+  // Timing for individual questions
+  timeSpent  Int? // Time spent on this question in seconds
+  answeredAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([attemptId, questionId])
+  @@map("exam_answers")
+}
+
+enum RankingLevel {
+  ISLAND
+  DISTRICT
+  ZONE
+}
+
+model ExamRanking {
+  id     String @id @default(cuid())
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  studentId  String
+  score      Float
+  percentage Float
+
+  // Location info for ranking
+  district String?
+  zone     String?
+
+  // Rankings
+  islandRank   Int
+  districtRank Int?
+  zoneRank     Int?
+
+  // Ranking metadata
+  totalIsland   Int // Total students at island level
+  totalDistrict Int? // Total students in district
+  totalZone     Int? // Total students in zone
+
+  calculatedAt DateTime @default(now())
+
+  @@unique([examId, studentId])
+  @@index([examId, islandRank])
+  @@index([examId, district, districtRank])
+  @@index([examId, zone, zoneRank])
+  @@map("exam_rankings")
+}
+
+// ================================
+// PAYMENT MANAGEMENT
+// ================================
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  BANK_SLIP // Physical bank slip upload
+  DIGITAL_WALLET
+  TRACKER_PLUS
+  WALLET_CREDITS // Payment from wallet balance
+}
+
+model Payment {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  amount   Float
+  currency String        @default("LKR")
+  status   PaymentStatus @default(PENDING)
+  method   PaymentMethod
+
+  // Bank slip specific
+  bankSlipUrl             String? // S3 URL of uploaded bank slip
+  bankSlipVerifiedBy      String? // Admin who verified
+  bankSlipVerifiedAt      DateTime?
+  bankSlipRejectionReason String?
+
+  // Payment gateway data
+  gatewayTransactionId String?
+  gatewayResponse      String? // JSON response from payment gateway
+
+  // Wallet payment
+  walletTransactionId String? // Link to WalletTransaction
+
+  // Transaction details
+  description   String?
+  metadata      String? // JSON metadata
+  referenceType String? // CLASS, EXAM, PUBLICATION
+  referenceId   String? // ID of the referenced entity
+
+  // Refund information
+  refundAmount Float?
+  refundReason String?
+  refundedAt   DateTime?
+
+  // Audit
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  enrollments Enrollment[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status])
+  @@map("payments")
+}
+
+// ================================
+// VIDEO CONFERENCING
+// ================================
+
+enum SessionStatus {
+  SCHEDULED
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+model VideoSession {
+  id      String @id @default(cuid())
+  classId String
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  hostId  String
+  host    User   @relation("SessionHost", fields: [hostId], references: [id])
+
+  title       String
+  description String?
+  status      SessionStatus @default(SCHEDULED)
+
+  // Scheduling
+  scheduledStartTime DateTime?
+  durationMinutes    Int
+  startedAt          DateTime?
+  endedAt            DateTime?
+  actualDuration     Int? // Actual duration in minutes
+
+  // Jitsi configuration
+  jitsiRoomName String @unique
+  jitsiDomain   String @default("meet.jit.si")
+
+  // Teacher controls
+  muteAll       Boolean @default(false)
+  videoDisabled Boolean @default(false)
+  locked        Boolean @default(false) // Prevent new joins
+
+  // Recording
+  recordSession     Boolean   @default(false)
+  recordingUrl      String?
+  recordingDeleteAt DateTime? // Auto-delete after 30 days
+
+  // Participation tracking
+  maxParticipants     Int @default(50)
+  currentParticipants Int @default(0)
+
+  // Creator tracking (same as hostId but explicit for consistency)
+  createdById String?
+  creator     User?  @relation("VideoSessionCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  participants SessionParticipant[]
+
+  @@index([classId, status])
+  @@index([scheduledStartTime])
+  @@index([recordingDeleteAt])
+  @@map("video_sessions")
+}
+
+model SessionParticipant {
+  id        String       @id @default(cuid())
+  sessionId String
+  session   VideoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+  duration Int? // Duration in minutes
+
+  // Activity tracking
+  lastActivity DateTime @default(now())
+  muteCount    Int      @default(0)
+  unmuteCount  Int      @default(0)
+
+  @@unique([sessionId, userId])
+  @@index([sessionId, joinedAt])
+  @@map("session_participants")
+}
+
+// ================================
+// NOTIFICATIONS
+// ================================
+
+enum NotificationType {
+  SYSTEM
+  CLASS_UPDATE
+  EXAM_REMINDER
+  PAYMENT_UPDATE
+  GRADE_RELEASED
+  GENERAL
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type   NotificationType
+  status NotificationStatus @default(UNREAD)
+
+  title   String
+  message String
+  data    String? // JSON data for additional context
+
+  // Delivery tracking
+  sentAt DateTime?
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notifications")
+}
+
+// ================================
+// AUDIT & SECURITY
+// ================================
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  FAILED_LOGIN
+  PASSWORD_RESET
+  EXAM_START
+  EXAM_SUBMIT
+  PAYMENT_PROCESS
+}
+
+model AuditLog {
+  id     String  @id @default(cuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  action     AuditAction
+  resource   String // Table/entity name
+  resourceId String? // ID of the affected resource
+
+  // Request information
+  ipAddress  String?
+  userAgent  String?
+  endpoint   String?
+  httpMethod String?
+
+  // Change tracking
+  oldValues String? // JSON of old values
+  newValues String? // JSON of new values
+
+  // Additional context
+  metadata String? // JSON metadata
+
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// ================================
+// PUBLICATIONS MODULE
+// ================================
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Publication {
+  id               String  @id @default(cuid())
+  title            String
+  description      String
+  shortDescription String?
+  coverImage       String?
+  price            Float
+  discountPrice    Float?
+
+  // Content
+  fileUrl    String // Secure S3 URL
+  fileSize   Int? // Size in bytes
+  fileType   String? // PDF, EPUB, etc.
+  previewUrl String? // Preview/sample pages
+
+  // Categorization
+  grade     String[]
+  subject   String[]
+  medium    String? // Sinhala, Tamil, English
+  author    String?
+  publisher String?
+  isbn      String?
+
+  // Status
+  status      PublicationStatus @default(DRAFT)
+  publishedAt DateTime?
+
+  // Creator tracking
+  createdById String?
+  creator     User?  @relation("PublicationCreator", fields: [createdById], references: [id])
+
+  // Metrics
+  downloads Int    @default(0)
+  views     Int    @default(0)
+  rating    Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  purchases PublicationPurchase[]
+  reviews   PublicationReview[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("publications")
+}
+
+model PublicationPurchase {
+  id            String      @id @default(cuid())
+  publicationId String
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation("PublicationPurchases", fields: [userId], references: [id])
+
+  amount    Float
+  paymentId String?
+
+  // Access control
+  accessExpiry  DateTime? // Optional expiry for limited access
+  downloadCount Int       @default(0)
+  maxDownloads  Int? // Limit downloads if needed
+
+  purchasedAt    DateTime  @default(now())
+  lastAccessedAt DateTime?
+
+  @@unique([publicationId, userId])
+  @@map("publication_purchases")
+}
+
+model PublicationReview {
+  id            String      @id @default(cuid())
+  publicationId String
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation("PublicationReviews", fields: [userId], references: [id])
+
+  rating  Int // 1-5
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([publicationId, userId])
+  @@map("publication_reviews")
+}
+
+// ================================
+// MUTUAL TRANSFER MODULE
+// ================================
+
+enum TransferRequestStatus {
+  PENDING
+  VERIFIED
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+model TransferRequest {
+  id       String @id @default(cuid())
+  uniqueId String @unique // Public-facing unique ID
+
+  // Requester information
+  requesterId     String
+  requester       User   @relation("TransferRequester", fields: [requesterId], references: [id])
+  registrationId  String
+  currentSchool   String
+  currentDistrict String
+  currentZone     String
+  fromZone        String
+
+  // Desired transfer details
+  toZones String[] // Multiple preferred zones
+  subject String
+  medium  String // Sinhala, Tamil, English
+  level   String // A/L, O/L
+
+  // Receiver (if matched)
+  receiverId String?
+  receiver   User?   @relation("TransferReceiver", fields: [receiverId], references: [id])
+
+  // Status and verification
+  status            TransferRequestStatus @default(PENDING)
+  verified          Boolean               @default(false)
+  verifiedBy        String?
+  verifiedAt        DateTime?
+  verificationNotes String?
+
+  // Visibility control (progressive disclosure)
+  requesterVisible Boolean @default(false) // Full details visible to receiver
+  receiverVisible  Boolean @default(false) // Full details visible to requester after accept
+
+  // Additional details
+  notes       String?
+  attachments String[] // Document URLs
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  // Relations
+  messages TransferMessage[]
+
+  @@index([status, verified])
+  @@index([fromZone, toZones])
+  @@map("transfer_requests")
+}
+
+model TransferMessage {
+  id                String          @id @default(cuid())
+  transferRequestId String
+  request           TransferRequest @relation(fields: [transferRequestId], references: [id], onDelete: Cascade)
+  senderId          String
+  sender            User            @relation("TransferMessageSender", fields: [senderId], references: [id])
+
+  content String
+  read    Boolean   @default(false)
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("transfer_messages")
+}
+
+// ================================
+// TIMETABLE & SCHEDULING
+// ================================
+
+model Timetable {
+  id String @id @default(cuid())
+
+  // Class details
+  grade   String
+  subject String
+  medium  String?
+
+  // Teacher
+  teacherId String
+  teacher   User   @relation("TimetableTeacher", fields: [teacherId], references: [id])
+
+  // Class link/room
+  classLink String // Video conference URL or room ID
+  classId   String? // Optional link to Class model
+
+  // Scheduling
+  dayOfWeek Int // 0-6 (Sunday-Saturday)
+  startTime String // "09:00" format
+  endTime   String // "10:00" format
+
+  // Validity period (1 year)
+  validFrom  DateTime
+  validUntil DateTime
+
+  // Status
+  recurring Boolean @default(true)
+  active    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  changes TimetableChange[]
+
+  @@index([grade, dayOfWeek])
+  @@index([teacherId])
+  @@map("timetable")
+}
+
+enum ChangeType {
+  CANCEL
+  SUBJECT_CHANGE
+  TEACHER_CHANGE
+  TIME_CHANGE
+  ROOM_CHANGE
+}
+
+model TimetableChange {
+  id          String    @id @default(cuid())
+  timetableId String
+  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+
+  changeType ChangeType
+  changeDate DateTime // Specific date for this change
+
+  // New values (based on change type)
+  newSubject   String?
+  newTeacherId String?
+  newTeacher   User?   @relation(name: "newTeacherId", fields: [newTeacherId], references: [id])
+  newStartTime String?
+  newEndTime   String?
+  newClassLink String?
+
+  reason           String?
+  notificationSent Boolean @default(false)
+
+  createdBy String
+  creator   User     @relation("ChangeCreator", fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([changeDate])
+  @@map("timetable_changes")
+}
+
+// ================================
+// ATTENDANCE TRACKING
+// ================================
+
+enum AttendanceType {
+  CLASS
+  EXAM
+  MEETING
+}
+
+model Attendance {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("AttendanceUser", fields: [userId], references: [id])
+
+  date DateTime
+  type AttendanceType @default(CLASS)
+
+  // Reference to class/exam/session
+  classId   String?
+  examId    String?
+  sessionId String? // Video session ID
+
+  // Attendance details
+  present   Boolean   @default(false)
+  joinTime  DateTime?
+  leaveTime DateTime?
+  duration  Int? // Minutes
+
+  // Additional info
+  notes    String?
+  markedBy String? // Admin/teacher who marked if manual
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date, classId, type])
+  @@index([userId, date])
+  @@index([date])
+  @@index([classId])
+  @@map("attendance")
+}
+
+model AttendanceSummary {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("AttendanceSummary", fields: [userId], references: [id])
+
+  month Int // 1-12
+  year  Int
+
+  totalClasses Int
+  attended     Int
+  percentage   Float
+
+  // Breakdown by type
+  classesTotal    Int @default(0)
+  classesAttended Int @default(0)
+  examsTotal      Int @default(0)
+  examsAttended   Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, month, year])
+  @@map("attendance_summary")
+}
+
+// ================================
+// WALLET & CREDITS
+// ================================
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+  REFUND
+}
+
+model Wallet {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation("UserWallet", fields: [userId], references: [id])
+
+  balance      Float @default(0)
+  totalCredits Float @default(0) // Lifetime credits added
+  totalDebits  Float @default(0) // Lifetime credits spent
+
+  // Limits
+  maxBalance Float?
+  minBalance Float  @default(0)
+
+  // Status
+  frozen       Boolean   @default(false)
+  frozenReason String?
+  frozenAt     DateTime?
+
+  lastTopUp DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id       String @id @default(cuid())
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  amount        Float
+  type          TransactionType
+  balanceBefore Float
+  balanceAfter  Float
+
+  // Transaction details
+  description   String
+  reference     String? // Payment ID, Exam ID, Publication ID, etc.
+  referenceType String? // PAYMENT, EXAM, PUBLICATION, REFUND
+
+  // Metadata
+  metadata String? // JSON for additional data
+
+  createdAt DateTime @default(now())
+
+  @@index([walletId, createdAt])
+  @@map("wallet_transactions")
+}
+
+// ================================
+// TEMPORARY ACCESS MANAGEMENT
+// ================================
+
+model TemporaryAccess {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("TemporaryAccessUser", fields: [userId], references: [id])
+
+  grantedBy String
+  grantor   User   @relation("AccessGrantor", fields: [grantedBy], references: [id])
+
+  expiresAt DateTime
+  reason    String?
+  active    Boolean  @default(true)
+
+  // Scope of access
+  accessType String? // ALL, EXAMS_ONLY, CLASSES_ONLY
+
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([userId, expiresAt])
+  @@map("temporary_access")
+}
+
+// ================================
+// SYSTEM CONFIGURATION
+// ================================
+
+model SystemConfig {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  value       String
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
+}
