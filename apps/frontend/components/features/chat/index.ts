@@ -1,2 +1,0 @@
-﻿// chat feature components
-export {};

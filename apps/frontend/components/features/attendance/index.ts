@@ -1,2 +1,0 @@
-﻿// attendance feature components
-export {};

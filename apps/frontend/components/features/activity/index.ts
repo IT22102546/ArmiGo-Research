@@ -1,2 +1,0 @@
-﻿// activity feature components
-export {};

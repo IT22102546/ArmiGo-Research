@@ -1,2 +1,0 @@
-﻿// admin feature components
-export {};
