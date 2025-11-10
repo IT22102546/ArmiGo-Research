@@ -1,146 +1,237 @@
 # Dependencies
 node_modules/
-*/node_modules/
-apps/*/node_modules/
-packages/*/node_modules/
-libs/*/node_modules/
-.pnpm-store/
-
-# Production builds
-dist/
-build/
-*/dist/
-*/build/
-apps/*/dist/
-apps/*/build/
-packages/*/dist/
-packages/*/build/
-
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
-*.log
-logs/
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Dependency directories
-.jest/
-.nest/
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env.test
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# Next.js build output
+# Build outputs
+dist/
+build/
 .next/
 out/
+*.tsbuildinfo
+.turbo/
 
-# Nuxt.js build / generate output
-.nuxt
-dist/
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
 
-# Gatsby files
-.cache/
-public
+# Keep example env files
+!.env.example
+!.env.development.example
+!.env.docker.example
+!**/.env.example
 
-# Vuepress build output
-.vuepress/dist
-
-# Serverless directories
-.serverless/
-
-# FuseBox cache
-.fusebox/
-
-# DynamoDB Local files
-.dynamodb/
-
-# TernJS port file
-.tern-port
-
-# Stores VSCode versions used for testing VSCode extensions
-.vscode-test
-
-# OS generated files
+# OS files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-
-# IDE and editor files
-.vscode/
-.idea/
 *.swp
 *.swo
 *~
 
-# Temporary files
-*.tmp
-*.temp
+# IDE
+# .vscode/settings.json (keep for team performance settings)
+.vscode/launch.json
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
 
-# Prisma
-prisma/migrations/
-!prisma/migrations/.gitkeep
-prisma/dev.db
-prisma/dev.db-journal
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
 
-# Redis
-dump.rdb
+# Docker
+docker-compose.override.yml
+.docker/
 
-# Backup files
-*.backup
+# Prisma
+# Keep migrations folder for version control
+# prisma/migrations/
+# !prisma/migrations/.gitkeep
+
+# Temporary files
+tmp/
+temp/
+.cache/
+*.tmp
+
+# Mobile specific (React Native)
+apps/mobile/android/app/build/
+apps/mobile/android/.gradle/
+apps/mobile/ios/Pods/
+apps/mobile/ios/build/
+apps/mobile/.expo/
+apps/mobile/.expo-shared/
+apps/mobile/android/app/google-services.json
+apps/mobile/ios/GoogleService-Info.plist
+
+# Admin/Web specific (Next.js)
+apps/admin/.next/
+apps/admin/out/
+apps/web/.next/
+apps/web/out/
+
+# Backend specific (NestJS)
+apps/backend/dist/
+apps/backend/uploads/
+apps/backend/*.log
+
+# Facial Recognition (Python/FastAPI)
+apps/facial_recognition_system/venv/
+apps/facial_recognition_system/__pycache__/
+apps/facial_recognition_system/**/__pycache__/
+apps/facial_recognition_system/**/*.pyc
+apps/facial_recognition_system/**/*.pyo
+apps/facial_recognition_system/**/*.pyd
+apps/facial_recognition_system/.pytest_cache/
+apps/facial_recognition_system/face_images/
+apps/facial_recognition_system/**/*.egg-info/
+
+# Package manager
+
+# --- Universal ignores for monorepo ---
+**/venv/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/node_modules/
+**/dist/
+**/build/
+**/.next/
+**/.turbo/
+**/.DS_Store
+**/.env
+**/.env.*
+**/.coverage
+**/.mypy_cache/
+**/.idea/
+**/.vscode/
+**/.pnp.*
+**/.yarn/
+**/.pnpm-store/
+**/.git/
+.pnpm-store/
+.yarn/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+# Additional aggressive ignores
+**/.cache/
+**/.bin/
+**/.modules.yaml
+**/node_modules/@types/
+**/node_modules/@turbo/
+**/coverage/
+**/out/
+**/*.egg-info/
+**/*.lock
+**/*.bak
+**/*.old
+**/*.orig
+**/*.log
+**/*.tsbuildinfo
+**/logs/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+.pnpm-store/
+.yarn/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# TypeScript
+*.tsbuildinfo
+.tsbuildinfo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Backups
 *.bak
+*.backup
+*.old
+*.orig
+
+# Temporary files
+*.temp
+*.tmp
+**/*.temp
+**/*.tmp
+temp.sql
+**/*.sql.bak
+
+# Secrets
+secrets.json
+*.pem
+*.key
+*.cert
+*.crt
+
+# CI/CD
+.github/workflows/*.secrets
+
+# Documentation builds
+docs/.vitepress/dist
+docs/.vitepress/cache
+
+# Testing
+.jest/
+junit.xml
+test-results/
+
+# Monitoring
+.sentryclirc
+
+# Other
+.changeset/*.md
+!.changeset/README.md
+
+apps/uploads/
+
+apps/backend/Dockerfile
+apps/frontend/Dockerfile
+docker-compose.yml

@@ -1,0 +1,63 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # LearnApp Backend API
+  - job_name: "learnup-backend"
+    static_configs:
+      - targets: ["backend:5000"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  # LearnApp Frontend
+  - job_name: "learnup-frontend"
+    static_configs:
+      - targets: ["frontend:3000"]
+    metrics_path: "/api/metrics"
+    scrape_interval: 30s
+
+  # PostgreSQL Database
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres:5432"]
+    params:
+      collect[]:
+        - "pg_stat_database"
+        - "pg_stat_bgwriter"
+        - "pg_locks"
+
+  # Redis Cache
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+
+  # Nginx Reverse Proxy
+  - job_name: "nginx"
+    static_configs:
+      - targets: ["nginx:80"]
+    metrics_path: "/nginx_status"
+
+  # Node Exporter (System metrics)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # Docker containers
+  - job_name: "docker"
+    static_configs:
+      - targets: ["docker-exporter:9417"]
