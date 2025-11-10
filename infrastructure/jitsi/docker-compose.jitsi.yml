@@ -1,0 +1,396 @@
+# =============================================================================
+# Jitsi Meet Self-Hosted Docker Compose Configuration
+# =============================================================================
+# This file contains all the services needed to run a self-hosted Jitsi Meet
+# instance. It should be run alongside the main docker-compose.yml.
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f infrastructure/jitsi/docker-compose.jitsi.yml up -d
+#
+# Or use the helper script:
+#   ./scripts/start-jitsi.sh
+# =============================================================================
+
+services:
+  # ==========================================================================
+  # Jitsi Meet Web Interface
+  # ==========================================================================
+  # The web server that serves the Jitsi Meet application
+  jitsi-web:
+    image: jitsi/web:stable-9823
+    container_name: learnup-jitsi-web
+    restart: unless-stopped
+    ports:
+      - "${JITSI_HTTP_PORT:-8443}:80"
+      - "${JITSI_HTTPS_PORT:-8444}:443"
+    volumes:
+      - ${JITSI_CONFIG_PATH:-./infrastructure/jitsi/config}/web:/config:Z
+      - ${JITSI_CONFIG_PATH:-./infrastructure/jitsi/config}/web/crontabs:/var/spool/cron/crontabs:Z
+      - ${JITSI_CONFIG_PATH:-./infrastructure/jitsi/config}/transcripts:/usr/share/jitsi-meet/transcripts:Z
+    environment:
+      - AMPLITUDE_ID
+      - ANALYTICS_SCRIPT_URLS
+      - ANALYTICS_WHITELISTED_EVENTS
+      - AUDIO_QUALITY_OPUS_BITRATE
+      - BRANDING_DATA_URL
+      - CALLSTATS_CUSTOM_SCRIPT_URL
+      - CALLSTATS_ID
+      - CALLSTATS_SECRET
+      - CHROME_EXTENSION_BANNER_JSON
+      - COLIBRI_WEBSOCKET_REGEX
+      - CONFIG_EXTERNAL_CONNECT
+      - DEFAULT_LANGUAGE=en
+      - DEPLOYMENTINFO_ENVIRONMENT
+      - DEPLOYMENTINFO_ENVIRONMENT_TYPE
+      - DEPLOYMENTINFO_REGION
+      - DEPLOYMENTINFO_SHARD
+      - DEPLOYMENTINFO_USERREGION
+      - DESKTOP_SHARING_FRAMERATE_MIN
+      - DESKTOP_SHARING_FRAMERATE_MAX
+      - DIALIN_NUMBERS_URL
+      - DIALOUT_AUTH_URL
+      - DIALOUT_CODES_URL
+      - DISABLE_AUDIO_LEVELS=${DISABLE_AUDIO_LEVELS:-false}
+      - DISABLE_DEEP_LINKING=${DISABLE_DEEP_LINKING:-false}
+      - DISABLE_GRANT_MODERATOR
+      - DISABLE_HTTPS=${DISABLE_HTTPS:-true}
+      - DISABLE_KICKOUT
+      - DISABLE_LOCAL_RECORDING
+      - DISABLE_POLLS
+      - DISABLE_PRIVATE_CHAT
+      - DISABLE_PROFILE
+      - DISABLE_REACTIONS
+      - DISABLE_REMOTE_VIDEO_MENU
+      - DISABLE_RINGING
+      - DISABLE_TILE_ENLARGE
+      - DISABLE_TRANSCRIPTION_SUBTITLES
+      - DROPBOX_APPKEY
+      - DROPBOX_REDIRECT_URI
+      - DYNAMIC_BRANDING_URL
+      - ENABLE_AUDIO_PROCESSING
+      - ENABLE_AUTH=${ENABLE_AUTH:-false}
+      - ENABLE_BREAKOUT_ROOMS=${ENABLE_BREAKOUT_ROOMS:-true}
+      - ENABLE_CALENDAR
+      - ENABLE_COLIBRI_WEBSOCKET
+      - ENABLE_E2EPING
+      - ENABLE_FILE_RECORDING_SHARING
+      - ENABLE_FLOC
+      - ENABLE_GUESTS=${ENABLE_GUESTS:-true}
+      - ENABLE_HSTS
+      - ENABLE_HTTP_REDIRECT
+      - ENABLE_IPV6
+      - ENABLE_JAAS_COMPONENTS
+      - ENABLE_LIPSYNC
+      - ENABLE_LIVESTREAMING=${ENABLE_LIVESTREAMING:-false}
+      - ENABLE_LOBBY=${ENABLE_LOBBY:-true}
+      - ENABLE_LOCAL_RECORDING_NOTIFY_ALL_PARTICIPANTS
+      - ENABLE_LOCAL_RECORDING_SELF_START
+      - ENABLE_NOISY_MIC_DETECTION=${ENABLE_NOISY_MIC_DETECTION:-true}
+      - ENABLE_NO_AUDIO_DETECTION=${ENABLE_NO_AUDIO_DETECTION:-true}
+      - ENABLE_OPUS_RED
+      - ENABLE_P2P=${ENABLE_P2P:-true}
+      - ENABLE_OAAUTH
+      - ENABLE_PREJOIN_PAGE=${ENABLE_PREJOIN_PAGE:-true}
+      - ENABLE_REACTIONS=${ENABLE_REACTIONS:-true}
+      - ENABLE_RECORDING=${ENABLE_RECORDING:-false}
+      - ENABLE_REMB=${ENABLE_REMB:-true}
+      - ENABLE_REQUIRE_DISPLAY_NAME=${ENABLE_REQUIRE_DISPLAY_NAME:-false}
+      - ENABLE_SIMULCAST=${ENABLE_SIMULCAST:-true}
+      - ENABLE_STATS_ID
+      - ENABLE_STEREO
+      - ENABLE_SUBDOMAINS
+      - ENABLE_TALK_WHILE_MUTED=${ENABLE_TALK_WHILE_MUTED:-true}
+      - ENABLE_TCC=${ENABLE_TCC:-true}
+      - ENABLE_TRANSCRIPTIONS
+      - ENABLE_WELCOME_PAGE=${ENABLE_WELCOME_PAGE:-true}
+      - ENABLE_XMPP_WEBSOCKET=${ENABLE_XMPP_WEBSOCKET:-true}
+      - ETHERPAD_PUBLIC_URL
+      - ETHERPAD_URL_BASE
+      - GOOGLE_ANALYTICS_ID
+      - GOOGLE_API_APP_CLIENT_ID
+      - HIDE_PREMEETING_BUTTONS
+      - HIDE_PREJOIN_DISPLAY_NAME
+      - HIDE_PREJOIN_EXTRA_BUTTONS
+      - INVITE_SERVICE_URL
+      - JICOFO_AUTH_USER=${JICOFO_AUTH_USER:-focus}
+      - JIBRI_BREWERY_MUC
+      - JIBRI_PENDING_TIMEOUT
+      - JIBRI_XMPP_USER
+      - JIGASI_BREWERY_MUC
+      - JIGASI_SIP_JIBRI_BREWERY_MUC
+      - JIGASI_XMPP_USER
+      - JVB_BREWERY_MUC
+      - JVB_XMPP_USER
+      - MATOMO_ENDPOINT
+      - MATOMO_SITE_ID
+      - MICROSOFT_API_APP_CLIENT_ID
+      - NGINX_RESOLVER
+      - NGINX_WORKER_CONNECTIONS
+      - NGINX_WORKER_PROCESSES
+      - PEOPLE_SEARCH_URL
+      - PUBLIC_URL=${PUBLIC_URL:-https://localhost:8444}
+      - RESOLUTION=${RESOLUTION:-720}
+      - RESOLUTION_MIN
+      - RESOLUTION_WIDTH
+      - RESOLUTION_WIDTH_MIN
+      - START_AUDIO_MUTED=${START_AUDIO_MUTED:-10}
+      - START_VIDEO_MUTED=${START_VIDEO_MUTED:-10}
+      - START_WITH_AUDIO_MUTED
+      - START_WITH_VIDEO_MUTED
+      - TESTING_CAP_SCREENSHARE_BITRATE
+      - TESTING_OCTOR_REGION
+      - TZ=${TZ:-UTC}
+      - TOKEN_AUTH_URL
+      - VIDEO_QUALITY_BITRATE_H264_HIGH
+      - VIDEO_QUALITY_BITRATE_H264_LOW
+      - VIDEO_QUALITY_BITRATE_H264_STANDARD
+      - VIDEO_QUALITY_BITRATE_VP8_HIGH
+      - VIDEO_QUALITY_BITRATE_VP8_LOW
+      - VIDEO_QUALITY_BITRATE_VP8_STANDARD
+      - VIDEO_QUALITY_BITRATE_VP9_HIGH
+      - VIDEO_QUALITY_BITRATE_VP9_LOW
+      - VIDEO_QUALITY_BITRATE_VP9_STANDARD
+      - VIDEO_QUALITY_ENFORCE_PREFERRED_CODEC
+      - VIDEO_QUALITY_PREFERRED_CODEC
+      - VIDEOQUALITY_BITRATE_H264_HIGH
+      - VIDEOQUALITY_BITRATE_H264_LOW
+      - VIDEOQUALITY_BITRATE_H264_STANDARD
+      - VIDEOQUALITY_BITRATE_VP8_HIGH
+      - VIDEOQUALITY_BITRATE_VP8_LOW
+      - VIDEOQUALITY_BITRATE_VP8_STANDARD
+      - VIDEOQUALITY_BITRATE_VP9_HIGH
+      - VIDEOQUALITY_BITRATE_VP9_LOW
+      - VIDEOQUALITY_BITRATE_VP9_STANDARD
+      - VIDEOQUALITY_ENFORCE_PREFERRED_CODEC
+      - VIDEOQUALITY_PREFERRED_CODEC
+      - WHITEBOARD_COLLAB_SERVER_PUBLIC_URL
+      - WHITEBOARD_ENABLED
+      - XMPP_AUTH_DOMAIN
+      - XMPP_BOSH_URL_BASE=http://jitsi-xmpp:5280
+      - XMPP_DOMAIN=${XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_GUEST_DOMAIN
+      - XMPP_MUC_DOMAIN
+      - XMPP_RECORDER_DOMAIN
+    networks:
+      learnup-network:
+        aliases:
+          - ${XMPP_DOMAIN:-meet.jitsi}
+
+  # ==========================================================================
+  # Prosody XMPP Server
+  # ==========================================================================
+  # Handles all the XMPP messaging for Jitsi components
+  jitsi-xmpp:
+    image: jitsi/prosody:stable-9823
+    container_name: learnup-jitsi-xmpp
+    restart: unless-stopped
+    expose:
+      - "5222"
+      - "5269"
+      - "5347"
+      - "5280"
+    volumes:
+      - ${JITSI_CONFIG_PATH:-./infrastructure/jitsi/config}/prosody/config:/config:Z
+      - ${JITSI_CONFIG_PATH:-./infrastructure/jitsi/config}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
+    environment:
+      - AUTH_TYPE=${AUTH_TYPE:-internal}
+      - DISABLE_POLLS
+      - ENABLE_AUTH=${ENABLE_AUTH:-false}
+      - ENABLE_AV_MODERATION
+      - ENABLE_BREAKOUT_ROOMS=${ENABLE_BREAKOUT_ROOMS:-true}
+      - ENABLE_END_CONFERENCE
+      - ENABLE_GUESTS=${ENABLE_GUESTS:-true}
+      - ENABLE_IPV6
+      - ENABLE_LOBBY=${ENABLE_LOBBY:-true}
+      - ENABLE_RECORDING=${ENABLE_RECORDING:-false}
+      - ENABLE_XMPP_WEBSOCKET=${ENABLE_XMPP_WEBSOCKET:-true}
+      - GLOBAL_CONFIG
+      - GLOBAL_MODULES
+      - JIBRI_RECORDER_PASSWORD
+      - JIBRI_RECORDER_USER
+      - JIBRI_XMPP_PASSWORD
+      - JIBRI_XMPP_USER
+      - JICOFO_AUTH_PASSWORD=${JICOFO_AUTH_PASSWORD:-changeme}
+      - JICOFO_AUTH_USER=${JICOFO_AUTH_USER:-focus}
+      - JICOFO_COMPONENT_SECRET=${JICOFO_COMPONENT_SECRET:-changeme}
+      - JIGASI_XMPP_PASSWORD
+      - JIGASI_XMPP_USER
+      - JVB_AUTH_PASSWORD=${JVB_AUTH_PASSWORD:-changeme}
+      - JVB_AUTH_USER=${JVB_AUTH_USER:-jvb}
+      - JWT_ACCEPTED_AUDIENCES
+      - JWT_ACCEPTED_ISSUERS
+      - JWT_ALLOW_EMPTY
+      - JWT_APP_ID
+      - JWT_APP_SECRET
+      - JWT_ASAP_KEYSERVER
+      - JWT_TOKEN_AUTH_MODULE
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LDAP_AUTH_METHOD
+      - LDAP_BASE
+      - LDAP_BINDDN
+      - LDAP_BINDPW
+      - LDAP_FILTER
+      - LDAP_START_TLS
+      - LDAP_TLS_CACERT_DIR
+      - LDAP_TLS_CACERT_FILE
+      - LDAP_TLS_CHECK_PEER
+      - LDAP_TLS_CIPHERS
+      - LDAP_URL
+      - LDAP_USE_TLS
+      - LDAP_VERSION
+      - MATRIX_UVS_AUTH_TOKEN
+      - MATRIX_UVS_ISSUER
+      - MATRIX_UVS_SYNC_POWER_LEVELS
+      - MATRIX_UVS_URL
+      - PUBLIC_URL=${PUBLIC_URL:-https://localhost:8444}
+      - OAUTHAUTH_ENABLED
+      - OAUTHAUTH_ISSUER_URL
+      - OAUTHAUTH_CLIENT_ID
+      - TURN_CREDENTIALS
+      - TURN_HOST
+      - TURN_PORT
+      - TURNS_HOST
+      - TURNS_PORT
+      - TURN_TRANSPORT
+      - TZ=${TZ:-UTC}
+      - OAUTHAUTH_ENABLED
+      - OAUTHAUTH_ISSUER_URL
+      - OAUTHAUTH_CLIENT_ID
+      - XMPP_CROSS_DOMAIN
+      - XMPP_DOMAIN=${XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_GUEST_DOMAIN=${XMPP_GUEST_DOMAIN:-guest.meet.jitsi}
+      - XMPP_INTERNAL_MUC_DOMAIN=${XMPP_INTERNAL_MUC_DOMAIN:-internal-muc.meet.jitsi}
+      - XMPP_INTERNAL_MUC_MODULES
+      - XMPP_MODULES
+      - XMPP_MUC_DOMAIN=${XMPP_MUC_DOMAIN:-muc.meet.jitsi}
+      - XMPP_MUC_MODULES
+      - XMPP_RECORDER_DOMAIN=${XMPP_RECORDER_DOMAIN:-recorder.meet.jitsi}
+    networks:
+      learnup-network:
+        aliases:
+          - ${XMPP_DOMAIN:-meet.jitsi}
+
+  # ==========================================================================
+  # Jicofo - Jitsi Conference Focus
+  # ==========================================================================
+  # Manages conference sessions and coordinates between participants
+  jitsi-jicofo:
+    image: jitsi/jicofo:stable-9823
+    container_name: learnup-jitsi-jicofo
+    restart: unless-stopped
+    volumes:
+      - ${JITSI_CONFIG_PATH:-./infrastructure/jitsi/config}/jicofo:/config:Z
+    environment:
+      - AUTH_TYPE=${AUTH_TYPE:-internal}
+      - BRIDGE_AVG_PARTICIPANT_STRESS
+      - BRIDGE_STRESS_THRESHOLD
+      - ENABLE_AUTH=${ENABLE_AUTH:-false}
+      - ENABLE_AUTO_LOGIN
+      - ENABLE_AUTO_OWNER
+      - ENABLE_CODEC_H264
+      - ENABLE_CODEC_VP8
+      - ENABLE_CODEC_VP9=${ENABLE_CODEC_VP9:-true}
+      - ENABLE_OCTO
+      - ENABLE_OCTO_SCTP
+      - ENABLE_RECORDING=${ENABLE_RECORDING:-false}
+      - ENABLE_OAUTHAUTH
+      - ENABLE_SCTP
+      - JICOFO_AUTH_PASSWORD=${JICOFO_AUTH_PASSWORD:-changeme}
+      - JICOFO_AUTH_USER=${JICOFO_AUTH_USER:-focus}
+      - JICOFO_COMPONENT_SECRET=${JICOFO_COMPONENT_SECRET:-changeme}
+      - JICOFO_ENABLE_BRIDGE_HEALTH_CHECKS
+      - JICOFO_CONF_INITIAL_PARTICIPANT_WAIT_TIMEOUT
+      - JICOFO_CONF_SINGLE_PARTICIPANT_TIMEOUT
+      - JICOFO_ENABLE_HEALTH_CHECKS
+      - JICOFO_MAX_MEMORY
+      - JICOFO_OAUTHAUTH_AUDIENCE
+      - JICOFO_SHORT_ID
+      - JIBRI_BREWERY_MUC
+      - JIBRI_REQUEST_RETRIES
+      - JIBRI_PENDING_TIMEOUT
+      - JIGASI_BREWERY_MUC
+      - JIGASI_SIP_JIBRI_BREWERY_MUC
+      - JVB_BREWERY_MUC=${JVB_BREWERY_MUC:-jvbbrewery@internal-muc.meet.jitsi}
+      - MAX_BRIDGE_PARTICIPANTS
+      - OAUTHAUTH_AUDIENCE
+      - OAUTHAUTH_ENABLED
+      - OAUTHAUTH_ISSUER_URL
+      - OAUTHAUTH_CLIENT_ID
+      - OAUTHAUTH_CLIENT_SECRET
+      - TZ=${TZ:-UTC}
+      - OAUTHAUTH_ENABLED
+      - OAUTHAUTH_ISSUER_URL
+      - OAUTHAUTH_CLIENT_ID
+      - OAUTHAUTH_CLIENT_SECRET
+      - XMPP_DOMAIN=${XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_INTERNAL_MUC_DOMAIN=${XMPP_INTERNAL_MUC_DOMAIN:-internal-muc.meet.jitsi}
+      - XMPP_MUC_DOMAIN=${XMPP_MUC_DOMAIN:-muc.meet.jitsi}
+      - XMPP_RECORDER_DOMAIN=${XMPP_RECORDER_DOMAIN:-recorder.meet.jitsi}
+      - XMPP_SERVER=jitsi-xmpp
+    depends_on:
+      - jitsi-xmpp
+    networks:
+      - learnup-network
+
+  # ==========================================================================
+  # JVB - Jitsi Video Bridge
+  # ==========================================================================
+  # Handles all video routing and WebRTC connections
+  jitsi-jvb:
+    image: jitsi/jvb:stable-9823
+    container_name: learnup-jitsi-jvb
+    restart: unless-stopped
+    ports:
+      - "${JVB_PORT:-10000}:${JVB_PORT:-10000}/udp"
+      - "${JVB_COLIBRI_PORT:-9090}:9090"
+    volumes:
+      - ${JITSI_CONFIG_PATH:-./infrastructure/jitsi/config}/jvb:/config:Z
+    environment:
+      - DOCKER_HOST_ADDRESS=${DOCKER_HOST_ADDRESS:-127.0.0.1}
+      - ENABLE_COLIBRI_WEBSOCKET=${ENABLE_COLIBRI_WEBSOCKET:-true}
+      - ENABLE_MULTI_STREAM
+      - ENABLE_OAUTHAUTH
+      - ENABLE_OCTO
+      - OAUTHAUTH_ENABLED
+      - OAUTHAUTH_ISSUER_URL
+      - OAUTHAUTH_CLIENT_ID
+      - OAUTHAUTH_CLIENT_SECRET
+      - JVB_AUTH_PASSWORD=${JVB_AUTH_PASSWORD:-changeme}
+      - JVB_AUTH_USER=${JVB_AUTH_USER:-jvb}
+      - JVB_BREWERY_MUC=${JVB_BREWERY_MUC:-jvbbrewery@internal-muc.meet.jitsi}
+      - JVB_DISABLE_STUN
+      - JVB_PORT=${JVB_PORT:-10000}
+      - JVB_MUC_NICKNAME
+      - JVB_OAUTHAUTH_AUDIENCE
+      - JVB_STUN_SERVERS=${JVB_STUN_SERVERS:-meet-jit-si-turnrelay.jitsi.net:443}
+      - JVB_OCTO_BIND_ADDRESS
+      - JVB_OCTO_BIND_PORT
+      - JVB_OCTO_RELAY_ID
+      - JVB_OCTO_REGION
+      - JVB_WS_DOMAIN
+      - JVB_WS_SERVER_ID
+      - PUBLIC_URL=${PUBLIC_URL:-https://localhost:8444}
+      - OAUTHAUTH_ENABLED
+      - OAUTHAUTH_ISSUER_URL
+      - OAUTHAUTH_CLIENT_ID
+      - OAUTHAUTH_CLIENT_SECRET
+      - OAUTHAUTH_AUDIENCE
+      - OAUTHAUTH_ENABLED
+      - OAUTHAUTH_ISSUER_URL
+      - OAUTHAUTH_CLIENT_ID
+      - OAUTHAUTH_CLIENT_SECRET
+      - OAUTHAUTH_AUDIENCE
+      - TZ=${TZ:-UTC}
+      - XMPP_AUTH_DOMAIN=${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_INTERNAL_MUC_DOMAIN=${XMPP_INTERNAL_MUC_DOMAIN:-internal-muc.meet.jitsi}
+      - XMPP_SERVER=jitsi-xmpp
+    depends_on:
+      - jitsi-xmpp
+    networks:
+      - learnup-network
+
+networks:
+  learnup-network:
+    external: true
