@@ -230,19 +230,11 @@ export const teacherTransferApi = {
       data || {}
     ),
 
-  // Verify transfer request (Admin only) - Sets verified=true and status=VERIFIED
-  verify: (id: string, data: { verificationNotes?: string }) =>
-    ApiClient.post<TeacherTransferRequest>(`/transfer/${id}/verify`, {
-      verified: true,
-      verificationNotes: data.verificationNotes,
-    }),
+  // Reject transfer match (Note: Backend doesn't have reject endpoint, handled via admin status change)
 
-  // Reject transfer request (Admin only) - Sets verified=false and status=PENDING
-  reject: (id: string, data: { verificationNotes?: string }) =>
-    ApiClient.post<TeacherTransferRequest>(`/transfer/${id}/verify`, {
-      verified: false,
-      verificationNotes: data.verificationNotes,
-    }),
+  // Verify transfer request (Admin only)
+  verify: (data: { requestId: string; approved: boolean; notes?: string }) =>
+    ApiClient.post<TeacherTransferRequest>("/transfer/verify", data),
 
   // Mark transfer as completed (Admin only)
   complete: (id: string) =>

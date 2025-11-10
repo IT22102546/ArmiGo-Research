@@ -147,17 +147,18 @@ export const icons = {
   nav_exam,
   nav_user,
   nav_home,
+  requests,
 
   emailFill,
   phoneFill,
   location,
   calender,
   notifications,
+  notification,
   credit,
   star,
   clock,
-  notification, 
-  
+
   sidebar_admin,
   burgermenu,
   sidebar_publications,
@@ -169,7 +170,7 @@ export const icons = {
   filter,
   download,
   play,
-  requests,
+
   // misc icons
   whatsapp,
   phone,

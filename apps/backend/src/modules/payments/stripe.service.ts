@@ -18,11 +18,11 @@ export class StripeService {
       );
       // Initialize with dummy key for development
       this.stripe = new Stripe("sk_test_dummy", {
-        apiVersion: "2025-12-15.clover",
+        apiVersion: "2025-11-17.clover",/*2025-12-15.clover*/ 
       });
     } else {
       this.stripe = new Stripe(apiKey, {
-        apiVersion: "2025-12-15.clover",
+        apiVersion: "2025-11-17.clover",
       });
       this.logger.log("Stripe service initialized successfully");
     }

@@ -368,26 +368,9 @@ export default function ExamDetailsStep({
                 min="1"
                 placeholder="e.g., 100"
                 value={formData.totalMarks}
-                onChange={(e) => {
-                  const newTotal = parseInt(e.target.value) || 0;
-                  const updates: Partial<ExamFormData> = {
-                    totalMarks: newTotal,
-                  };
-
-                  // If MIXED type and part marks are set, recalculate part2 to match new total
-                  if (
-                    formData.type === "MIXED" &&
-                    formData.part1Marks !== undefined &&
-                    formData.part1Marks > 0
-                  ) {
-                    updates.part2Marks = Math.max(
-                      0,
-                      newTotal - formData.part1Marks
-                    );
-                  }
-
-                  updateFormData(updates);
-                }}
+                onChange={(e) =>
+                  updateFormData({ totalMarks: parseInt(e.target.value) || 0 })
+                }
               />
             </div>
 

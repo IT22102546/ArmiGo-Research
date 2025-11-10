@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Plus,
@@ -12,12 +13,14 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  Image as ImageIcon,
   Eye,
   FileText,
   CheckCircle2,
   Circle,
   Type,
   List,
+  ArrowUpDown,
   Square,
   MessageSquare,
   AlignLeft,
@@ -48,6 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, prepareRichText } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +59,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import RichTextEditor from "@/components/shared/RichTextEditor";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,10 +70,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { mediumsApi } from "@/lib/api/endpoints/mediums";
-import { LanguageInput } from "@/components/shared/LanguageInput";
-import { LanguageTextarea } from "@/components/shared/LanguageTextarea";
-import { getLanguageFontStyle } from "@/lib/utils/fonts";
+import { Textarea } from "@/components/ui/textarea";
 
 interface ExamQuestionsStepProps {
   formData: ExamFormData;
@@ -93,26 +95,16 @@ const QUESTION_TYPE_ICONS: Record<QuestionType, React.ReactNode> = {
   MATCHING: <Layers className="h-4 w-4" />,
 };
 
-// Helper function to remove section prefix (e.g., "Part I - " from titles)
-function getSectionDisplayTitle(title: string): string {
-  // Remove patterns like "Part I - ", "Part II - ", "PART_I - ", "PART_II - " etc.
-  return title.replace(/^(Part|PART)\s+([IVX]+)\s*[-–]\s*/i, "").trim();
-}
-
 // Question Preview Component
 function QuestionPreview({
   question,
   index,
   sectionTitle,
-  mediumName,
 }: {
   question: Question;
   index: number;
   sectionTitle?: string;
-  mediumName?: string;
 }) {
-  const fontStyle = getLanguageFontStyle(mediumName);
-
   const renderAnswerArea = () => {
     switch (question.type) {
       case "MULTIPLE_CHOICE":
@@ -136,7 +128,7 @@ function QuestionPreview({
                     ) : (
                       <Circle className="h-5 w-5 text-muted-foreground/50" />
                     )}
-                    <span style={fontStyle}>{option}</span>
+                    <span>{option}</span>
                     {option === question.correctAnswer && (
                       <Badge className="ml-auto bg-green-100 text-green-700">
                         Correct
@@ -165,21 +157,19 @@ function QuestionPreview({
                 ) : (
                   <Circle className="h-5 w-5 text-muted-foreground/50" />
                 )}
-                <span className="font-medium" style={fontStyle}>
-                  {option}
-                </span>
+                <span className="font-medium">{option}</span>
               </div>
             ))}
           </div>
         );
-      case "FILL_BLANK": {
+      case "FILL_BLANK":
         const parts = question.question.split("[BLANK]");
         return (
           <div className="mt-4 p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground mb-2">
               Student will see:
             </p>
-            <p className="text-base" style={fontStyle}>
+            <p className="text-base">
               {parts.map((part, i) => (
                 <React.Fragment key={i}>
                   {part}
@@ -192,12 +182,11 @@ function QuestionPreview({
             {question.correctAnswer && (
               <p className="mt-2 text-sm text-green-600">
                 <span className="font-medium">Correct answer:</span>{" "}
-                <span style={fontStyle}>{question.correctAnswer}</span>
+                {question.correctAnswer}
               </p>
             )}
           </div>
         );
-      }
       case "SHORT_ANSWER":
         return (
           <div className="mt-4">
@@ -207,7 +196,7 @@ function QuestionPreview({
             {question.correctAnswer && (
               <p className="mt-2 text-sm text-green-600">
                 <span className="font-medium">Expected answer:</span>{" "}
-                <span style={fontStyle}>{question.correctAnswer}</span>
+                {question.correctAnswer}
               </p>
             )}
           </div>
@@ -258,7 +247,6 @@ function QuestionPreview({
           {question.question ? (
             <div
               className="text-lg font-medium max-w-none rich-text-content"
-              style={fontStyle}
               dangerouslySetInnerHTML={{
                 __html: prepareRichText(question.question),
               }}
@@ -324,43 +312,12 @@ export default function ExamQuestionsStep({
     open: boolean;
     section: ExamSection | null;
   }>({ open: false, section: null });
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(
-    null
-  );
-  const [mediumName, setMediumName] = useState<string>("");
 
   const [newSectionData, setNewSectionData] = useState({
     title: "",
     instruction: "",
     questionType: "MULTIPLE_CHOICE" as QuestionType,
   });
-
-  // Fetch medium name when mediumId changes
-  useEffect(() => {
-    const fetchMedium = async () => {
-      if (!formData.mediumId) {
-        setMediumName("");
-        return;
-      }
-      try {
-        // Get all mediums and find the one matching our ID
-        const response = await mediumsApi.getAll({ includeInactive: false });
-        const mediums = response?.mediums || [];
-        const selectedMedium = mediums.find((m) => m.id === formData.mediumId);
-        if (selectedMedium) {
-          setMediumName(selectedMedium.name);
-          console.log("Medium fetched successfully:", selectedMedium.name);
-        } else {
-          console.warn("Medium not found for ID:", formData.mediumId);
-          setMediumName("");
-        }
-      } catch (error) {
-        console.error("Error fetching medium:", error);
-        setMediumName("");
-      }
-    };
-    fetchMedium();
-  }, [formData.mediumId]);
 
   // Initialize with one section if empty
   React.useEffect(() => {
@@ -614,7 +571,7 @@ export default function ExamQuestionsStep({
 
                 <div>
                   <h3 className="font-semibold text-gray-900">
-                    {getSectionDisplayTitle(section.title)}
+                    {section.title}
                   </h3>
                   <div className="flex items-center gap-2 mt-1">
                     <Badge
@@ -673,7 +630,7 @@ export default function ExamQuestionsStep({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowDeleteConfirm(section.id);
+                  deleteSection(section.id);
                 }}
                 className="text-red-600 hover:text-red-700 hover:bg-red-50"
               >
@@ -782,9 +739,7 @@ export default function ExamQuestionsStep({
                   </p>
                   <p className="text-sm text-gray-500 mb-4">
                     Add questions to this section based on: "
-                    {section.instruction ||
-                      getSectionDisplayTitle(section.title)}
-                    "
+                    {section.instruction || section.title}"
                   </p>
                   <Button
                     onClick={() => addQuestionToSection(section.id)}
@@ -859,9 +814,7 @@ export default function ExamQuestionsStep({
                                 setPreviewQuestion({
                                   question: q,
                                   index: qIndex,
-                                  sectionTitle: getSectionDisplayTitle(
-                                    section.title
-                                  ),
+                                  sectionTitle: section.title,
                                 })
                               }
                               title="Preview"
@@ -940,7 +893,6 @@ export default function ExamQuestionsStep({
                               onUpdate={(updates) =>
                                 updateQuestion(globalIndex, updates)
                               }
-                              mediumName={mediumName}
                             />
                           </div>
                         )}
@@ -1149,8 +1101,9 @@ export default function ExamQuestionsStep({
               </div>
               <div className="bg-white p-3 rounded-lg border text-center">
                 <div className="text-2xl font-bold text-orange-600">
-                  {formData.sections?.filter((s) => s.type === "INSTRUCTION")
-                    .length || 0}
+                  {formData.sections?.filter(
+                    (s) => s.type === "INSTRUCTION"
+                  ).length || 0}
                 </div>
                 <div className="text-xs text-gray-600">Sections</div>
               </div>
@@ -1192,9 +1145,7 @@ export default function ExamQuestionsStep({
                     <Badge variant="outline" className="text-xs">
                       {idx + 1}
                     </Badge>
-                    <span className="truncate">
-                      {getSectionDisplayTitle(section.title)}
-                    </span>
+                    <span className="truncate">{section.title}</span>
                   </div>
                   <Badge variant="secondary" className="text-xs">
                     {
@@ -1228,9 +1179,7 @@ export default function ExamQuestionsStep({
           <div className="space-y-4 py-4">
             <div>
               <Label className="text-sm font-medium">Section Title *</Label>
-              <LanguageInput
-                mediumName={mediumName}
-                showVirtualKeyboard={true}
+              <Input
                 value={newSectionData.title}
                 onChange={(e) =>
                   setNewSectionData({
@@ -1238,7 +1187,7 @@ export default function ExamQuestionsStep({
                     title: e.target.value,
                   })
                 }
-                placeholder="e.g. Multiple Choice Questions"
+                placeholder="e.g., Part I - Multiple Choice Questions"
                 className="mt-1"
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -1250,9 +1199,7 @@ export default function ExamQuestionsStep({
               <Label className="text-sm font-medium">
                 Instructions for Students *
               </Label>
-              <LanguageTextarea
-                mediumName={mediumName}
-                showVirtualKeyboard={true}
+              <Textarea
                 value={newSectionData.instruction}
                 onChange={(e) =>
                   setNewSectionData({
@@ -1320,11 +1267,9 @@ export default function ExamQuestionsStep({
       {/* Edit Section Dialog */}
       <AlertDialog
         open={showEditSectionDialog.open}
-        onOpenChange={(open) => {
-          if (!open) {
-            setShowEditSectionDialog({ open: false, section: null });
-          }
-        }}
+        onOpenChange={(open) =>
+          setShowEditSectionDialog({ open, section: null })
+        }
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1338,49 +1283,27 @@ export default function ExamQuestionsStep({
             <div className="space-y-4 py-4">
               <div>
                 <Label className="text-sm font-medium">Section Title</Label>
-                <LanguageInput
-                  mediumName={mediumName}
-                  showVirtualKeyboard={true}
-                  value={showEditSectionDialog.section?.title || ""}
-                  onChange={(e) => {
-                    if (showEditSectionDialog.section) {
-                      setShowEditSectionDialog({
-                        ...showEditSectionDialog,
-                        section: {
-                          ...showEditSectionDialog.section,
-                          title: e.target.value,
-                        },
-                      });
-                      updateSection(showEditSectionDialog.section.id, {
-                        title: e.target.value,
-                      });
-                    }
-                  }}
-                  placeholder="e.g. Multiple Choice Questions"
+                <Input
+                  value={showEditSectionDialog.section.title}
+                  onChange={(e) =>
+                    updateSection(showEditSectionDialog.section!.id, {
+                      title: e.target.value,
+                    })
+                  }
+                  placeholder="e.g., Part I - Multiple Choice Questions"
                   className="mt-1"
                 />
               </div>
 
               <div>
                 <Label className="text-sm font-medium">Instructions</Label>
-                <LanguageTextarea
-                  mediumName={mediumName}
-                  showVirtualKeyboard={true}
-                  value={showEditSectionDialog.section?.instruction || ""}
-                  onChange={(e) => {
-                    if (showEditSectionDialog.section) {
-                      setShowEditSectionDialog({
-                        ...showEditSectionDialog,
-                        section: {
-                          ...showEditSectionDialog.section,
-                          instruction: e.target.value,
-                        },
-                      });
-                      updateSection(showEditSectionDialog.section.id, {
-                        instruction: e.target.value,
-                      });
-                    }
-                  }}
+                <Textarea
+                  value={showEditSectionDialog.section.instruction || ""}
+                  onChange={(e) =>
+                    updateSection(showEditSectionDialog.section!.id, {
+                      instruction: e.target.value,
+                    })
+                  }
                   placeholder="e.g., Choose the correct answer from the options given below."
                   className="mt-1 min-h-[100px]"
                 />
@@ -1391,10 +1314,11 @@ export default function ExamQuestionsStep({
                   Question Type for this Section
                 </Label>
                 <Select
-                  value={"MULTIPLE_CHOICE"}
-                  onValueChange={(_val: QuestionType) =>
-                    showEditSectionDialog.section &&
-                    updateSection(showEditSectionDialog.section.id, {
+                  value={
+                    "MULTIPLE_CHOICE"
+                  }
+                  onValueChange={(val: QuestionType) =>
+                    updateSection(showEditSectionDialog.section!.id, {
                       // Note: defaultQuestionType doesn't exist in ExamSection
                     })
                   }
@@ -1422,42 +1346,11 @@ export default function ExamQuestionsStep({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                setShowEditSectionDialog({ open: false, section: null });
-              }}
+              onClick={() =>
+                setShowEditSectionDialog({ open: false, section: null })
+              }
             >
               Save Changes
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Section Confirmation Dialog */}
-      <AlertDialog
-        open={!!showDeleteConfirm}
-        onOpenChange={() => setShowDeleteConfirm(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Section?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this section? This will also
-              delete all questions in this section. This action cannot be
-              undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (showDeleteConfirm) {
-                  deleteSection(showDeleteConfirm);
-                  setShowDeleteConfirm(null);
-                }
-              }}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Delete Section
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1484,7 +1377,6 @@ export default function ExamQuestionsStep({
                 question={previewQuestion.question}
                 index={previewQuestion.index}
                 sectionTitle={previewQuestion.sectionTitle}
-                mediumName={mediumName}
               />
             </div>
           )}

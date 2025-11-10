@@ -3,7 +3,6 @@
 import React, { useRef, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getLanguageAttributes } from "@/lib/utils/fonts";
 import {
   Bold,
   Italic,
@@ -14,8 +13,6 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  Keyboard,
-  Image as ImageIcon,
 } from "lucide-react";
 import {
   Tooltip,
@@ -23,10 +20,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  VirtualKeyboard,
-  type KeyboardLanguage,
-} from "@/components/shared/VirtualKeyboard";
 
 interface RichTextEditorProps {
   value: string;
@@ -37,10 +30,6 @@ interface RichTextEditorProps {
   className?: string;
   showFormatting?: boolean;
   label?: string;
-  style?: React.CSSProperties;
-  mediumName?: string;
-  showVirtualKeyboard?: boolean;
-  onImageUploadClick?: () => void;
 }
 
 interface FormatButton {
@@ -83,42 +72,13 @@ export default function RichTextEditor({
   className,
   showFormatting = true,
   label,
-  style,
-  mediumName,
-  showVirtualKeyboard = false,
-  onImageUploadClick,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>(
     {}
   );
   const isInternalUpdate = useRef(false);
-  const langAttrs = getLanguageAttributes(mediumName);
-
-  // Determine if we should show keyboard button
-  // Show button when showVirtualKeyboard is true, regardless of medium loading
-  const shouldShowKeyboard = showVirtualKeyboard;
-
-  // Debug logging
-  useEffect(() => {
-    if (showVirtualKeyboard) {
-      console.log("[RichTextEditor] Debug:", {
-        showVirtualKeyboard,
-        mediumName,
-        isTamilOrSinhala: ["Tamil", "Sinhala"].includes(mediumName || ""),
-        shouldShowKeyboard,
-      });
-    }
-  }, [showVirtualKeyboard, mediumName]);
-
-  // Map medium name to keyboard language
-  const getKeyboardLanguage = (): KeyboardLanguage => {
-    if (mediumName?.toLowerCase() === "tamil") return "tamil";
-    if (mediumName?.toLowerCase() === "sinhala") return "sinhala";
-    return "english";
-  };
 
   // Check which formats are active at cursor position
   const updateActiveFormats = useCallback(() => {
@@ -309,49 +269,6 @@ export default function RichTextEditor({
                 </TooltipContent>
               </Tooltip>
             ))}
-
-            {shouldShowKeyboard && (
-              <>
-                <div className="w-px h-6 bg-border mx-1" />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsKeyboardOpen(!isKeyboardOpen)}
-                      className="h-8 w-8 p-0"
-                      title={`Toggle ${mediumName} Virtual Keyboard`}
-                    >
-                      <Keyboard className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">
-                    Toggle Virtual Keyboard
-                  </TooltipContent>
-                </Tooltip>
-
-                {onImageUploadClick && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={onImageUploadClick}
-                        className="h-8 w-8 p-0"
-                        title="Upload Image"
-                      >
-                        <ImageIcon className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs">
-                      Upload Image
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </>
-            )}
           </TooltipProvider>
         </div>
       )}
@@ -360,8 +277,6 @@ export default function RichTextEditor({
       <div className="relative">
         <div
           ref={editorRef}
-          lang={langAttrs.lang}
-          dir={langAttrs.dir}
           contentEditable={!disabled}
           onInput={handleInput}
           onKeyDown={handleKeyDown}
@@ -391,11 +306,7 @@ export default function RichTextEditor({
             "[&_ol]:list-decimal [&_ol]:ml-5 [&_ol]:my-1",
             "[&_li]:my-0.5"
           )}
-          style={{
-            minHeight: `${minHeight}px`,
-            fontFamily: langAttrs.style.fontFamily,
-            ...style,
-          }}
+          style={{ minHeight: `${minHeight}px` }}
           suppressContentEditableWarning
         />
 
@@ -404,16 +315,6 @@ export default function RichTextEditor({
           <div className="absolute top-2 left-3 text-sm text-muted-foreground pointer-events-none">
             {placeholder}
           </div>
-        )}
-
-        {/* Virtual Keyboard */}
-        {shouldShowKeyboard && (
-          <VirtualKeyboard
-            language={getKeyboardLanguage()}
-            isOpen={isKeyboardOpen}
-            onClose={() => setIsKeyboardOpen(false)}
-            targetElement={editorRef.current}
-          />
         )}
       </div>
     </div>

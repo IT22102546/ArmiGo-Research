@@ -793,7 +793,6 @@ export function ExamDetailPage({ id }: { id?: string }) {
               </CardTitle>
               <CardDescription>
                 All sections and questions with correct answers
-                {console.log(exam)}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -855,77 +854,9 @@ export function ExamDetailPage({ id }: { id?: string }) {
                     </div>
                   )}
 
-                  {/* If hierarchical structure with sections - render sections with questions inside */}
-                  {exam.useHierarchicalStructure &&
-                  (exam as any).sections &&
-                  (exam as any).sections.length > 0 ? (
-                    <div className="space-y-6">
-                      {(exam as any).sections.map((section: any) => {
-                        const isSectionExpanded = expandedSections.has(
-                          section.id
-                        );
-                        // Get questions for this section
-                        const sectionQuestions = (exam.questions || []).filter(
-                          (q: any) => q.sectionId === section.id
-                        );
-
-                        return (
-                          <div
-                            key={section.id}
-                            className="border rounded-lg overflow-hidden"
-                          >
-                            <div
-                              className="flex items-center gap-2 p-4 bg-slate-50 dark:bg-slate-900 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                              onClick={() => toggleSection(section.id)}
-                            >
-                              <ChevronDown
-                                className={`h-5 w-5 transition-transform duration-200 ${
-                                  isSectionExpanded ? "rotate-180" : ""
-                                }`}
-                              />
-                              <FileText className="h-5 w-5" />
-                              <div className="flex-1">
-                                <div className="font-semibold">
-                                  {section.title}
-                                </div>
-                                {section.description && (
-                                  <div className="text-sm text-muted-foreground">
-                                    {section.description}
-                                  </div>
-                                )}
-                              </div>
-                              <Badge variant="outline">
-                                Part {section.examPart}
-                              </Badge>
-                              <Badge variant="secondary">
-                                {sectionQuestions.length} questions
-                              </Badge>
-                            </div>
-                            {isSectionExpanded && (
-                              <div className="p-4 space-y-4">
-                                {sectionQuestions.length > 0 ? (
-                                  sectionQuestions.map(
-                                    (q: any, idx: number) => (
-                                      <QuestionDisplay
-                                        key={q.id}
-                                        question={q}
-                                        index={idx}
-                                      />
-                                    )
-                                  )
-                                ) : (
-                                  <div className="text-center py-4 text-muted-foreground">
-                                    <p>No questions in this section</p>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : questionsByPart &&
-                    questionsByPart.useHierarchicalStructure ? (
+                  {/* If we have hierarchical data grouped by part/section/group, render nested structure */}
+                  {questionsByPart &&
+                  questionsByPart.useHierarchicalStructure ? (
                     <div className="space-y-8">
                       {Object.entries(questionsByPart.parts || {}).map(
                         ([partKey, partValue]: any) => {
@@ -1124,16 +1055,44 @@ export function ExamDetailPage({ id }: { id?: string }) {
                       })}
                     </div>
                   ) : (
-                    // Default flat list from exam.questions - show all questions with options
-                    <div className="space-y-4">
-                      {(exam.questions || []).map((question, index) => (
-                        <QuestionDisplay
-                          key={question.id}
-                          question={question}
-                          index={index}
-                        />
-                      ))}
-                    </div>
+                    // Default flat list from exam.questions
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Order</TableHead>
+                          <TableHead>Part</TableHead>
+                          <TableHead>Question</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Marks</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(exam.questions || []).map((question) => (
+                          <TableRow key={question.id}>
+                            <TableCell>{question.order}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{question.part}</Badge>
+                            </TableCell>
+                            <TableCell className="max-w-md">
+                              <span
+                                className="rich-text-content"
+                                dangerouslySetInnerHTML={{
+                                  __html: prepareRichText(
+                                    question.questionText ?? (question as any).question ?? ""
+                                  ),
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">
+                                {question.type.replace(/_/g, " ")}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{question.marks}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   )}
                 </div>
               )}

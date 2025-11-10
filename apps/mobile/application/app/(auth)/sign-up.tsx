@@ -1,3 +1,4 @@
+// app/(auth)/signup.tsx - COMPLETE CODE WITH UPDATED TEACHER FIELDS
 import { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -18,8 +19,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AntDesign, MaterialIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
 import { icons } from "@/constants";
@@ -27,383 +28,61 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import Checkbox from "expo-checkbox";
 
 // Data arrays
-const districtZoneData = {
-  Ampara: [
-    "Akkaraipattu",
-    "Ampara",
-    "Kalmunai",
-    "Sainthamaruthu",
-    "Uhana",
-    "Pottuvil",
-    "Damana",
-    "Mahaoya",
-    "Navithanveli",
-    "Irakkamam",
-    "Dehiattakandiya",
-    "Lahugala",
-    "Thirukkovil",
-    "Nintavur",
-    "Addalaichenai",
-  ],
-  Anuradhapura: [
-    "Anuradhapura",
-    "Kekirawa",
-    "Medawachchiya",
-    "Mihintale",
-    "Nochchiyagama",
-    "Thalawa",
-    "Galenbindunuwewa",
-    "Horowpothana",
-    "Kahatagasdigiliya",
-    "Ipalogama",
-    "Palagala",
-    "Palugaswewa",
-    "Rambewa",
-    "Thambuttegama",
-    "Kebithigollewa",
-  ],
-  Badulla: [
-    "Badulla",
-    "Bandarawela",
-    "Mahiyanganaya",
-    "Welimada",
-    "Hali Ela",
-    "Passara",
-    "Kandaketiya",
-    "Lunugala",
-    "Rideemaliyadda",
-    "Soranathota",
-    "Haputale",
-    "Diyatalawa",
-    "Haldummulla",
-    "Ella",
-    "Uva Paranagama",
-  ],
-  Batticaloa: [
-    "Batticaloa",
-    "Kattankudy",
-    "Eravur",
-    "Valaichchenai",
-    "Vakarai",
-    "Porativu",
-    "Koralai Pattu",
-    "Manmunai",
-    "Eravur Pattu",
-    "Kiran",
-    "Vellavely",
-    "Oddamavadi",
-    "Vantharamoolai",
-  ],
-  Colombo: [
-    "Colombo",
-    "Dehiwala",
-    "Moratuwa",
-    "Sri Jayawardenepura Kotte",
-    "Kolonnawa",
-    "Kaduwela",
-    "Homagama",
-    "Maharagama",
-    "Kesbewa",
-    "Ratmalana",
-    "Boralesgamuwa",
-    "Nugegoda",
-    "Pannipitiya",
-    "Hanwella",
-    "Padukka",
-  ],
-  Galle: [
-    "Galle",
-    "Ambalangoda",
-    "Hikkaduwa",
-    "Elpitiya",
-    "Bentota",
-    "Karapitiya",
-    "Baddegama",
-    "Imaduwa",
-    "Neluwa",
-    "Nagoda",
-    "Thawalama",
-    "Akmeemana",
-    "Habaraduwa",
-    "Yakkalamulla",
-    "Udugama",
-  ],
-  Gampaha: [
-    "Gampaha",
-    "Negombo",
-    "Kelaniya",
-    "Kadawatha",
-    "Ja-Ela",
-    "Wattala",
-    "Minuwangoda",
-    "Divulapitiya",
-    "Mirigama",
-    "Veyangoda",
-    "Biyagama",
-    "Dompe",
-    "Mahara",
-    "Katana",
-    "Attanagalla",
-  ],
-  Hambantota: [
-    "Hambantota",
-    "Tangalle",
-    "Ambalantota",
-    "Tissamaharama",
-    "Beliatta",
-    "Weeraketiya",
-    "Lunugamwehera",
-    "Okewela",
-    "Sooriyawewa",
-    "Angunakolapelessa",
-    "Katuwana",
-    "Walasmulla",
-    "Middeniya",
-  ],
-  Jaffna: [
-    "Jaffna",
-    "Chavakachcheri",
-    "Nallur",
-    "Point Pedro",
-    "Karainagar",
-    "Kayts",
-    "Vaddukoddai",
-    "Uduppidy",
-    "Kopay",
-    "Tellippalai",
-    "Maruthnkerny",
-    "Chankanai",
-    "Sandilipay",
-  ],
-  Kalutara: [
-    "Kalutara",
-    "Panadura",
-    "Horana",
-    "Beruwala",
-    "Matugama",
-    "Agalawatta",
-    "Bandaragama",
-    "Bulathsinhala",
-    "Madurawala",
-    "Millaniya",
-    "Palindanuwara",
-    "Walallavita",
-    "Ingiriya",
-  ],
-  Kandy: [
-    "Kandy",
-    "Gampola",
-    "Nawalapitiya",
-    "Kadugannawa",
-    "Peradeniya",
-    "Kundasale",
-    "Akurana",
-    "Ampitiya",
-    "Pilimatalawa",
-    "Galagedara",
-    "Harispattuwa",
-    "Pathadumbara",
-    "Udunuwara",
-    "Yatinuwara",
-    "Udapalatha",
-    "Minipe",
-    "Hatharaliyadda",
-  ],
-  Kegalle: [
-    "Kegalle",
-    "Mawanella",
-    "Rambukkana",
-    "Warakapola",
-    "Galigamuwa",
-    "Yatiyantota",
-    "Dehiowita",
-    "Deraniyagala",
-    "Aranayaka",
-    "Ruwanwella",
-  ],
-  Kilinochchi: [
-    "Kilinochchi",
-    "Pallai",
-    "Kandavalai",
-    "Karachchi",
-    "Poonakary",
-  ],
-  Kurunegala: [
-    "Kurunegala",
-    "Kuliyapitiya",
-    "Pannala",
-    "Narammala",
-    "Polgahawela",
-    "Alawwa",
-    "Bingiriya",
-    "Wariyapola",
-    "Giriulla",
-    "Melsiripura",
-    "Nikaweratiya",
-    "Mahawa",
-    "Galgamuwa",
-    "Panduwasnuwara",
-    "Kobeigane",
-    "Ibbagamuwa",
-  ],
+interface DistrictZoneData {
+  [key: string]: string[];
+}
+
+const districtZoneData: DistrictZoneData = {
+  Ampara: ["Akkaraipattu", "Ampara", "Kalmunai", "Sainthamaruthu", "Uhana", "Pottuvil", "Damana", "Mahaoya", "Navithanveli", "Irakkamam", "Dehiattakandiya", "Lahugala", "Thirukkovil", "Nintavur", "Addalaichenai"],
+  Anuradhapura: ["Anuradhapura", "Kekirawa", "Medawachchiya", "Mihintale", "Nochchiyagama", "Thalawa", "Galenbindunuwewa", "Horowpothana", "Kahatagasdigiliya", "Ipalogama", "Palagala", "Palugaswewa", "Rambewa", "Thambuttegama", "Kebithigollewa"],
+  Badulla: ["Badulla", "Bandarawela", "Mahiyanganaya", "Welimada", "Hali Ela", "Passara", "Kandaketiya", "Lunugala", "Rideemaliyadda", "Soranathota", "Haputale", "Diyatalawa", "Haldummulla", "Ella", "Uva Paranagama"],
+  Batticaloa: ["Batticaloa", "Kattankudy", "Eravur", "Valaichchenai", "Vakarai", "Porativu", "Koralai Pattu", "Manmunai", "Eravur Pattu", "Kiran", "Vellavely", "Oddamavadi", "Vantharamoolai"],
+  Colombo: ["Colombo", "Dehiwala", "Moratuwa", "Sri Jayawardenepura Kotte", "Kolonnawa", "Kaduwela", "Homagama", "Maharagama", "Kesbewa", "Ratmalana", "Boralesgamuwa", "Nugegoda", "Pannipitiya", "Hanwella", "Padukka"],
+  Galle: ["Galle", "Ambalangoda", "Hikkaduwa", "Elpitiya", "Bentota", "Karapitiya", "Baddegama", "Imaduwa", "Neluwa", "Nagoda", "Thawalama", "Akmeemana", "Habaraduwa", "Yakkalamulla", "Udugama"],
+  Gampaha: ["Gampaha", "Negombo", "Kelaniya", "Kadawatha", "Ja-Ela", "Wattala", "Minuwangoda", "Divulapitiya", "Mirigama", "Veyangoda", "Biyagama", "Dompe", "Mahara", "Katana", "Attanagalla"],
+  Hambantota: ["Hambantota", "Tangalle", "Ambalantota", "Tissamaharama", "Beliatta", "Weeraketiya", "Lunugamwehera", "Okewela", "Sooriyawewa", "Angunakolapelessa", "Katuwana", "Walasmulla", "Middeniya"],
+  Jaffna: ["Jaffna", "Chavakachcheri", "Nallur", "Point Pedro", "Karainagar", "Kayts", "Vaddukoddai", "Uduppidy", "Kopay", "Tellippalai", "Maruthnkerny", "Chankanai", "Sandilipay"],
+  Kalutara: ["Kalutara", "Panadura", "Horana", "Beruwala", "Matugama", "Agalawatta", "Bandaragama", "Bulathsinhala", "Madurawala", "Millaniya", "Palindanuwara", "Walallavita", "Ingiriya"],
+  Kandy: ["Kandy", "Gampola", "Nawalapitiya", "Kadugannawa", "Peradeniya", "Kundasale", "Akurana", "Ampitiya", "Pilimatalawa", "Galagedara", "Harispattuwa", "Pathadumbara", "Udunuwara", "Yatinuwara", "Udapalatha", "Minipe", "Hatharaliyadda"],
+  Kegalle: ["Kegalle", "Mawanella", "Rambukkana", "Warakapola", "Galigamuwa", "Yatiyantota", "Dehiowita", "Deraniyagala", "Aranayaka", "Ruwanwella"],
+  Kilinochchi: ["Kilinochchi", "Pallai", "Kandavalai", "Karachchi", "Poonakary"],
+  Kurunegala: ["Kurunegala", "Kuliyapitiya", "Pannala", "Narammala", "Polgahawela", "Alawwa", "Bingiriya", "Wariyapola", "Giriulla", "Melsiripura", "Nikaweratiya", "Mahawa", "Galgamuwa", "Panduwasnuwara", "Kobeigane", "Ibbagamuwa"],
   Mannar: ["Mannar", "Nanattan", "Madhu", "Musali", "Manthai West"],
-  Matale: [
-    "Matale",
-    "Dambulla",
-    "Galewela",
-    "Ukuwela",
-    "Rattota",
-    "Palapathwela",
-    "Naula",
-    "Wilgamuwa",
-    "Yatawatta",
-  ],
-  Matara: [
-    "Matara",
-    "Weligama",
-    "Hakmana",
-    "Devinuwara",
-    "Akuressa",
-    "Kamburupitiya",
-    "Athuraliya",
-    "Malimbada",
-    "Thihagoda",
-    "Pasgoda",
-    "Kotapola",
-    "Dickwella",
-  ],
-  Moneragala: [
-    "Moneragala",
-    "Wellawaya",
-    "Bibile",
-    "Buttala",
-    "Katharagama",
-    "Madulla",
-    "Sevanagala",
-    "Siyambalanduwa",
-    "Thanamalwila",
-    "Medagana",
-  ],
-  Mullaitivu: [
-    "Mullaitivu",
-    "Oddusuddan",
-    "Puthukudiyiruppu",
-    "Thunukkai",
-    "Manthai East",
-    "Maritimepattu",
-    "Welioya",
-  ],
-  "Nuwara Eliya": [
-    "Nuwara Eliya",
-    "Hatton",
-    "Talawakele",
-    "Kotagala",
-    "Ginigathena",
-    "Hanguranketha",
-    "Walapane",
-    "Ragala",
-    "Ambagamuwa",
-    "Maskeliya",
-  ],
-  Polonnaruwa: [
-    "Polonnaruwa",
-    "Kaduruwela",
-    "Hingurakgoda",
-    "Medirigiriya",
-    "Lankapura",
-    "Thamankaduwa",
-    "Welikanda",
-    "Dimbulagala",
-  ],
-  Puttalam: [
-    "Puttalam",
-    "Chilaw",
-    "Wennappuwa",
-    "Dankotuwa",
-    "Nattandiya",
-    "Marawila",
-    "Anamaduwa",
-    "Kalpitiya",
-    "Pallama",
-    "Vanathavilluwa",
-    "Madampe",
-  ],
-  Ratnapura: [
-    "Ratnapura",
-    "Balangoda",
-    "Embilipitiya",
-    "Pelmadulla",
-    "Eheliyagoda",
-    "Kuruwita",
-    "Nivithigala",
-    "Kahawatta",
-    "Godakawela",
-    "Ayagama",
-    "Kalawana",
-    "Opanayaka",
-    "Weligepola",
-    "Rakwana",
-  ],
-  Trincomalee: [
-    "Trincomalee",
-    "Kinniya",
-    "Muthur",
-    "Kuchchaveli",
-    "Gomarankadawala",
-    "Morawewa",
-    "Seruvila",
-    "Thambalagamuwa",
-    "Verugal",
-  ],
+  Matale: ["Matale", "Dambulla", "Galewela", "Ukuwela", "Rattota", "Palapathwela", "Naula", "Wilgamuwa", "Yatawatta"],
+  Matara: ["Matara", "Weligama", "Hakmana", "Devinuwara", "Akuressa", "Kamburupitiya", "Athuraliya", "Malimbada", "Thihagoda", "Pasgoda", "Kotapola", "Dickwella"],
+  Moneragala: ["Moneragala", "Wellawaya", "Bibile", "Buttala", "Katharagama", "Madulla", "Sevanagala", "Siyambalanduwa", "Thanamalwila", "Medagana"],
+  Mullaitivu: ["Mullaitivu", "Oddusuddan", "Puthukudiyiruppu", "Thunukkai", "Manthai East", "Maritimepattu", "Welioya"],
+  "Nuwara Eliya": ["Nuwara Eliya", "Hatton", "Talawakele", "Kotagala", "Ginigathena", "Hanguranketha", "Walapane", "Ragala", "Ambagamuwa", "Maskeliya"],
+  Polonnaruwa: ["Polonnaruwa", "Kaduruwela", "Hingurakgoda", "Medirigiriya", "Lankapura", "Thamankaduwa", "Welikanda", "Dimbulagala"],
+  Puttalam: ["Puttalam", "Chilaw", "Wennappuwa", "Dankotuwa", "Nattandiya", "Marawila", "Anamaduwa", "Kalpitiya", "Pallama", "Vanathavilluwa", "Madampe"],
+  Ratnapura: ["Ratnapura", "Balangoda", "Embilipitiya", "Pelmadulla", "Eheliyagoda", "Kuruwita", "Nivithigala", "Kahawatta", "Godakawela", "Ayagama", "Kalawana", "Opanayaka", "Weligepola", "Rakwana"],
+  Trincomalee: ["Trincomalee", "Kinniya", "Muthur", "Kuchchaveli", "Gomarankadawala", "Morawewa", "Seruvila", "Thambalagamuwa", "Verugal"],
   Vavuniya: ["Vavuniya", "Vengalacheddikulam", "Nedunkerny", "Cheddikulam"],
 };
 
 const districts = Object.keys(districtZoneData);
-const grades = [
-  "Grade 6",
-  "Grade 7",
-  "Grade 8",
-  "Grade 9",
-  "Grade 10",
-  "Grade 11",
-  "Grade 12",
-  "Grade 13",
-];
+const grades = ["Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12", "Grade 13"];
 const mediums = ["Sinhala", "Tamil", "English"];
-const subjects = [
-  "Mathematics",
-  "Science",
-  "English",
-  "Sinhala",
-  "Tamil",
-  "History",
-  "Geography",
-  "ICT",
-  "Commerce",
-  "Business Studies",
-];
-const levels = [
-  "Primary (Grade 1-5)",
-  "Junior Secondary (Grade 6-9)",
-  "O/L (Grade 10-11)",
-  "A/L (Grade 12-13)",
-];
-const qualifications = [
-  "B.A.",
-  "B.Sc.",
-  "B.Ed.",
-  "M.A.",
-  "M.Sc.",
-  "M.Ed.",
-  "Ph.D.",
-  "Diploma in Education",
-  "National Diploma",
-  "PGDE",
-];
+const subjects = ["Mathematics", "Science", "English", "Sinhala", "Tamil", "History", "Geography", "ICT", "Commerce", "Business Studies"];
+const levels = ["Primary (Grade 1-5)", "Junior Secondary (Grade 6-9)", "O/L (Grade 10-11)", "A/L (Grade 12-13)"];
+const qualifications = ["B.A.", "B.Sc.", "B.Ed.", "M.A.", "M.Sc.", "M.Ed.", "Ph.D.", "Diploma in Education", "National Diploma", "PGDE"];
 
 const API = process.env.EXPO_PUBLIC_API_URL;
 
 const SignUp = () => {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  
+  // Get role from navigation params
+  const [userRole, setUserRole] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (params.role) {
+      setUserRole(params.role as string);
+      console.log("User role from params:", params.role);
+    }
+  }, [params.role]);
+
   const [formData, setFormData] = useState({
     email: "",
     phone: "",
@@ -445,21 +124,62 @@ const SignUp = () => {
     canManageClasses: true,
   });
 
+  // OTP Verification States
+  const [otp, setOtp] = useState(["", "", "", ""]);
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verifyOtpLoading, setVerifyOtpLoading] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const [canResendOtp, setCanResendOtp] = useState(false);
+  const [tempUserId, setTempUserId] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [phoneExists, setPhoneExists] = useState(false);
+
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDistrictDropdown, setShowDistrictDropdown] = useState(false);
   const [showZoneDropdown, setShowZoneDropdown] = useState(false);
   const [showCurrentZoneDropdown, setShowCurrentZoneDropdown] = useState(false);
-  const [showRequiredZoneDropdown, setShowRequiredZoneDropdown] =
-    useState(false);
-  const [showRequiredDistrictDropdown, setShowRequiredDistrictDropdown] =
-    useState(false);
+  const [showRequiredZoneDropdown, setShowRequiredZoneDropdown] = useState(false);
+  const [showRequiredDistrictDropdown, setShowRequiredDistrictDropdown] = useState(false);
   const [showGradeDropdown, setShowGradeDropdown] = useState(false);
   const [showMediumDropdown, setShowMediumDropdown] = useState(false);
-  const [availableZones, setAvailableZones] = useState([]);
+  const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
+  const [showLevelDropdown, setShowLevelDropdown] = useState(false);
+  const [showQualificationDropdown, setShowQualificationDropdown] = useState(false);
+  const [showDesiredZoneDropdown, setShowDesiredZoneDropdown] = useState(false);
+  const [availableZones, setAvailableZones] = useState<string[]>([]);
+  const [availableCurrentZones, setAvailableCurrentZones] = useState<string[]>([]);
   const [tempDate, setTempDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
 
-  const router = useRouter();
+
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://your-backend-url.com";
+const API_VERSION = "v1";
+const FULL_API_URL = `${API_BASE_URL}/api/${API_VERSION}`;
+
+  // OTP input refs
+  const otpInputRefs = useRef<Array<TextInput | null>>([]);
+
+  // OTP Countdown Timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (otpCountdown > 0) {
+      interval = setInterval(() => {
+        setOtpCountdown((prev) => prev - 1);
+      }, 1000);
+    } else if (otpCountdown === 0 && isOtpSent) {
+      setCanResendOtp(true);
+    }
+    return () => clearInterval(interval);
+  }, [otpCountdown, isOtpSent]);
+
+  // Format countdown to MM:SS
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
 
   // Animation values for icons
   const animatedValues = useRef(
@@ -471,23 +191,18 @@ const SignUp = () => {
 
   // Animation functions
   const startAnimations = () => {
-    // Clear any existing animations
     animationRefs.current.forEach((animation) => animation.stop());
     animationRefs.current = [];
 
-    // Reset all animated values to start position
     animatedValues.forEach((value) => value.setValue(0));
 
-    // Start floating animations for all icons
     const iconAnimations = animatedValues.map((animValue, index) => {
       const delay = index * 150 + Math.random() * 400;
 
-      // Create a continuous floating animation
       const animation = Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
           Animated.parallel([
-            // Float up and down
             Animated.timing(animValue, {
               toValue: 1,
               duration: 3000 + Math.random() * 2000,
@@ -506,7 +221,6 @@ const SignUp = () => {
       return animation;
     });
 
-    // Start all animations
     iconAnimations.forEach((animation) => animation.start());
   };
 
@@ -515,10 +229,8 @@ const SignUp = () => {
     animationRefs.current = [];
   };
 
-  // Start animations when component mounts
   useEffect(() => {
     startAnimations();
-
     return () => {
       stopAnimations();
     };
@@ -534,64 +246,387 @@ const SignUp = () => {
       setAvailableZones(districtZoneData[value] || []);
       setFormData((prev) => ({ ...prev, zone: "" }));
     }
-  };
 
-  // Date picker handlers
-  const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      const formattedDate = selectedDate.toISOString().split("T")[0];
-      setFormData((prev) => ({ ...prev, dateOfBirth: formattedDate }));
+    // Reset verification if phone number changes
+    if (name === "phone" && value !== formData.phone) {
+      resetVerification();
     }
   };
 
-  const showDatepicker = () => {
-    setShowDatePicker(true);
+  const handleTeacherChange = (name: string, value: any) => {
+    setTeacherData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    // If current district changes, update available zones
+    if (name === "currentDistrict" && value) {
+      setAvailableCurrentZones(districtZoneData[value] || []);
+      setTeacherData(prev => ({ ...prev, currentZone: "" }));
+    }
   };
 
-  // Dropdown selection handlers
-  const handleDistrictSelect = (district) => {
-    handleChange("district", district);
-    setShowDistrictDropdown(false);
+  const toggleQualification = (qualification: string) => {
+    setTeacherData(prev => {
+      const current = [...prev.qualifications];
+      if (current.includes(qualification)) {
+        return { ...prev, qualifications: current.filter(q => q !== qualification) };
+      } else {
+        return { ...prev, qualifications: [...current, qualification] };
+      }
+    });
   };
 
-  const handleZoneSelect = (zone) => {
-    handleChange("zone", zone);
-    setShowZoneDropdown(false);
+  const toggleDesiredZone = (zone: string) => {
+    setTeacherData(prev => {
+      const current = [...prev.desiredZones];
+      if (current.includes(zone)) {
+        return { ...prev, desiredZones: current.filter(z => z !== zone) };
+      } else {
+        return { ...prev, desiredZones: [...current, zone] };
+      }
+    });
   };
 
-  const handleGradeSelect = (grade) => {
-    handleChange("grade", grade);
-    setShowGradeDropdown(false);
+  const toggleRequiredZone = (zone: string) => {
+    setTeacherData(prev => {
+      const current = [...prev.requiredZones];
+      if (current.includes(zone)) {
+        return { ...prev, requiredZones: current.filter(z => z !== zone) };
+      } else {
+        return { ...prev, requiredZones: [...current, zone] };
+      }
+    });
   };
 
-  const handleMediumSelect = (medium) => {
-    handleChange("medium", medium);
-    setShowMediumDropdown(false);
+  const toggleRequiredDistrict = (district: string) => {
+    setTeacherData(prev => {
+      const current = [...prev.requiredDistricts];
+      if (current.includes(district)) {
+        return { ...prev, requiredDistricts: current.filter(d => d !== district) };
+      } else {
+        return { ...prev, requiredDistricts: [...current, district] };
+      }
+    });
   };
 
-  // Render dropdown items
-  const renderDropdownItem = ({ item, onSelect }) => (
-    <TouchableOpacity
-      style={styles.dropdownItem}
-      onPress={() => onSelect(item)}
-    >
-      <Text style={styles.dropdownItemText}>{item}</Text>
-    </TouchableOpacity>
-  );
+  const resetVerification = () => {
+    setIsOtpSent(false);
+    setIsPhoneVerified(false);
+    setPhoneExists(false);
+    setResetToken("");
+    setTempUserId("");
+    setOtp(["", "", "", ""]);
+    setOtpCountdown(0);
+    setCanResendOtp(false);
+  };
 
-  const handleSignUp = async () => {
-    const { signIn } = useAuthStore.getState(); // ✅ CORRECT - No hook violation
-    if (
-      !formData.email ||
-      !formData.phone ||
-      !formData.firstName ||
-      !formData.lastName ||
-      !formData.dateOfBirth ||
-      !formData.password ||
-      !formData.confirmPassword
-    ) {
+  // Validate phone number format
+  const validatePhoneNumber = (phone: string) => {
+    const mobileRegex = /^(071|076|077|075|078|070|074|072)\d{7}$/;
+    return mobileRegex.test(phone);
+  };
+
+  // OTP input handlers
+  const handleOtpChange = (value: string, index: number) => {
+    if (!/^\d?$/.test(value)) return;
+
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Auto-focus next input
+    if (value && index < 3) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-verify when all digits are entered
+    if (newOtp.every((digit) => digit !== "") && index === 3) {
+      verifyOtp(newOtp.join(""));
+    }
+  };
+
+  const handleOtpKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Step 1: Check if phone number exists before sending OTP
+  const checkPhoneExists = async (): Promise<boolean> => {
+    try {
+      console.log("📱 Checking if phone exists:", formData.phone);
+
+      const response = await fetch(`${API}/api/v1/auth/check-account`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          identifier: formData.phone,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // If exists is true, phone number already exists
+        if (data.exists) {
+          setPhoneExists(true);
+          Alert.alert(
+            "Phone Number Already Exists",
+            "This phone number is already registered. Please use a different number or try signing in."
+          );
+          return true;
+        }
+        return false;
+      }
+      return false;
+    } catch (error) {
+      console.error("❌ Error checking phone:", error);
+      return false;
+    }
+  };
+
+  // Add this function after your imports
+const apiRequest = async (
+  endpoint: string,
+  method: string = "POST",
+  body?: any,
+  customHeaders: Record<string, string> = {}
+) => {
+  const url = `${FULL_API_URL}${endpoint}`;
+  
+  const headers = {
+    "Content-Type": "application/json",
+    "x-client-type": "mobile",
+    "x-return-tokens": "true",
+    ...customHeaders,
+  };
+
+  console.log(`🌐 API Request: ${method} ${url}`);
+  if (body) {
+    console.log("📦 Request Body:", JSON.stringify(body, null, 2));
+  }
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const responseText = await response.text();
+    console.log(`📥 Response Status: ${response.status}`);
+    console.log("📥 Response Body:", responseText);
+
+    let data;
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch (parseError) {
+      console.error("❌ Failed to parse response as JSON:", parseError);
+      throw new Error(`Invalid JSON response: ${responseText}`);
+    }
+
+    if (!response.ok) {
+      // Handle 401 Unauthorized specifically
+      if (response.status === 401) {
+        throw new Error("Unauthorized: Please check your API configuration");
+      }
+      throw new Error(data.message || `Request failed with status ${response.status}`);
+    }
+
+    return data;
+  } catch (error: any) {
+    console.error("❌ API Request Error:", error);
+    
+    // Handle network errors
+    if (error.message.includes("Network request failed")) {
+      throw new Error("Network error: Please check your internet connection");
+    }
+    
+    // Handle CORS errors
+    if (error.message.includes("Failed to fetch") || error.message.includes("CORS")) {
+      throw new Error("CORS error: Please check backend CORS configuration");
+    }
+    
+    throw error;
+  }
+};
+
+  // Step 2: Send OTP for signup
+const sendSignupOtp = async () => {
+  if (!validatePhoneNumber(formData.phone)) {
+    Alert.alert(
+      "Error",
+      "Please enter a valid Sri Lankan mobile number (e.g., 0712345678)"
+    );
+    return;
+  }
+
+  setVerificationLoading(true);
+  try {
+    // First check if phone exists
+    const phoneAlreadyExists = await checkPhoneExists();
+    if (phoneAlreadyExists) {
+      setVerificationLoading(false);
+      return;
+    }
+
+    console.log("📱 Sending OTP for signup:", formData.phone);
+
+    // Use the API helper
+    const data = await apiRequest("/auth/send-signup-otp", "POST", {
+      phone: formData.phone,
+    });
+
+    console.log("✅ OTP sent successfully:", data);
+
+    setIsOtpSent(true);
+    setOtpCountdown(60);
+    setCanResendOtp(false);
+    setOtp(["", "", "", ""]);
+    setTempUserId(data.tempUserId || "");
+
+    Alert.alert("Success", "OTP sent to your mobile number");
+  } catch (error: any) {
+    console.error("❌ OTP send error:", error);
+    
+    // Specific error handling
+    if (error.message.includes("Unauthorized")) {
+      Alert.alert(
+        "Configuration Error",
+        "Please ensure the backend is properly configured with CORS and authentication headers."
+      );
+    } else if (error.message.includes("CORS")) {
+      Alert.alert(
+        "CORS Error",
+        "Cannot connect to the server. Please check if the backend allows requests from this origin."
+      );
+    } else {
+      Alert.alert(
+        "Error",
+        error.message || "Failed to send OTP. Please try again."
+      );
+    }
+  } finally {
+    setVerificationLoading(false);
+  }
+};
+  // Step 3: Resend OTP
+  const resendOtp = async () => {
+    if (!canResendOtp) return;
+
+    setVerificationLoading(true);
+    try {
+      console.log("📱 Resending OTP for signup:", formData.phone);
+
+      // Use the signup-specific OTP endpoint for resending
+      const response = await fetch(`${API}/api/v1/auth/send-signup-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: formData.phone,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to resend OTP");
+      }
+
+      console.log("✅ OTP resent successfully:", data);
+
+      setOtpCountdown(60);
+      setCanResendOtp(false);
+      setOtp(["", "", "", ""]);
+
+      Alert.alert("Success", "New OTP sent to your mobile number");
+    } catch (error: any) {
+      console.error("❌ Resend OTP error:", error);
+      Alert.alert(
+        "Error",
+        error.message || "Failed to resend OTP. Please try again."
+      );
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  // Step 4: Verify OTP
+  const verifyOtp = async (enteredOtp?: string) => {
+    const otpToVerify = enteredOtp || otp.join("");
+
+    if (otpToVerify.length !== 4) {
+      Alert.alert("Error", "Please enter a valid 4-digit OTP");
+      return;
+    }
+
+    setVerifyOtpLoading(true);
+    try {
+      console.log("📱 Verifying OTP for signup:", otpToVerify);
+
+      // Use the signup-specific OTP verification endpoint
+      const response = await fetch(`${API}/api/v1/auth/verify-signup-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: formData.phone,
+          otp: otpToVerify,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Invalid OTP");
+      }
+
+      console.log("✅ OTP verified successfully:", data);
+
+      // Store the verification token
+      setResetToken(data.verificationToken || "");
+      setIsPhoneVerified(true);
+      setIsOtpSent(false);
+      setOtpCountdown(0);
+
+      Alert.alert("Success", "Phone number verified successfully!");
+    } catch (error: any) {
+      console.error("❌ OTP verification error:", error);
+      Alert.alert("Error", error.message || "Invalid OTP. Please try again.");
+      // Clear OTP on error
+      setOtp(["", "", "", ""]);
+      otpInputRefs.current[0]?.focus();
+    } finally {
+      setVerifyOtpLoading(false);
+    }
+  };
+
+  // Step 5: Complete signup with verified phone
+  const completeSignup = async () => {
+    // Validate required fields
+    const requiredFields = [
+      !formData.email,
+      !formData.phone,
+      !formData.firstName,
+      !formData.lastName,
+      !formData.dateOfBirth,
+      !formData.password,
+      !formData.confirmPassword,
+    ];
+
+    if (requiredFields.some(field => field)) {
       Alert.alert("Error", "Please fill all required fields");
+      return;
+    }
+
+    if (!isPhoneVerified) {
+      Alert.alert("Error", "Please verify your phone number first");
       return;
     }
 
@@ -600,74 +635,97 @@ const SignUp = () => {
       return;
     }
 
-    if (formData.password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters long");
+    if (formData.password.length < 8) {
+      Alert.alert("Error", "Password must be at least 8 characters long");
       return;
     }
 
-    // Validate mobile number format (Sri Lankan)
-    const mobileRegex = /^(071|076|077|075|078|070|074|072)\d{7}$/;
-    if (!mobileRegex.test(formData.phone)) {
+    // Validate password strength
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
+    if (!passwordRegex.test(formData.password)) {
       Alert.alert(
         "Error",
-        "Please enter a valid Sri Lankan mobile number (e.g., 0712345678)"
+        "Password must contain at least 1 uppercase, 1 lowercase, 1 number, and 1 special character"
       );
       return;
     }
 
-    // Validate date of birth
-    const birthDate = new Date(formData.dateOfBirth);
-    if (isNaN(birthDate.getTime())) {
-      Alert.alert("Error", "Invalid date of birth");
+    if (userRole === "Teacher" && !formData.acceptTerms) {
+      Alert.alert("Error", "You must accept the terms and conditions");
       return;
     }
 
-    // Check if date is in the future
-    const today = new Date();
-    if (birthDate > today) {
-      Alert.alert("Error", "Date of birth cannot be in the future");
-      return;
+    // Additional validation for teacher registration
+    if (userRole === "Teacher") {
+      const requiredTeacherFields = [
+        !teacherData.registrationId,
+        !teacherData.address,
+        !teacherData.currentSchool,
+        !teacherData.currentDistrict,
+        !teacherData.currentZone,
+      ];
+
+      if (requiredTeacherFields.some(field => field)) {
+        Alert.alert("Error", "Please fill all required teacher fields");
+        return;
+      }
     }
 
     setLoading(true);
     try {
-      const firstName = formData.firstName;
-      const lastName = formData.lastName;
+      let registerDto;
 
-      // Format phone number with country code
-      const formattedPhone = `+94${formData.phone.substring(1)}`;
+      if (userRole === "Teacher") {
+        // Teacher registration with updated fields
+        registerDto = {
+          phone: formData.phone,
+          email: formData.email,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          dateOfBirth: formData.dateOfBirth + "T00:00:00.000Z",
+          role: "EXTERNAL_TEACHER",
+          password: formData.password,
+          // Teacher-specific required fields
+          registrationId: teacherData.registrationId,
+          currentSchool: teacherData.currentSchool,
+          address: teacherData.address,
+          currentZone: teacherData.currentZone,
+          currentDistrict: teacherData.currentDistrict,
+          nicNumber: teacherData.nicNumber || undefined,
+          requiredZones: teacherData.requiredZones,
+          requiredDistricts: teacherData.requiredDistricts,
+          subject: teacherData.subject || "General",
+          medium: teacherData.medium || "English",
+          level: teacherData.level || "A/L",
+          acceptTerms: formData.acceptTerms,
+          // Optional fields
+          qualifications: teacherData.qualifications,
+          experience: teacherData.experience ? parseInt(teacherData.experience) : undefined,
+          department: teacherData.department,
+          specialization: teacherData.specialization,
+        };
+      } else {
+        // Student registration
+        registerDto = {
+          phone: formData.phone,
+          email: formData.email,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          dateOfBirth: formData.dateOfBirth + "T00:00:00.000Z",
+          role: "INTERNAL_STUDENT",
+          password: formData.password,
+          ...(formData.district && { district: formData.district }),
+          ...(formData.zone && { zone: formData.zone }),
+          ...(formData.grade && { grade: formData.grade }),
+          ...(formData.school && { school: formData.school }),
+          ...(formData.medium && { medium: formData.medium }),
+          ...(formData.institution && { institution: formData.institution }),
+          ...(formData.institutionCode && { institutionCode: formData.institutionCode }),
+        };
+      }
 
-      // FIX: Convert to ISO string with time component
-      const dateOfBirth = new Date(
-        formData.dateOfBirth + "T00:00:00.000Z"
-      ).toISOString();
-
-      const requestBody = {
-        phone: formattedPhone,
-        email: formData.email,
-        password: formData.password,
-        firstName: firstName,
-        dateOfBirth: dateOfBirth, // Now sending as ISO string
-        lastName: lastName,
-        role: "INTERNAL_STUDENT",
-        // Optional fields
-        ...(formData.district && { district: formData.district }),
-        ...(formData.zone && { zone: formData.zone }),
-        ...(formData.grade && { grade: formData.grade }),
-        ...(formData.school && { school: formData.school }),
-        ...(formData.medium && { medium: formData.medium }),
-        ...(formData.institution && { institution: formData.institution }),
-        ...(formData.institutionCode && {
-          institutionCode: formData.institutionCode,
-        }),
-      };
-
-      console.log(
-        "📤 Sending signup request to:",
-        `${API}/api/v1/auth/register`
-      );
-      console.log("📦 Request body:", JSON.stringify(requestBody, null, 2));
-      console.log("📅 Date of Birth value:", dateOfBirth);
+      console.log("📤 Completing signup with verified phone");
+      console.log("📦 Request body:", JSON.stringify(registerDto, null, 2));
 
       // Include verification token if available
       const headers: Record<string, string> = {
@@ -682,14 +740,9 @@ const SignUp = () => {
 
       const response = await fetch(`${API}/api/v1/auth/register`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-client-type": "mobile", // ← ADD THIS HEADER
-        },
-        body: JSON.stringify(requestBody),
+        headers: headers,
+        body: JSON.stringify(registerDto),
       });
-
-      console.log("📥 Response status:", response.status);
 
       const responseText = await response.text();
       console.log("📥 Raw response:", responseText);
@@ -702,74 +755,20 @@ const SignUp = () => {
         throw new Error(`Server returned invalid JSON: ${responseText}`);
       }
 
-      console.log("📥 Parsed response data:", data);
-
       if (!response.ok) {
-        console.error("❌ API Error:", {
-          status: response.status,
-          statusText: response.statusText,
-          data: data,
-        });
-
-        if (data.message) {
-          throw new Error(data.message);
-        } else if (response.status === 400) {
-          throw new Error("Bad request - please check your input");
-        } else if (response.status === 409) {
-          throw new Error("User already exists");
-        } else if (response.status === 500) {
-          throw new Error("Server error - please try again later");
-        } else {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
+        throw new Error(data.message || "Signup failed");
       }
 
-      console.log("✅ Signup successful:", data);
+      console.log("✅ Signup completed successfully:", data);
 
-      // ✅ CHECK FOR TOKENS AND STORE THEM
-      if (data.access_token && data.refresh_token) {
-        console.log("🎉 Tokens received! Storing user and tokens...");
-        console.log("🔑 Access Token:", data.access_token ? "Yes" : "No");
-        console.log("🔑 Refresh Token:", data.refresh_token ? "Yes" : "No");
-        console.log(
-          "📋 Registration Number:",
-          data.user?.registrationNumber || "N/A"
-        );
-
-        // Store user data with tokens
-
-        // And in your handleSignUp function, use:
-        await signIn(data.user, data.access_token, data.refresh_token);
-
-        // Build success message with registration number if available
-        const registrationNumber = data.user?.registrationNumber;
-        const successMessage = registrationNumber
-          ? `Account created successfully!\n\nYour Registration Number:\n${registrationNumber}\n\nPlease save this number for future reference.`
-          : "Account created successfully! You are now signed in.";
-
-        Alert.alert("Success", successMessage, [
+      Alert.alert(
+        "Account Created Successfully!",
+        `Your ${userRole === "Teacher" ? "teacher" : "student"} account has been created. Please sign in to continue.`,
+        [
           {
-            text: "OK",
+            text: "Sign In",
             onPress: () => {
-              // Navigate to home since user is already signed in
-              router.replace("/(root)/(tabs)/home");
-            },
-          },
-        ]);
-      } else {
-        console.warn("⚠️ No tokens in response - redirecting to sign in");
-
-        // Build success message with registration number if available
-        const registrationNumber = data.user?.registrationNumber;
-        const successMessage = registrationNumber
-          ? `Account created successfully!\n\nYour Registration Number:\n${registrationNumber}\n\nPlease save this number and sign in to continue.`
-          : "Account created successfully! Please sign in to continue.";
-
-        Alert.alert("Success", successMessage, [
-          {
-            text: "OK",
-            onPress: () => {
-              // Reset form and navigate to sign-in
+              // Clear all form data
               setFormData({
                 email: "",
                 phone: "",
@@ -808,48 +807,103 @@ const SignUp = () => {
                 canMonitorExams: true,
                 canManageClasses: true,
               });
-              router.replace("/sign-in");
+              resetVerification();
+              router.replace("/(auth)/sign-in");
             },
           },
-        ]);
+        ]
+      );
+    } catch (error: any) {
+      console.error("❌ Signup completion error:", error);
+      
+      // Handle specific error for duplicate phone
+      if (error.message && error.message.toLowerCase().includes("phone") && error.message.toLowerCase().includes("exist")) {
+        Alert.alert(
+          "Phone Number Already Exists",
+          "This phone number is already registered. Please use a different number or try signing in."
+        );
+        setPhoneExists(true);
+        resetVerification();
+      } else {
+        Alert.alert(
+          "Error",
+          error.message || "Failed to complete signup. Please try again."
+        );
       }
-    } catch (error) {
-      console.error("❌ Signup error details:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      });
-
-      let errorMessage =
-        error.message || "Failed to sign up. Please try again.";
-
-      // Make error messages more user-friendly
-      if (
-        error.message.includes("User with this phone number already exists")
-      ) {
-        errorMessage = "This phone number is already registered.";
-      } else if (error.message.includes("Email already registered")) {
-        errorMessage = "This email address is already registered.";
-      } else if (
-        error.message.includes("network") ||
-        error.message.includes("fetch")
-      ) {
-        errorMessage = "Network error. Please check your internet connection.";
-      } else if (error.message.includes("Internal teacher accounts")) {
-        errorMessage =
-          "This account type cannot be created through self-registration.";
-      } else if (
-        error.message.includes("premature end of input") ||
-        error.message.includes("DateTime")
-      ) {
-        errorMessage = "Invalid date format. Please check your date of birth.";
-      }
-
-      Alert.alert("Sign Up Error", errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  // Date picker handlers
+  const handleDateChange = (event: any, selectedDate: Date | undefined) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      const formattedDate = selectedDate.toISOString().split("T")[0];
+      setFormData((prev) => ({ ...prev, dateOfBirth: formattedDate }));
+    }
+  };
+
+  const showDatepicker = () => {
+    setShowDatePicker(true);
+  };
+
+  // Dropdown selection handlers
+  const handleDistrictSelect = (district: string) => {
+    handleChange("district", district);
+    setShowDistrictDropdown(false);
+  };
+
+  const handleZoneSelect = (zone: string) => {
+    handleChange("zone", zone);
+    setShowZoneDropdown(false);
+  };
+
+  const handleCurrentDistrictSelect = (district: string) => {
+    handleTeacherChange("currentDistrict", district);
+  };
+
+  const handleCurrentZoneSelect = (zone: string) => {
+    handleTeacherChange("currentZone", zone);
+    setShowCurrentZoneDropdown(false);
+  };
+
+  const handleGradeSelect = (grade: string) => {
+    handleChange("grade", grade);
+    setShowGradeDropdown(false);
+  };
+
+  const handleMediumSelect = (medium: string) => {
+    handleChange("medium", medium);
+    setShowMediumDropdown(false);
+  };
+
+  const handleSubjectSelect = (subject: string) => {
+    handleTeacherChange("subject", subject);
+    setShowSubjectDropdown(false);
+  };
+
+  const handleLevelSelect = (level: string) => {
+    handleTeacherChange("level", level);
+    setShowLevelDropdown(false);
+  };
+
+  // Render dropdown items
+  const renderDropdownItem = ({
+    item,
+    onSelect,
+  }: {
+    item: string;
+    onSelect: (item: string) => void;
+  }) => (
+    <TouchableOpacity
+      style={styles.dropdownItem}
+      onPress={() => onSelect(item)}
+    >
+      <Text style={styles.dropdownItemText}>{item}</Text>
+    </TouchableOpacity>
+  );
+
   // Pick only the icons you want
   const selectedIcons: ImageSourcePropType[] = [
     icons.Icon1,
@@ -871,26 +925,20 @@ const SignUp = () => {
 
   const getPredefinedPositions = () => {
     const positions = [
-      // Top row
       { top: 25, left: 10 },
       { top: 25, left: 50 },
       { top: 25, left: 90 },
-      // Upper middle row
       { top: 60, left: 20 },
       { top: 60, left: 80 },
-      // Middle row
       { top: 95, left: 5 },
       { top: 95, left: 35 },
       { top: 95, left: 65 },
       { top: 95, left: 95 },
-      // Lower middle row
       { top: 130, left: 15 },
       { top: 130, left: 50 },
       { top: 130, left: 85 },
-      // Bottom row
       { top: 165, left: 25 },
       { top: 165, left: 75 },
-      // Very bottom row
       { top: 200, left: 5 },
       { top: 200, left: 40 },
       { top: 200, left: 60 },
@@ -918,20 +966,19 @@ const SignUp = () => {
       const randomSize = 20 + Math.random() * 12;
       const randomRotation = Math.random() * 20 - 10;
 
-      // Animation transforms - same as other screens
       const translateY = animatedValues[index].interpolate({
         inputRange: [0, 1],
-        outputRange: [0, -15], // Increased movement for better visibility
+        outputRange: [0, -15],
       });
 
       const scale = animatedValues[index].interpolate({
         inputRange: [0, 1],
-        outputRange: [1, 1.1], // Slightly more scale change
+        outputRange: [1, 1.1],
       });
 
       const rotate = animatedValues[index].interpolate({
         inputRange: [0, 1],
-        outputRange: [`${randomRotation}deg`, `${randomRotation + 8}deg`], // More rotation
+        outputRange: [`${randomRotation}deg`, `${randomRotation + 8}deg`],
       });
 
       const opacity = animatedValues[index].interpolate({
@@ -969,6 +1016,699 @@ const SignUp = () => {
     });
   };
 
+  // Render Phone Verification Section
+  const renderPhoneVerification = () => (
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>
+        Phone Number <Text style={styles.required}>*</Text>
+      </Text>
+      <View style={styles.inputWrapper}>
+        <MaterialIcons
+          name="phone"
+          size={18}
+          color="#999"
+          style={styles.icon}
+        />
+        <TextInput
+          style={[styles.textInput, { flex: 1 }]}
+          placeholder="Phone Number"
+          placeholderTextColor="#9ca3af"
+          keyboardType="phone-pad"
+          value={formData.phone}
+          onChangeText={(text) => {
+            const cleanedText = text.replace(/[^0-9]/g, "");
+            if (cleanedText.length <= 10) {
+              handleChange("phone", cleanedText);
+            }
+          }}
+          maxLength={10}
+          editable={!isPhoneVerified && !isOtpSent}
+        />
+        {!isPhoneVerified && !isOtpSent && (
+          <TouchableOpacity
+            style={[
+              styles.verifyButton,
+              (!formData.phone || verificationLoading || phoneExists) &&
+                styles.disabledButton,
+            ]}
+            onPress={sendSignupOtp}
+            disabled={!formData.phone || verificationLoading || phoneExists}
+          >
+            {verificationLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.verifyButtonText}>
+                {phoneExists ? "Already Exists" : "Verify"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
+        {isPhoneVerified && (
+          <View style={styles.verifiedBadge}>
+            <MaterialIcons name="check-circle" size={20} color="#10b981" />
+          </View>
+        )}
+      </View>
+
+      {phoneExists && (
+        <Text style={styles.errorText}>
+          <MaterialIcons name="error" size={14} color="#ef4444" /> Phone number
+          already registered
+        </Text>
+      )}
+
+      {isOtpSent && !isPhoneVerified && (
+        <>
+          {/* OTP Input Section */}
+          <View style={styles.otpSection}>
+            <Text style={styles.otpLabel}>
+              Enter 4-digit OTP sent to{" "}
+              {formData.phone.replace(/(\d{3})\d{4}(\d{3})/, "$1****$2")}
+            </Text>
+
+            {/* OTP Input Boxes */}
+            <View style={styles.otpContainer}>
+              {otp.map((digit, index) => (
+                <TextInput
+                  key={index}
+                  ref={(ref) => (otpInputRefs.current[index] = ref)}
+                  style={[styles.otpInputBox, digit && styles.otpInputFilled]}
+                  value={digit}
+                  onChangeText={(value) => handleOtpChange(value, index)}
+                  onKeyPress={(e) => handleOtpKeyPress(e, index)}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  selectTextOnFocus
+                  editable={!verifyOtpLoading}
+                />
+              ))}
+            </View>
+
+            {/* Timer and Resend */}
+            <View style={styles.otpActionsContainer}>
+              {otpCountdown > 0 ? (
+                <Text style={styles.timerText}>
+                  Resend OTP in {formatCountdown(otpCountdown)}
+                </Text>
+              ) : (
+                <TouchableOpacity
+                  onPress={resendOtp}
+                  disabled={!canResendOtp || verificationLoading}
+                >
+                  <Text
+                    style={[
+                      styles.resendText,
+                      (!canResendOtp || verificationLoading) &&
+                        styles.resendTextDisabled,
+                    ]}
+                  >
+                    Resend OTP
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.verifyOtpButton,
+                  (otp.join("").length !== 4 || verifyOtpLoading) &&
+                    styles.disabledButton,
+                ]}
+                onPress={() => verifyOtp()}
+                disabled={otp.join("").length !== 4 || verifyOtpLoading}
+              >
+                {verifyOtpLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.verifyOtpButtonText}>Verify OTP</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      )}
+
+      {isPhoneVerified && (
+        <Text style={styles.verifiedText}>
+          <MaterialIcons name="check-circle" size={14} color="#10b981" /> Phone
+          number verified
+        </Text>
+      )}
+    </View>
+  );
+
+  // Render Teacher Specific Fields
+  const renderTeacherFields = () => {
+    if (userRole !== "Teacher") return null;
+
+    return (
+      <>
+        <Text style={styles.sectionTitle}>Teacher Registration Information</Text>
+
+        {/* Teacher Registration Number */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>
+            Teacher Registration Number <Text style={styles.required}>*</Text>
+          </Text>
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="badge" size={18} color="#999" style={styles.icon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Teacher Registration Number"
+              placeholderTextColor="#9ca3af"
+              value={teacherData.registrationId}
+              onChangeText={(text) => handleTeacherChange("registrationId", text)}
+            />
+          </View>
+        </View>
+
+        {/* Address */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>
+            Address <Text style={styles.required}>*</Text>
+          </Text>
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="home" size={18} color="#999" style={styles.icon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Full Address"
+              placeholderTextColor="#9ca3af"
+              value={teacherData.address}
+              onChangeText={(text) => handleTeacherChange("address", text)}
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+        </View>
+
+        {/* NIC Number */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>NIC Number (Optional)</Text>
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="credit-card" size={18} color="#999" style={styles.icon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="NIC Number"
+              placeholderTextColor="#9ca3af"
+              value={teacherData.nicNumber}
+              onChangeText={(text) => handleTeacherChange("nicNumber", text)}
+            />
+          </View>
+        </View>
+
+        {/* Current School */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>
+            Current School <Text style={styles.required}>*</Text>
+          </Text>
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="school" size={18} color="#999" style={styles.icon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Current School Name"
+              placeholderTextColor="#9ca3af"
+              value={teacherData.currentSchool}
+              onChangeText={(text) => handleTeacherChange("currentSchool", text)}
+            />
+          </View>
+        </View>
+
+        {/* Current District */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>
+            Current District <Text style={styles.required}>*</Text>
+          </Text>
+          <TouchableOpacity
+            style={styles.inputWrapper}
+            onPress={() => setShowDistrictDropdown(true)}
+          >
+            <MaterialIcons name="location-on" size={18} color="#999" style={styles.icon} />
+            <Text
+              style={[
+                styles.textInput,
+                !teacherData.currentDistrict && { color: "#9ca3af" },
+              ]}
+            >
+              {teacherData.currentDistrict || "Select Current District"}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <Modal
+            visible={showDistrictDropdown}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowDistrictDropdown(false)}
+          >
+            <TouchableWithoutFeedback
+              onPress={() => setShowDistrictDropdown(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.dropdownContainer}>
+                  <FlatList
+                    data={districts}
+                    keyExtractor={(item) => item}
+                    renderItem={({ item }) =>
+                      renderDropdownItem({
+                        item,
+                        onSelect: handleCurrentDistrictSelect,
+                      })
+                    }
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+        </View>
+
+        {/* Current Zone */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>
+            Current School Zone <Text style={styles.required}>*</Text>
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.inputWrapper,
+              !teacherData.currentDistrict && styles.disabledInput,
+            ]}
+            onPress={() => teacherData.currentDistrict && setShowCurrentZoneDropdown(true)}
+            disabled={!teacherData.currentDistrict}
+          >
+            <MaterialIcons name="map" size={18} color="#999" style={styles.icon} />
+            <Text
+              style={[
+                styles.textInput,
+                !teacherData.currentZone && { color: "#9ca3af" },
+              ]}
+            >
+              {teacherData.currentZone ||
+                (teacherData.currentDistrict ? "Select Zone" : "Select District First")}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <Modal
+            visible={showCurrentZoneDropdown}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowCurrentZoneDropdown(false)}
+          >
+            <TouchableWithoutFeedback
+              onPress={() => setShowCurrentZoneDropdown(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.dropdownContainer}>
+                  <FlatList
+                    data={availableCurrentZones}
+                    keyExtractor={(item) => item}
+                    renderItem={({ item }) =>
+                      renderDropdownItem({
+                        item,
+                        onSelect: handleCurrentZoneSelect,
+                      })
+                    }
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+        </View>
+
+        {/* Required Districts (Multi-selection) */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Required Districts (Optional)</Text>
+          <TouchableOpacity
+            style={styles.inputWrapper}
+            onPress={() => setShowRequiredDistrictDropdown(true)}
+          >
+            <MaterialIcons name="location-city" size={18} color="#999" style={styles.icon} />
+            <Text
+              style={[
+                styles.textInput,
+                teacherData.requiredDistricts.length === 0 && { color: "#9ca3af" },
+              ]}
+            >
+              {teacherData.requiredDistricts.length > 0
+                ? `${teacherData.requiredDistricts.length} districts selected`
+                : "Select Required Districts"}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <Modal
+            visible={showRequiredDistrictDropdown}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowRequiredDistrictDropdown(false)}
+          >
+            <TouchableWithoutFeedback
+              onPress={() => setShowRequiredDistrictDropdown(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={[styles.dropdownContainer, { maxHeight: 400 }]}>
+                  <FlatList
+                    data={districts}
+                    keyExtractor={(item) => item}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.checkboxItem}
+                        onPress={() => toggleRequiredDistrict(item)}
+                      >
+                        <Checkbox
+                          value={teacherData.requiredDistricts.includes(item)}
+                          onValueChange={() => toggleRequiredDistrict(item)}
+                          color={teacherData.requiredDistricts.includes(item) ? "#3b82f6" : undefined}
+                        />
+                        <Text style={styles.checkboxText}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+        </View>
+
+        {/* Required Zones (Multi-selection) */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Required Zones (Optional)</Text>
+          <TouchableOpacity
+            style={styles.inputWrapper}
+            onPress={() => setShowRequiredZoneDropdown(true)}
+          >
+            <MaterialIcons name="map" size={18} color="#999" style={styles.icon} />
+            <Text
+              style={[
+                styles.textInput,
+                teacherData.requiredZones.length === 0 && { color: "#9ca3af" },
+              ]}
+            >
+              {teacherData.requiredZones.length > 0
+                ? `${teacherData.requiredZones.length} zones selected`
+                : "Select Required Zones"}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <Modal
+            visible={showRequiredZoneDropdown}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowRequiredZoneDropdown(false)}
+          >
+            <TouchableWithoutFeedback
+              onPress={() => setShowRequiredZoneDropdown(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={[styles.dropdownContainer, { maxHeight: 400 }]}>
+                  <FlatList
+                    data={availableZones}
+                    keyExtractor={(item) => item}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.checkboxItem}
+                        onPress={() => toggleRequiredZone(item)}
+                      >
+                        <Checkbox
+                          value={teacherData.requiredZones.includes(item)}
+                          onValueChange={() => toggleRequiredZone(item)}
+                          color={teacherData.requiredZones.includes(item) ? "#3b82f6" : undefined}
+                        />
+                        <Text style={styles.checkboxText}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+        </View>
+
+        {/* Subject */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Subject</Text>
+          <TouchableOpacity
+            style={styles.inputWrapper}
+            onPress={() => setShowSubjectDropdown(true)}
+          >
+            <MaterialIcons name="book" size={18} color="#999" style={styles.icon} />
+            <Text
+              style={[
+                styles.textInput,
+                !teacherData.subject && { color: "#9ca3af" },
+              ]}
+            >
+              {teacherData.subject || "Select Subject"}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <Modal
+            visible={showSubjectDropdown}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowSubjectDropdown(false)}
+          >
+            <TouchableWithoutFeedback
+              onPress={() => setShowSubjectDropdown(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.dropdownContainer}>
+                  <FlatList
+                    data={subjects}
+                    keyExtractor={(item) => item}
+                    renderItem={({ item }) =>
+                      renderDropdownItem({
+                        item,
+                        onSelect: handleSubjectSelect,
+                      })
+                    }
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+        </View>
+
+        {/* Teaching Level */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Teaching Level</Text>
+          <TouchableOpacity
+            style={styles.inputWrapper}
+            onPress={() => setShowLevelDropdown(true)}
+          >
+            <MaterialIcons name="trending-up" size={18} color="#999" style={styles.icon} />
+            <Text
+              style={[
+                styles.textInput,
+                !teacherData.level && { color: "#9ca3af" },
+              ]}
+            >
+              {teacherData.level || "Select Level"}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <Modal
+            visible={showLevelDropdown}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowLevelDropdown(false)}
+          >
+            <TouchableWithoutFeedback
+              onPress={() => setShowLevelDropdown(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.dropdownContainer}>
+                  <FlatList
+                    data={levels}
+                    keyExtractor={(item) => item}
+                    renderItem={({ item }) =>
+                      renderDropdownItem({
+                        item,
+                        onSelect: handleLevelSelect,
+                      })
+                    }
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+        </View>
+
+        {/* Department */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Department (Optional)</Text>
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="business" size={18} color="#999" style={styles.icon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Department"
+              placeholderTextColor="#9ca3af"
+              value={teacherData.department}
+              onChangeText={(text) => handleTeacherChange("department", text)}
+            />
+          </View>
+        </View>
+
+        {/* Specialization */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Specialization (Optional)</Text>
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="psychology" size={18} color="#999" style={styles.icon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Specialization"
+              placeholderTextColor="#9ca3af"
+              value={teacherData.specialization}
+              onChangeText={(text) => handleTeacherChange("specialization", text)}
+            />
+          </View>
+        </View>
+
+        {/* Years of Experience */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Years of Experience (Optional)</Text>
+          <View style={styles.inputWrapper}>
+            <MaterialIcons name="history" size={18} color="#999" style={styles.icon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Years of Experience"
+              placeholderTextColor="#9ca3af"
+              keyboardType="number-pad"
+              value={teacherData.experience}
+              onChangeText={(text) => handleTeacherChange("experience", text)}
+            />
+          </View>
+        </View>
+
+        {/* Qualifications */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Qualifications (Optional)</Text>
+          <TouchableOpacity
+            style={styles.inputWrapper}
+            onPress={() => setShowQualificationDropdown(true)}
+          >
+            <MaterialIcons name="school" size={18} color="#999" style={styles.icon} />
+            <Text
+              style={[
+                styles.textInput,
+                teacherData.qualifications.length === 0 && { color: "#9ca3af" },
+              ]}
+            >
+              {teacherData.qualifications.length > 0
+                ? `${teacherData.qualifications.length} selected`
+                : "Select Qualifications"}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <Modal
+            visible={showQualificationDropdown}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowQualificationDropdown(false)}
+          >
+            <TouchableWithoutFeedback
+              onPress={() => setShowQualificationDropdown(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={[styles.dropdownContainer, { maxHeight: 400 }]}>
+                  <FlatList
+                    data={qualifications}
+                    keyExtractor={(item) => item}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.checkboxItem}
+                        onPress={() => toggleQualification(item)}
+                      >
+                        <Checkbox
+                          value={teacherData.qualifications.includes(item)}
+                          onValueChange={() => toggleQualification(item)}
+                          color={teacherData.qualifications.includes(item) ? "#3b82f6" : undefined}
+                        />
+                        <Text style={styles.checkboxText}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+        </View>
+
+        {/* Teaching Permissions
+        <View style={styles.permissionsContainer}>
+          <Text style={styles.label}>Teaching Permissions</Text>
+          
+          <View style={styles.permissionRow}>
+            <View style={styles.permissionCheckbox}>
+              <Checkbox
+                value={teacherData.canCreateExams}
+                onValueChange={(value) => handleTeacherChange("canCreateExams", value)}
+                color={teacherData.canCreateExams ? "#3b82f6" : undefined}
+              />
+              <Text style={styles.permissionText}>Can Create Exams</Text>
+            </View>
+            
+            <View style={styles.permissionCheckbox}>
+              <Checkbox
+                value={teacherData.canMonitorExams}
+                onValueChange={(value) => handleTeacherChange("canMonitorExams", value)}
+                color={teacherData.canMonitorExams ? "#3b82f6" : undefined}
+              />
+              <Text style={styles.permissionText}>Can Monitor Exams</Text>
+            </View>
+            
+            <View style={styles.permissionCheckbox}>
+              <Checkbox
+                value={teacherData.canManageClasses}
+                onValueChange={(value) => handleTeacherChange("canManageClasses", value)}
+                color={teacherData.canManageClasses ? "#3b82f6" : undefined}
+              />
+              <Text style={styles.permissionText}>Can Manage Classes</Text>
+            </View>
+          </View>
+        </View>
+ */}
+        {/* Terms and Conditions */}
+        <View style={styles.termsContainer}>
+          <View style={styles.termsCheckbox}>
+            <Checkbox
+              value={formData.acceptTerms}
+              onValueChange={(value) => handleChange("acceptTerms", value.toString())}
+              color={formData.acceptTerms ? "#3b82f6" : undefined}
+            />
+            <Text style={styles.termsText}>
+              I accept the Terms and Conditions for teacher registration
+            </Text>
+          </View>
+        </View>
+      </>
+    );
+  };
+
+  // Render Role Indicator
+  const renderRoleIndicator = () => {
+    if (!userRole) return null;
+    
+    return (
+      <View style={styles.roleIndicator}>
+        <Text style={styles.roleIndicatorText}>
+          {userRole === "Teacher" 
+            ? "Teacher Registration" 
+            : "Student Registration"}
+        </Text>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Top Gradient with Icons and Waves */}
@@ -981,10 +1721,10 @@ const SignUp = () => {
         {/* Icons Layer with Animation */}
         <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
 
-        {/* Title - Only Learn APP in top section */}
+        {/* Title */}
         <Text style={styles.header}>Learn APP</Text>
 
-        {/* Light Blue Wave - BELOW the white wave */}
+        {/* Light Blue Wave */}
         <View style={styles.lightBlueWaveContainer}>
           <Svg
             height="92"
@@ -999,7 +1739,7 @@ const SignUp = () => {
           </Svg>
         </View>
 
-        {/* White Wave - ABOVE the blue wave */}
+        {/* White Wave */}
         <Svg
           height="92"
           width="100%"
@@ -1042,8 +1782,8 @@ const SignUp = () => {
                 First Name <Text style={styles.required}>*</Text>
               </Text>
               <View style={styles.inputWrapper}>
-                <AntDesign
-                  name="user"
+                <MaterialIcons
+                  name="person"
                   size={18}
                   color="#999"
                   style={styles.icon}
@@ -1064,8 +1804,8 @@ const SignUp = () => {
                 Last Name <Text style={styles.required}>*</Text>
               </Text>
               <View style={styles.inputWrapper}>
-                <AntDesign
-                  name="user"
+                <MaterialIcons
+                  name="person"
                   size={18}
                   color="#999"
                   style={styles.icon}
@@ -1089,8 +1829,8 @@ const SignUp = () => {
                 style={styles.inputWrapper}
                 onPress={showDatepicker}
               >
-                <AntDesign
-                  name="calendar"
+                <MaterialIcons
+                  name="calendar-today"
                   size={18}
                   color="#999"
                   style={styles.icon}
@@ -1112,35 +1852,6 @@ const SignUp = () => {
                   onChange={handleDateChange}
                 />
               )}
-            </View>
-
-            {/* Mobile Number */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>
-                Phone Number <Text style={styles.required}>*</Text>
-              </Text>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons
-                  name="phone"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Phone Number (e.g., 0712345678)"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="phone-pad"
-                  value={formData.phone}
-                  onChangeText={(text) => {
-                    const cleanedText = text.replace(/[^0-9]/g, "");
-                    if (cleanedText.length <= 10) {
-                      handleChange("phone", cleanedText);
-                    }
-                  }}
-                  maxLength={10}
-                />
-              </View>
             </View>
 
             {/* Email */}
@@ -1168,410 +1879,291 @@ const SignUp = () => {
               </View>
             </View>
 
-            {/* Academic Info Section */}
-            <Text style={styles.sectionTitle}>Academic Information</Text>
+            {/* Phone Verification */}
+            {renderPhoneVerification()}
 
-            {/* District */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>District</Text>
-              <TouchableOpacity
-                style={styles.inputWrapper}
-                onPress={() => setShowDistrictDropdown(true)}
-              >
-                <MaterialIcons
-                  name="location-on"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <Text
-                  style={[
-                    styles.textInput,
-                    !formData.district && { color: "#9ca3af" },
-                  ]}
-                >
-                  {formData.district || "District"}
-                </Text>
-                <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
-              </TouchableOpacity>
+            {/* Teacher Specific Fields */}
+            {renderTeacherFields()}
 
-              <Modal
-                visible={showDistrictDropdown}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowDistrictDropdown(false)}
-              >
-                <TouchableWithoutFeedback
-                  onPress={() => setShowDistrictDropdown(false)}
-                >
-                  <View style={styles.modalOverlay}>
-                    <View style={styles.dropdownContainer}>
-                      <FlatList
-                        data={districts}
-                        keyExtractor={(item) => item}
-                        renderItem={({ item }) =>
-                          renderDropdownItem({
-                            item,
-                            onSelect: handleDistrictSelect,
-                          })
-                        }
-                        showsVerticalScrollIndicator={false}
-                      />
-                    </View>
+            {/* Only show these academic fields for students */}
+            {userRole !== "Teacher" && (
+              <>
+                <Text style={styles.sectionTitle}>Academic Information</Text>
+
+                {/* District */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>District</Text>
+                  <TouchableOpacity
+                    style={styles.inputWrapper}
+                    onPress={() => setShowDistrictDropdown(true)}
+                  >
+                    <MaterialIcons
+                      name="location-on"
+                      size={18}
+                      color="#999"
+                      style={styles.icon}
+                    />
+                    <Text
+                      style={[
+                        styles.textInput,
+                        !formData.district && { color: "#9ca3af" },
+                      ]}
+                    >
+                      {formData.district || "District"}
+                    </Text>
+                    <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+                  </TouchableOpacity>
+
+                  <Modal
+                    visible={showDistrictDropdown}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowDistrictDropdown(false)}
+                  >
+                    <TouchableWithoutFeedback
+                      onPress={() => setShowDistrictDropdown(false)}
+                    >
+                      <View style={styles.modalOverlay}>
+                        <View style={styles.dropdownContainer}>
+                          <FlatList
+                            data={districts}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) =>
+                              renderDropdownItem({
+                                item,
+                                onSelect: handleDistrictSelect,
+                              })
+                            }
+                            showsVerticalScrollIndicator={false}
+                          />
+                        </View>
+                      </View>
+                    </TouchableWithoutFeedback>
+                  </Modal>
+                </View>
+
+                {/* Zone */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Zone</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.inputWrapper,
+                      !formData.district && styles.disabledInput,
+                    ]}
+                    onPress={() => formData.district && setShowZoneDropdown(true)}
+                    disabled={!formData.district}
+                  >
+                    <MaterialIcons
+                      name="map"
+                      size={18}
+                      color="#999"
+                      style={styles.icon}
+                    />
+                    <Text
+                      style={[
+                        styles.textInput,
+                        !formData.zone && { color: "#9ca3af" },
+                      ]}
+                    >
+                      {formData.zone ||
+                        (formData.district ? "Zone" : "Select District First")}
+                    </Text>
+                    <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+                  </TouchableOpacity>
+
+                  <Modal
+                    visible={showZoneDropdown}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowZoneDropdown(false)}
+                  >
+                    <TouchableWithoutFeedback
+                      onPress={() => setShowZoneDropdown(false)}
+                    >
+                      <View style={styles.modalOverlay}>
+                        <View style={styles.dropdownContainer}>
+                          <FlatList
+                            data={availableZones}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) =>
+                              renderDropdownItem({
+                                item,
+                                onSelect: handleZoneSelect,
+                              })
+                            }
+                            showsVerticalScrollIndicator={false}
+                          />
+                        </View>
+                      </View>
+                    </TouchableWithoutFeedback>
+                  </Modal>
+                </View>
+
+                {/* Grade */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Grade</Text>
+                  <TouchableOpacity
+                    style={styles.inputWrapper}
+                    onPress={() => setShowGradeDropdown(true)}
+                  >
+                    <MaterialIcons
+                      name="school"
+                      size={18}
+                      color="#999"
+                      style={styles.icon}
+                    />
+                    <Text
+                      style={[
+                        styles.textInput,
+                        !formData.grade && { color: "#9ca3af" },
+                      ]}
+                    >
+                      {formData.grade || "Grade"}
+                    </Text>
+                    <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+                  </TouchableOpacity>
+
+                  <Modal
+                    visible={showGradeDropdown}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowGradeDropdown(false)}
+                  >
+                    <TouchableWithoutFeedback
+                      onPress={() => setShowGradeDropdown(false)}
+                    >
+                      <View style={styles.modalOverlay}>
+                        <View style={styles.dropdownContainer}>
+                          <FlatList
+                            data={grades}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) =>
+                              renderDropdownItem({
+                                item,
+                                onSelect: handleGradeSelect,
+                              })
+                            }
+                            showsVerticalScrollIndicator={false}
+                          />
+                        </View>
+                      </View>
+                    </TouchableWithoutFeedback>
+                  </Modal>
+                </View>
+
+                {/* School */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>School</Text>
+                  <View style={styles.inputWrapper}>
+                    <MaterialIcons
+                      name="apartment"
+                      size={18}
+                      color="#999"
+                      style={styles.icon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="School"
+                      placeholderTextColor="#9ca3af"
+                      value={formData.school}
+                      onChangeText={(t) => handleChange("school", t)}
+                    />
                   </View>
-                </TouchableWithoutFeedback>
-              </Modal>
-            </View>
+                </View>
 
-            {/* Zone */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Zone</Text>
-              <TouchableOpacity
-                style={[
-                  styles.inputWrapper,
-                  !formData.district && styles.disabledInput,
-                ]}
-                onPress={() => formData.district && setShowZoneDropdown(true)}
-                disabled={!formData.district}
-              >
-                <MaterialIcons
-                  name="map"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <Text
-                  style={[
-                    styles.textInput,
-                    !formData.zone && { color: "#9ca3af" },
-                  ]}
-                >
-                  {formData.zone ||
-                    (formData.district ? "Zone" : "Select District First")}
-                </Text>
-                <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
-              </TouchableOpacity>
+                {/* Medium */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Medium</Text>
+                  <TouchableOpacity
+                    style={styles.inputWrapper}
+                    onPress={() => setShowMediumDropdown(true)}
+                  >
+                    <MaterialIcons
+                      name="translate"
+                      size={18}
+                      color="#999"
+                      style={styles.icon}
+                    />
+                    <Text
+                      style={[
+                        styles.textInput,
+                        !formData.medium && { color: "#9ca3af" },
+                      ]}
+                    >
+                      {formData.medium || "Medium"}
+                    </Text>
+                    <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
+                  </TouchableOpacity>
 
-              <Modal
-                visible={showZoneDropdown}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowZoneDropdown(false)}
-              >
-                <TouchableWithoutFeedback
-                  onPress={() => setShowZoneDropdown(false)}
-                >
-                  <View style={styles.modalOverlay}>
-                    <View style={styles.dropdownContainer}>
-                      <FlatList
-                        data={availableZones}
-                        keyExtractor={(item) => item}
-                        renderItem={({ item }) =>
-                          renderDropdownItem({
-                            item,
-                            onSelect: handleZoneSelect,
-                          })
-                        }
-                        showsVerticalScrollIndicator={false}
-                      />
-                    </View>
+                  <Modal
+                    visible={showMediumDropdown}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowMediumDropdown(false)}
+                  >
+                    <TouchableWithoutFeedback
+                      onPress={() => setShowMediumDropdown(false)}
+                    >
+                      <View style={styles.modalOverlay}>
+                        <View style={styles.dropdownContainer}>
+                          <FlatList
+                            data={mediums}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) =>
+                              renderDropdownItem({
+                                item,
+                                onSelect: handleMediumSelect,
+                              })
+                            }
+                            showsVerticalScrollIndicator={false}
+                          />
+                        </View>
+                      </View>
+                    </TouchableWithoutFeedback>
+                  </Modal>
+                </View>
+
+                {/* Institution */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Institution</Text>
+                  <View style={styles.inputWrapper}>
+                    <MaterialIcons
+                      name="business"
+                      size={18}
+                      color="#999"
+                      style={styles.icon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Institution"
+                      placeholderTextColor="#9ca3af"
+                      value={formData.institution}
+                      onChangeText={(t) => handleChange("institution", t)}
+                    />
                   </View>
-                </TouchableWithoutFeedback>
-              </Modal>
-            </View>
+                </View>
 
-            {/* Grade */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Grade</Text>
-              <TouchableOpacity
-                style={styles.inputWrapper}
-                onPress={() => setShowGradeDropdown(true)}
-              >
-                <MaterialIcons
-                  name="school"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <Text
-                  style={[
-                    styles.textInput,
-                    !formData.grade && { color: "#9ca3af" },
-                  ]}
-                >
-                  {formData.grade || "Grade"}
-                </Text>
-                <MaterialIcons name="arrow-drop-down" size={20} color="#999" />
-              </TouchableOpacity>
-
-              <Modal
-                visible={showGradeDropdown}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowGradeDropdown(false)}
-              >
-                <TouchableWithoutFeedback
-                  onPress={() => setShowGradeDropdown(false)}
-                >
-                  <View style={styles.modalOverlay}>
-                    <View style={styles.dropdownContainer}>
-                      <FlatList
-                        data={grades}
-                        keyExtractor={(item) => item}
-                        renderItem={({ item }) =>
-                          renderDropdownItem({
-                            item,
-                            onSelect: handleGradeSelect,
-                          })
-                        }
-                        showsVerticalScrollIndicator={false}
-                      />
-                    </View>
+                {/* Institution Code */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Institution Code (Optional)</Text>
+                  <View style={styles.inputWrapper}>
+                    <MaterialIcons
+                      name="vpn-key"
+                      size={18}
+                      color="#999"
+                      style={styles.icon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Institution Code"
+                      placeholderTextColor="#9ca3af"
+                      value={formData.institutionCode}
+                      onChangeText={(t) => handleChange("institutionCode", t)}
+                    />
                   </View>
-                </TouchableWithoutFeedback>
-              </Modal>
-            </View>
-
-            {/* School */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>School</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons
-                  name="apartment"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="School"
-                  placeholderTextColor="#9ca3af"
-                  value={formData.school}
-                  onChangeText={(t) => handleChange("school", t)}
-                />
-              </View>
-            </View>
-
-            {/* Zone */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Zone</Text>
-              <TouchableOpacity
-                style={[
-                  styles.inputWrapper,
-                  !formData.district && styles.disabledInput,
-                ]}
-                onPress={() => formData.district && setShowZoneDropdown(true)}
-                disabled={!formData.district}
-              >
-                <MaterialIcons
-                  name="map"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <Text
-                  style={[
-                    styles.textInput,
-                    !formData.zone && { color: "#9ca3af" },
-                  ]}
-                >
-                  {formData.zone ||
-                    (formData.district ? "Zone" : "Select District First")}
-                </Text>
-                <AntDesign name="down" size={16} color="#999" />
-              </TouchableOpacity>
-
-              <Modal
-                visible={showZoneDropdown}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowZoneDropdown(false)}
-              >
-                <TouchableWithoutFeedback
-                  onPress={() => setShowZoneDropdown(false)}
-                >
-                  <View style={styles.modalOverlay}>
-                    <View style={styles.dropdownContainer}>
-                      <FlatList
-                        data={availableZones}
-                        keyExtractor={(item) => item}
-                        renderItem={({ item }) =>
-                          renderDropdownItem({
-                            item,
-                            onSelect: handleZoneSelect,
-                          })
-                        }
-                        showsVerticalScrollIndicator={false}
-                      />
-                    </View>
-                  </View>
-                </TouchableWithoutFeedback>
-              </Modal>
-            </View>
-
-            {/* Grade */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Grade</Text>
-              <TouchableOpacity
-                style={styles.inputWrapper}
-                onPress={() => setShowGradeDropdown(true)}
-              >
-                <MaterialIcons
-                  name="school"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <Text
-                  style={[
-                    styles.textInput,
-                    !formData.grade && { color: "#9ca3af" },
-                  ]}
-                >
-                  {formData.grade || "Grade"}
-                </Text>
-                <AntDesign name="down" size={16} color="#999" />
-              </TouchableOpacity>
-
-              <Modal
-                visible={showGradeDropdown}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowGradeDropdown(false)}
-              >
-                <TouchableWithoutFeedback
-                  onPress={() => setShowGradeDropdown(false)}
-                >
-                  <View style={styles.modalOverlay}>
-                    <View style={styles.dropdownContainer}>
-                      <FlatList
-                        data={grades}
-                        keyExtractor={(item) => item}
-                        renderItem={({ item }) =>
-                          renderDropdownItem({
-                            item,
-                            onSelect: handleGradeSelect,
-                          })
-                        }
-                        showsVerticalScrollIndicator={false}
-                      />
-                    </View>
-                  </View>
-                </TouchableWithoutFeedback>
-              </Modal>
-            </View>
-
-            {/* School */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>School</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons
-                  name="apartment"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="School"
-                  placeholderTextColor="#9ca3af"
-                  value={formData.school}
-                  onChangeText={(t) => handleChange("school", t)}
-                />
-              </View>
-            </View>
-
-            {/* Medium */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Medium</Text>
-              <TouchableOpacity
-                style={styles.inputWrapper}
-                onPress={() => setShowMediumDropdown(true)}
-              >
-                <MaterialIcons
-                  name="translate"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <Text
-                  style={[
-                    styles.textInput,
-                    !formData.medium && { color: "#9ca3af" },
-                  ]}
-                >
-                  {formData.medium || "Medium"}
-                </Text>
-                <AntDesign name="down" size={16} color="#999" />
-              </TouchableOpacity>
-
-              <Modal
-                visible={showMediumDropdown}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowMediumDropdown(false)}
-              >
-                <TouchableWithoutFeedback
-                  onPress={() => setShowMediumDropdown(false)}
-                >
-                  <View style={styles.modalOverlay}>
-                    <View style={styles.dropdownContainer}>
-                      <FlatList
-                        data={mediums}
-                        keyExtractor={(item) => item}
-                        renderItem={({ item }) =>
-                          renderDropdownItem({
-                            item,
-                            onSelect: handleMediumSelect,
-                          })
-                        }
-                        showsVerticalScrollIndicator={false}
-                      />
-                    </View>
-                  </View>
-                </TouchableWithoutFeedback>
-              </Modal>
-            </View>
-
-            {/* Institution */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Institution</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons
-                  name="business"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Institution"
-                  placeholderTextColor="#9ca3af"
-                  value={formData.institution}
-                  onChangeText={(t) => handleChange("institution", t)}
-                />
-              </View>
-            </View>
-
-            {/* Institution Code */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Institution Code (Optional)</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons
-                  name="generating-tokens"
-                  size={18}
-                  color="#999"
-                  style={styles.icon}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Institution Code"
-                  placeholderTextColor="#9ca3af"
-                  value={formData.institutionCode}
-                  onChangeText={(t) => handleChange("institutionCode", t)}
-                />
-              </View>
-            </View>
+                </View>
+              </>
+            )}
 
             {/* Password Section */}
             <Text style={styles.sectionTitle}>Password</Text>
@@ -1597,6 +2189,10 @@ const SignUp = () => {
                   onChangeText={(t) => handleChange("password", t)}
                 />
               </View>
+              <Text style={styles.helperText}>
+                Must be at least 8 characters with uppercase, lowercase, number
+                & special character
+              </Text>
             </View>
 
             {/* Confirm Password */}
@@ -1624,18 +2220,25 @@ const SignUp = () => {
 
             {/* Sign Up Button */}
             <TouchableOpacity
-              style={[styles.signUpButton, loading && styles.disabledButton]}
-              onPress={handleSignUp}
-              disabled={loading}
+              style={[
+                styles.signUpButton,
+                (!isPhoneVerified || loading) && styles.disabledButton,
+              ]}
+              onPress={completeSignup}
+              disabled={!isPhoneVerified || loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.signUpButtonText}>Sign UP</Text>
+                <Text style={styles.signUpButtonText}>
+                  {isPhoneVerified 
+                    ? `Sign Up as ${userRole === "Teacher" ? "Teacher" : "Student"}` 
+                    : "Verify Phone to Sign Up"}
+                </Text>
               )}
             </TouchableOpacity>
 
-            {/* Sign In */}
+            {/* Sign In Link */}
             <View style={styles.signInContainer}>
               <Text style={styles.signInText}>Already Have An Account? </Text>
               <TouchableOpacity onPress={() => router.back()}>
@@ -1699,14 +2302,14 @@ const styles = StyleSheet.create({
   headingContainer: {
     alignItems: "center",
     marginTop: 40,
-    marginBottom: 30,
+    marginBottom: 20,
   },
   roleIndicator: {
     backgroundColor: "#f0f4ff",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    alignSelf: "center",
+    alignSelf: 'center',
     marginBottom: 20,
     borderWidth: 1,
     borderColor: "#dbeafe",
@@ -1727,16 +2330,18 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 4,
     fontFamily: "Poppins-Regular",
+    textAlign: "center",
+    paddingHorizontal: 20,
   },
   formContainer: {
     paddingHorizontal: 32,
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#000",
-    marginTop: 20,
+    marginTop: 10,
     marginBottom: 16,
     fontFamily: "Poppins-SemiBold",
   },
@@ -1777,6 +2382,107 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingVertical: 0,
   },
+  // Phone Verification Styles
+  verifyButton: {
+    backgroundColor: "#3b82f6",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  verifyButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+  },
+  verifiedBadge: {
+    marginLeft: 8,
+  },
+  verifiedText: {
+    fontSize: 12,
+    color: "#10b981",
+    marginTop: 4,
+    fontFamily: "Poppins-Medium",
+  },
+  errorText: {
+    fontSize: 12,
+    color: "#ef4444",
+    marginTop: 4,
+    fontFamily: "Poppins-Medium",
+  },
+  // OTP Section Styles
+  otpSection: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  otpLabel: {
+    fontSize: 14,
+    color: "#374151",
+    marginBottom: 12,
+    fontFamily: "Poppins-Medium",
+    textAlign: "center",
+  },
+  otpContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  otpInputBox: {
+    width: 60,
+    height: 60,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    textAlign: "center",
+    fontSize: 24,
+    fontFamily: "Poppins-SemiBold",
+    color: "#000",
+    backgroundColor: "#fff",
+  },
+  otpInputFilled: {
+    borderColor: "#3b82f6",
+    backgroundColor: "#f0f7ff",
+  },
+  otpActionsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  timerText: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontFamily: "Poppins-Regular",
+  },
+  resendText: {
+    fontSize: 12,
+    color: "#3b82f6",
+    fontFamily: "Poppins-Medium",
+  },
+  resendTextDisabled: {
+    color: "#9ca3af",
+  },
+  verifyOtpButton: {
+    backgroundColor: "#10b981",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  verifyOtpButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Poppins-Medium",
+  },
+  // Other styles
+  helperText: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 4,
+    fontFamily: "Poppins-Regular",
+  },
   // Dropdown styles
   modalOverlay: {
     flex: 1,
@@ -1806,6 +2512,70 @@ const styles = StyleSheet.create({
     color: "#000",
     fontFamily: "Poppins-Regular",
   },
+  // Checkbox styles
+  checkboxItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  checkboxText: {
+    fontSize: 14,
+    color: "#000",
+    fontFamily: "Poppins-Regular",
+    marginLeft: 12,
+  },
+  // Permissions styles
+  permissionsContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  permissionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 8,
+  },
+  permissionCheckbox: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    minWidth: "45%",
+  },
+  permissionText: {
+    fontSize: 12,
+    color: "#374151",
+    fontFamily: "Poppins-Regular",
+    marginLeft: 8,
+  },
+  // Terms styles
+  termsContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: "#f0f7ff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+  },
+  termsCheckbox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  termsText: {
+    fontSize: 12,
+    color: "#1e40af",
+    fontFamily: "Poppins-Regular",
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 18,
+  },
+  // Signup Button
   signUpButton: {
     backgroundColor: "#3b82f6",
     paddingVertical: 16,
@@ -1824,6 +2594,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: "Poppins-SemiBold",
   },
+  // Sign In Link
   signInContainer: {
     flexDirection: "row",
     justifyContent: "center",

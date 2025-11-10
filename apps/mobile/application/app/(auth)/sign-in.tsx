@@ -28,16 +28,16 @@ const API = process.env.EXPO_PUBLIC_API_URL;
 // Enhanced helper function to validate email or phone
 const isValidIdentifier = (value: string): boolean => {
   if (!value || value.trim() === "") return false;
-
+  
   // Check if it's an email
   const emailRegex = /^\S+@\S+\.\S+$/;
   if (emailRegex.test(value)) {
     return true;
   }
-
+  
   // Check if it's a valid phone number (supports international formats)
-  const cleanPhone = value.replace(/\D/g, ""); // Remove non-digits
-
+  const cleanPhone = value.replace(/\D/g, ''); // Remove non-digits
+  
   // Phone number should be 9-15 digits (with optional country code)
   return cleanPhone.length >= 9 && cleanPhone.length <= 15;
 };
@@ -45,51 +45,51 @@ const isValidIdentifier = (value: string): boolean => {
 // Helper function to format phone number
 const formatPhoneNumber = (phone: string): string => {
   // Remove all non-digits
-  const cleaned = phone.replace(/\D/g, "");
-
+  const cleaned = phone.replace(/\D/g, '');
+  
   // If it starts with 0, convert to +94 format
-  if (cleaned.startsWith("0")) {
+  if (cleaned.startsWith('0')) {
     return `+94${cleaned.substring(1)}`;
   }
-
+  
   // If it's 9 digits, assume it's a Sri Lankan number and add +94
   if (cleaned.length === 9) {
     return `+94${cleaned}`;
   }
-
+  
   // If it starts with 94, add the +
-  if (cleaned.startsWith("94")) {
+  if (cleaned.startsWith('94')) {
     return `+${cleaned}`;
   }
-
+  
   // Otherwise return as is with +
-  return cleaned.startsWith("+") ? cleaned : `+${cleaned}`;
+  return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
 };
 
 // Improved helper to determine if identifier is likely email
 const isLikelyEmail = (identifier: string): boolean => {
   if (!identifier) return false;
-
+  
   // If it already contains @, it's definitely an email
-  if (identifier.includes("@")) {
+  if (identifier.includes('@')) {
     return true;
   }
-
+  
   // If it contains . (dot) and letters, it might be an email without @ yet
-  if (identifier.includes(".") && /[a-zA-Z]/.test(identifier)) {
+  if (identifier.includes('.') && /[a-zA-Z]/.test(identifier)) {
     return true;
   }
-
+  
   // If it contains only digits, it's likely a phone number
-  if (/^\d+$/.test(identifier.replace(/\D/g, ""))) {
+  if (/^\d+$/.test(identifier.replace(/\D/g, ''))) {
     return false;
   }
-
+  
   // If it contains letters, assume it's an email being typed
   if (/[a-zA-Z]/.test(identifier)) {
     return true;
   }
-
+  
   // Default to phone for empty or numeric input
   return false;
 };
@@ -97,17 +97,17 @@ const isLikelyEmail = (identifier: string): boolean => {
 // Get keyboard type based on input
 const getKeyboardType = (value: string): KeyboardTypeOptions => {
   if (!value) return "default";
-
+  
   if (isLikelyEmail(value)) {
     return "email-address";
   }
-
+  
   // Check if input looks like a phone number
-  const cleanValue = value.replace(/\D/g, "");
+  const cleanValue = value.replace(/\D/g, '');
   if (cleanValue.length > 0 && /^\d+$/.test(cleanValue)) {
     return "phone-pad";
   }
-
+  
   // Default to default keyboard for mixed input
   return "default";
 };
@@ -115,22 +115,22 @@ const getKeyboardType = (value: string): KeyboardTypeOptions => {
 // Get placeholder based on current input
 const getPlaceholder = (value: string): string => {
   if (!value) return "Enter your email or phone number";
-
+  
   if (isLikelyEmail(value)) {
     return "Enter your email address";
   }
-
+  
   return "Enter your phone number";
 };
 
 // Get icon based on input
 const getIconName = (value: string): string => {
   if (!value) return "person-outline";
-
+  
   if (isLikelyEmail(value)) {
     return "mail-outline";
   }
-
+  
   return "call-outline";
 };
 
@@ -148,7 +148,7 @@ const SignIn = () => {
       password: "",
     },
   });
-
+  
   const [secureText, setSecureText] = useState(true);
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -157,7 +157,7 @@ const SignIn = () => {
     identifier: "",
     password: "",
   });
-
+  
   const identifierValue = watch("identifier");
 
   const router = useRouter();
@@ -243,18 +243,15 @@ const SignIn = () => {
   };
 
   // Handle sign up navigation
-  const handleSignUp = () => {
-    router.push({
-      pathname: "/(auth)/sign-up",
-      params: { role: userRole }, // Pass the role parameter
-    });
-  };
+ const handleSignUp = () => {
+  router.push({
+    pathname: "/(auth)/sign-up",
+    params: { role: userRole } // Pass the role parameter
+  });
+};
 
   // Handle sign in with email or phone
-  const onSubmit = async (credentials: {
-    identifier: string;
-    password: string;
-  }) => {
+  const onSubmit = async (credentials: { identifier: string; password: string }) => {
     try {
       setLoading(true);
 
@@ -270,10 +267,8 @@ const SignIn = () => {
 
       // Format phone number if it's not an email
       let formattedIdentifier = credentials.identifier;
-      const isEmailInput =
-        isLikelyEmail(credentials.identifier) &&
-        credentials.identifier.includes("@");
-
+      const isEmailInput = isLikelyEmail(credentials.identifier) && credentials.identifier.includes('@');
+      
       if (!isEmailInput) {
         formattedIdentifier = formatPhoneNumber(credentials.identifier);
       }
@@ -286,7 +281,7 @@ const SignIn = () => {
 
       // Prepare allowedRoles based on selected role
       let allowedRoles: string[] = [];
-
+      
       if (userRole) {
         // Define which roles are allowed based on the selected portal
         if (userRole === "Teacher" || userRole === "TEACHER") {
@@ -321,13 +316,9 @@ const SignIn = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-
+        
         // Check if error is due to role mismatch
-        if (
-          errorData.message?.includes("role") ||
-          errorData.message?.includes("Role") ||
-          errorData.message?.includes("not allowed")
-        ) {
+        if (errorData.message?.includes("role") || errorData.message?.includes("Role") || errorData.message?.includes("not allowed")) {
           Alert.alert(
             "Role Mismatch",
             `This account cannot access the ${userRole === "Teacher" || userRole === "TEACHER" ? "Teacher" : "Student"} portal. Please use the correct portal for your account type.`,
@@ -335,14 +326,14 @@ const SignIn = () => {
               {
                 text: "Go Back",
                 onPress: () => router.back(),
-                style: "cancel",
-              },
+                style: "cancel"
+              }
             ]
           );
         } else {
           throw new Error(errorData.message || "Login failed");
         }
-
+        
         setLoading(false);
         return;
       }
@@ -367,20 +358,13 @@ const SignIn = () => {
 
       // Verify the user role matches the expected portal
       if (userRole) {
-        const isTeacherPortal =
-          userRole === "Teacher" || userRole === "TEACHER";
-        const isStudentPortal =
-          userRole === "Internal" || userRole === "INTERNAL_STUDENT";
-
-        const userIsTeacher =
-          user.role === "INTERNAL_TEACHER" || user.role === "EXTERNAL_TEACHER";
-        const userIsStudent =
-          user.role === "INTERNAL_STUDENT" || user.role === "EXTERNAL_STUDENT";
-
-        if (
-          (isTeacherPortal && !userIsTeacher) ||
-          (isStudentPortal && !userIsStudent)
-        ) {
+        const isTeacherPortal = userRole === "Teacher" || userRole === "TEACHER";
+        const isStudentPortal = userRole === "Internal" || userRole === "INTERNAL_STUDENT";
+        
+        const userIsTeacher = user.role === "INTERNAL_TEACHER" || user.role === "EXTERNAL_TEACHER";
+        const userIsStudent = user.role === "INTERNAL_STUDENT" || user.role === "EXTERNAL_STUDENT";
+        
+        if ((isTeacherPortal && !userIsTeacher) || (isStudentPortal && !userIsStudent)) {
           Alert.alert(
             "Invalid Portal Access",
             `You are trying to access the ${isTeacherPortal ? "Teacher" : "Student"} portal with a ${user.role} account. Please use the correct portal.`,
@@ -388,8 +372,8 @@ const SignIn = () => {
               {
                 text: "Go Back",
                 onPress: () => router.back(),
-                style: "cancel",
-              },
+                style: "cancel"
+              }
             ]
           );
           setLoading(false);
@@ -401,20 +385,10 @@ const SignIn = () => {
       await signIn(user, accessToken, refreshToken);
 
       console.log("✅ Sign in successful!");
-      if (
-        userRole === "Internal" ||
-        userRole === "INTERNAL_STUDENT" ||
-        userRole === "External" ||
-        userRole === "EXTERNAL_STUDENT"
-      ) {
-        router.replace("/(root)/(tabs)/home");
-      } else if (
-        userRole === "Teacher" ||
-        userRole === "TEACHER" ||
-        userRole === "INTERNAL_TEACHER" ||
-        userRole === "EXTERNAL_TEACHER"
-      ) {
-        router.replace("/(root)/(tabs)/TeacherHome");
+      if(userRole === "Internal" || userRole === "INTERNAL_STUDENT" || userRole === "External" || userRole === "EXTERNAL_STUDENT") {
+              router.replace("/(root)/(tabs)/home");
+      } else if(userRole === "Teacher" || userRole === "TEACHER" || userRole === "INTERNAL_TEACHER" || userRole === "EXTERNAL_TEACHER") {
+              router.replace("/(root)/(tabs)/TeacherHome");
       }
     } catch (error: any) {
       console.error("❌ Sign in error:", error);
@@ -597,8 +571,8 @@ const SignIn = () => {
         {userRole && (
           <View style={styles.roleIndicator}>
             <Text style={styles.roleIndicatorText}>
-              {userRole === "Teacher" || userRole === "TEACHER"
-                ? "Signing in as Teacher"
+              {userRole === "Teacher" || userRole === "TEACHER" 
+                ? "Signing in as Teacher" 
                 : "Signing in as Student"}
             </Text>
           </View>
@@ -612,9 +586,7 @@ const SignIn = () => {
             name="identifier"
             rules={{
               required: "Email or phone number is required",
-              validate: (value) =>
-                isValidIdentifier(value) ||
-                "Please enter a valid email or phone number",
+              validate: (value) => isValidIdentifier(value) || "Please enter a valid email or phone number",
             }}
             render={({ field: { onChange, value } }) => (
               <View style={styles.inputContainer}>
@@ -630,11 +602,7 @@ const SignIn = () => {
                   <Ionicons
                     name={getIconName(value)}
                     size={18}
-                    color={
-                      errors.identifier || apiErrors.identifier
-                        ? "#ef4444"
-                        : "gray"
-                    }
+                    color={errors.identifier || apiErrors.identifier ? "#ef4444" : "gray"}
                   />
                   <TextInput
                     placeholder={getPlaceholder(value)}
@@ -653,15 +621,12 @@ const SignIn = () => {
                 </View>
                 {(errors.identifier || apiErrors.identifier) && (
                   <Text style={styles.errorText}>
-                    {(errors.identifier?.message as string) ||
-                      apiErrors.identifier}
+                    {(errors.identifier?.message as string) || apiErrors.identifier}
                   </Text>
                 )}
                 {value && !errors.identifier && (
                   <Text style={styles.identifierTypeText}>
-                    {isLikelyEmail(value)
-                      ? "Using email to sign in"
-                      : "Using phone number to sign in"}
+                    {isLikelyEmail(value) ? "Using email to sign in" : "Using phone number to sign in"}
                   </Text>
                 )}
               </View>
@@ -823,7 +788,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    alignSelf: "center",
+    alignSelf: 'center',
     marginBottom: 20,
     borderWidth: 1,
     borderColor: "#dbeafe",

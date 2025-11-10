@@ -10,6 +10,9 @@
 
 */
 -- DropForeignKey
+ALTER TABLE "auth_sessions" DROP CONSTRAINT "auth_sessions_userid_fkey";
+
+-- DropForeignKey
 ALTER TABLE "exam_question_mappings" DROP CONSTRAINT "exam_question_mappings_examId_fkey";
 
 -- DropForeignKey
@@ -39,6 +42,63 @@ ALTER TABLE "questions" DROP CONSTRAINT "questions_deletedBy_fkey";
 -- DropForeignKey
 ALTER TABLE "questions" DROP CONSTRAINT "questions_subjectId_fkey";
 
+-- DropForeignKey
+ALTER TABLE "refresh_tokens" DROP CONSTRAINT "refresh_tokens_sessionid_fkey";
+
+-- DropForeignKey
+ALTER TABLE "refresh_tokens" DROP CONSTRAINT "refresh_tokens_userid_fkey";
+
+-- DropIndex
+DROP INDEX "idx_attendance_user_class_date";
+
+-- DropIndex
+DROP INDEX "idx_class_rescheduling_date";
+
+-- DropIndex
+DROP INDEX "idx_classes_soft_delete";
+
+-- DropIndex
+DROP INDEX "idx_classes_status_createdat";
+
+-- DropIndex
+DROP INDEX "idx_classes_teacher_subject_grade";
+
+-- DropIndex
+DROP INDEX "idx_enrollments_student_class";
+
+-- DropIndex
+DROP INDEX "idx_enrollments_student_status";
+
+-- DropIndex
+DROP INDEX "idx_exam_attempts_student_exam_status";
+
+-- DropIndex
+DROP INDEX "idx_exam_attempts_submitted";
+
+-- DropIndex
+DROP INDEX "idx_exams_grade_subject_medium";
+
+-- DropIndex
+DROP INDEX "idx_exams_status_window";
+
+-- DropIndex
+DROP INDEX "idx_payments_user_status_createdat";
+
+-- DropIndex
+DROP INDEX "idx_refresh_tokens_hash";
+
+-- DropIndex
+DROP INDEX "idx_users_email_phone";
+
+-- DropIndex
+DROP INDEX "idx_users_phone_hash";
+
+-- DropIndex
+DROP INDEX "idx_users_role_status_createdat";
+
+-- DropIndex
+DROP INDEX "idx_users_soft_delete";
+
 -- AlterTable
 ALTER TABLE "exams" DROP COLUMN "questionSource";
 
@@ -59,21 +119,3 @@ DROP TABLE "questions";
 
 -- DropEnum
 DROP TYPE "ExamQuestionSource";
-
--- CreateTable
-CREATE TABLE "temp_signups" (
-    "id" TEXT NOT NULL,
-    "phone" TEXT NOT NULL,
-    "otp" TEXT,
-    "otpExpires" TIMESTAMP(3),
-    "attempts" INTEGER NOT NULL DEFAULT 0,
-    "verified" BOOLEAN NOT NULL DEFAULT false,
-    "verifiedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "temp_signups_pkey" PRIMARY KEY ("id")
-);
-
--- CreateIndex
-CREATE UNIQUE INDEX "temp_signups_phone_key" ON "temp_signups"("phone");

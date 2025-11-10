@@ -1,3 +1,4 @@
+// apps/frontend/app/teacher/transfer/create.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -15,7 +16,22 @@ import {
   Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  ArrowLeft,
+  Save,
+  X,
+  ChevronDown,
+  User,
+  School,
+  MapPin,
+  BookOpen,
+  Award,
+  MessageSquare,
+  Check,
+  CheckCircle,
+  ClipboardCheck,
+  AlertCircle,
+} from "lucide-react-native";
 import { apiFetch } from "../../../utils/api";
 import useAuthStore from "../../../stores/authStore";
 
@@ -482,7 +498,7 @@ export default function CreateTransferRequest() {
           },
           {
             text: "Done",
-            onPress: () => router.push("/(root)/(tabs)/TeacherHome"),
+            onPress: () => router.push("/teacher/transfer/requests"),
           },
         ]
       );
@@ -619,7 +635,7 @@ export default function CreateTransferRequest() {
               >
                 {displayValue || `Select ${label}`}
               </Text>
-              <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              <ChevronDown size={20} color="#6B7280" />
             </View>
             {error && <Text style={styles.errorText}>{error}</Text>}
           </View>
@@ -713,7 +729,7 @@ export default function CreateTransferRequest() {
               onPress={() => router.push("/(root)/(tabs)/TeacherHome")}
               style={styles.backButton}
             >
-              <Ionicons name="arrow-back" size={24} color="#111827" />
+              <ArrowLeft size={24} color="#111827" />
             </TouchableOpacity>
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Existing Request</Text>
@@ -726,7 +742,7 @@ export default function CreateTransferRequest() {
 
         <View style={styles.existingRequestContainer}>
           <View style={styles.existingRequestContent}>
-            <Ionicons name="alert-circle" size={64} color="#F59E0B" />
+            <AlertCircle size={64} color="#F59E0B" />
             <Text style={styles.existingRequestTitle}>
               Active Transfer Request
             </Text>
@@ -756,8 +772,9 @@ export default function CreateTransferRequest() {
             onPress={() => router.push("/(root)/(tabs)/TeacherHome")}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#111827" />
+            <ArrowLeft size={24} color="#111827" />
           </TouchableOpacity>
+          
         </View>
       </View>
 
@@ -768,7 +785,7 @@ export default function CreateTransferRequest() {
         {/* Instructions */}
         <View style={styles.instructionsBanner}>
           <View style={styles.instructionsContent}>
-            <Ionicons name="checkmark-done-circle" size={20} color="#4F46E5" />
+            <ClipboardCheck size={20} color="#4F46E5" />
             <View style={styles.instructionsText}>
               <Text style={styles.instructionsTitle}>Important</Text>
               <Text style={styles.instructionsSubtitle}>
@@ -782,7 +799,7 @@ export default function CreateTransferRequest() {
         {/* Registration & Service */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="person" size={20} color="#4F46E5" />
+            <User size={20} color="#4F46E5" />
             <Text style={styles.sectionTitle}>Registration & Service</Text>
           </View>
 
@@ -944,10 +961,10 @@ export default function CreateTransferRequest() {
           </View>
         </View>
 
-        {/* Internal Teacher Toggle 
+        {/* Internal Teacher Toggle */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="checkmark-circle" size={20} color="#4F46E5" />
+            <CheckCircle size={20} color="#4F46E5" />
             <Text style={styles.sectionTitle}>Internal Teacher</Text>
             <Switch
               value={formData.isInternalTeacher}
@@ -959,7 +976,7 @@ export default function CreateTransferRequest() {
               style={{ marginLeft: "auto" }}
             />
           </View>
-        </View>*/}
+        </View>
 
         {/* Submit Button */}
         <TouchableOpacity
@@ -971,12 +988,7 @@ export default function CreateTransferRequest() {
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>
-              <Ionicons
-                name="save"
-                size={20}
-                color="#fff"
-                style={styles.submitIcon}
-              />
+              <Save size={20} color="#fff" style={styles.submitIcon} />
               <Text style={styles.submitButtonText}>
                 Submit Transfer Request
               </Text>
@@ -1027,7 +1039,7 @@ export default function CreateTransferRequest() {
                         {item.label}
                       </Text>
                       {tempSelected.includes(item.value) && (
-                        <Ionicons name="checkmark" size={20} color="#4F46E5" />
+                        <Check size={20} color="#4F46E5" />
                       )}
                     </TouchableOpacity>
                   )}

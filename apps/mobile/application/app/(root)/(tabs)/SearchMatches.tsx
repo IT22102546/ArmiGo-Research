@@ -1,3 +1,4 @@
+// apps/frontend/app/(root)/(tabs)/SearchMatches.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -151,7 +152,7 @@ const STATUS_OPTIONS = [
   { id: "7", value: "REJECTED", label: "Rejected" },
 ];
 
-export default function SearchMatches() {
+export default function SearchMatchesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -356,7 +357,7 @@ export default function SearchMatches() {
       const authStore = useAuthStore.getState();
       const userRole = authStore.currentUser?.role;
 
-      let endpoint = "/api/v1/transfer/matches";
+      let endpoint = "/api/v1/transfer/browse";
       let queryParams = "";
 
       // Build query parameters from filters
@@ -1636,4 +1637,3 @@ const styles = StyleSheet.create({
     fontFamily: "Inter-Medium",
   },
 });
-

@@ -560,116 +560,90 @@ export default function ExamBuilderWizard({
         return;
       }
 
-      // For MIXED type exams, validate and correct part marks to ensure they sum to totalMarks
-      let finalFormData = { ...formData };
-      if (formData.type === "MIXED") {
-        const part1 = formData.part1Marks || 0;
-        const part2 = formData.part2Marks || 0;
-        const total = formData.totalMarks;
-
-        if (Math.abs(part1 + part2 - total) > 0.01) {
-          // Part marks don't sum to total - auto-correct by adjusting part2
-          console.warn(
-            `⚠️ MIXED exam: Part1 (${part1}) + Part2 (${part2}) = ${part1 + part2} does not equal Total (${total})`
-          );
-          console.warn(
-            `Auto-correcting Part2 to ${Math.max(0, total - part1)}`
-          );
-
-          finalFormData.part2Marks = Math.max(0, total - part1);
-
-          toast.warning(
-            `Part marks adjusted: Part 1 = ${part1}, Part 2 = ${finalFormData.part2Marks} (Total = ${total})`
-          );
-        }
-      }
-
       // Create the exam payload - REMOVE useHierarchicalStructure for now
       const examPayload = {
-        title: finalFormData.title,
-        description: finalFormData.description || undefined,
-        type: finalFormData.type,
-        duration: finalFormData.duration,
-        totalMarks: finalFormData.totalMarks,
-        passingMarks: finalFormData.passingMarks,
-        attemptsAllowed: finalFormData.attemptsAllowed,
+        title: formData.title,
+        description: formData.description || undefined,
+        type: formData.type,
+        duration: formData.duration,
+        totalMarks: formData.totalMarks,
+        passingMarks: formData.passingMarks,
+        attemptsAllowed: formData.attemptsAllowed,
 
         // REQUIRED fields
-        subjectId: finalFormData.subjectId,
-        gradeId: finalFormData.gradeId,
-        mediumId: finalFormData.mediumId,
+        subjectId: formData.subjectId,
+        gradeId: formData.gradeId,
+        mediumId: formData.mediumId,
 
         // Optional class
-        classId: finalFormData.classId || undefined,
+        classId: formData.classId || undefined,
 
         // Schedule - REQUIRED
-        startTime: formatDateTimeForBackend(finalFormData.startTime),
-        endTime: formatDateTimeForBackend(finalFormData.endTime),
+        startTime: formatDateTimeForBackend(formData.startTime),
+        endTime: formatDateTimeForBackend(formData.endTime),
 
         // Instructions
-        instructions: finalFormData.instructions || undefined,
+        instructions: formData.instructions || undefined,
 
         // Part marks - only for MIXED exams
-        ...(finalFormData.type === "MIXED" && {
-          part1Marks: finalFormData.part1Marks,
-          part2Marks: finalFormData.part2Marks,
+        ...(formData.type === "MIXED" && {
+          part1Marks: formData.part1Marks,
+          part2Marks: formData.part2Marks,
         }),
 
         // File upload settings
-        allowFileUpload: finalFormData.allowFileUpload || false,
-        ...(finalFormData.allowFileUpload && {
-          maxFileSize: finalFormData.maxFileSize || 10,
-          allowedFileTypes: finalFormData.allowedFileTypes || [
+        allowFileUpload: formData.allowFileUpload || false,
+        ...(formData.allowFileUpload && {
+          maxFileSize: formData.maxFileSize || 10,
+          allowedFileTypes: formData.allowedFileTypes || [
             "pdf",
             "docx",
             "jpg",
             "png",
           ],
-          uploadInstructions: finalFormData.uploadInstructions || undefined,
+          uploadInstructions: formData.uploadInstructions || undefined,
         }),
 
         // Windowed access
-        ...(finalFormData.windowStart && {
-          windowStart: formatDateTimeForBackend(finalFormData.windowStart),
+        ...(formData.windowStart && {
+          windowStart: formatDateTimeForBackend(formData.windowStart),
         }),
-        ...(finalFormData.windowEnd && {
-          windowEnd: formatDateTimeForBackend(finalFormData.windowEnd),
+        ...(formData.windowEnd && {
+          windowEnd: formatDateTimeForBackend(formData.windowEnd),
         }),
-        lateSubmissionAllowed: finalFormData.lateSubmissionAllowed || false,
-        ...(finalFormData.lateSubmissionAllowed && {
-          latePenaltyPercent: finalFormData.latePenaltyPercent || 10,
+        lateSubmissionAllowed: formData.lateSubmissionAllowed || false,
+        ...(formData.lateSubmissionAllowed && {
+          latePenaltyPercent: formData.latePenaltyPercent || 10,
         }),
 
         // Ranking settings
-        enableRanking: finalFormData.enableRanking || false,
-        ...(finalFormData.enableRanking && {
-          rankingLevels: finalFormData.rankingLevels || [],
+        enableRanking: formData.enableRanking || false,
+        ...(formData.enableRanking && {
+          rankingLevels: formData.rankingLevels || [],
         }),
 
         // AI monitoring
-        aiMonitoringEnabled: finalFormData.aiMonitoringEnabled || false,
-        faceVerificationRequired:
-          finalFormData.faceVerificationRequired || false,
-        browseLockEnabled: finalFormData.browseLockEnabled || false,
+        aiMonitoringEnabled: formData.aiMonitoringEnabled || false,
+        faceVerificationRequired: formData.faceVerificationRequired || false,
+        browseLockEnabled: formData.browseLockEnabled || false,
 
         // Other fields
-        timeZone: finalFormData.timeZone || "Asia/Colombo",
-        allowedResources: finalFormData.allowedResources || undefined,
+        timeZone: formData.timeZone || "Asia/Colombo",
+        allowedResources: formData.allowedResources || undefined,
 
         // New fields  to DTO
-        randomizeQuestions: finalFormData.randomizeQuestions || false,
-        randomizeOptions: finalFormData.randomizeOptions || false,
-        showResults: finalFormData.showResults !== false,
+        randomizeQuestions: formData.randomizeQuestions || false,
+        randomizeOptions: formData.randomizeOptions || false,
+        showResults: formData.showResults !== false,
 
         // REMOVE THIS FOR NOW - it's causing the error
-        useHierarchicalStructure:
-          finalFormData.useHierarchicalStructure || false,
+        useHierarchicalStructure: formData.useHierarchicalStructure || false,
 
         // Also removed sections from initial payload
-        ...(finalFormData.useHierarchicalStructure &&
-          finalFormData.sections &&
-          finalFormData.sections.length > 0 && {
-            sections: finalFormData.sections.map((section) => ({
+        ...(formData.useHierarchicalStructure &&
+          formData.sections &&
+          formData.sections.length > 0 && {
+            sections: formData.sections.map((section) => ({
               title: section.title,
               description: section.instruction || section.description || "",
               order: section.order,
@@ -678,19 +652,14 @@ export default function ExamBuilderWizard({
           }),
       };
 
-      console.log(
-        "=== DEBUG: Exam Payload (without useHierarchicalStructure) ==="
-      );
+      console.log("=== DEBUG: Exam Payload (without useHierarchicalStructure) ===");
       console.log("Payload:", JSON.stringify(examPayload, null, 2));
       console.log("Subject ID:", examPayload.subjectId);
-      console.log("Questions count:", finalFormData.questions.length);
+      console.log("Questions count:", formData.questions.length);
       console.log("=== END DEBUG ===");
 
       // Create the exam
-      const examResponse = await ApiClient.post<{
-        id: string;
-        data?: { id: string; data?: { id: string } };
-      }>("/exams", examPayload);
+      const examResponse = await ApiClient.post<{ id: string; data?: { id: string; data?: { id: string } } }>("/exams", examPayload);
 
       // Handle response format
       let examId: string;
@@ -713,10 +682,6 @@ export default function ExamBuilderWizard({
       // IMPORTANT: Now create sections and questions
 
       // Step 1: Create sections if hierarchical structure is enabled
-      // Map temporary section IDs to real database IDs
-      let sectionIdMap: Map<string, string> = new Map();
-      let createdSectionIds: string[] = [];
-
       if (
         formData.useHierarchicalStructure &&
         formData.sections &&
@@ -731,151 +696,77 @@ export default function ExamBuilderWizard({
           }));
 
           console.log("Creating sections:", sectionsPayload.length);
-          const sectionsResponse = await ApiClient.post(
-            `/exams/${examId}/sections/bulk`,
-            { sections: sectionsPayload }
-          );
-          console.log(
-            "Sections response:",
-            JSON.stringify(sectionsResponse, null, 2)
-          );
-
-          // Extract real section IDs from response
-          // The response structure is: { success, message, data: [...] }
-          const realSections = sectionsResponse?.data || [];
-          if (Array.isArray(realSections) && realSections.length > 0) {
-            createdSectionIds = realSections.map((s: any) => s.id);
-            console.log(
-              "Created section IDs:",
-              createdSectionIds.map((id, idx) => `[${idx}]: ${id}`).join(", ")
-            );
-
-            // Map by position: questions with examPart X go to section X
-            // Since we create one section per part typically, we can map by examPart
-            realSections.forEach((section: any, index: number) => {
-              // Map by order position
-              const tempSectionId = `section_${formData.sections[index]?.id || index}`;
-              sectionIdMap.set(tempSectionId, section.id);
-              console.log(
-                `Mapped section by index ${index}: temp=${tempSectionId} → real=${section.id}`
-              );
-            });
-          }
+          await ApiClient.post(`/exams/${examId}/sections/bulk`, {
+            sections: sectionsPayload,
+          });
+          console.log("Sections created successfully");
         } catch (sectionError: any) {
           console.error("Failed to create sections:", sectionError);
-          logger.error("Failed to create sections for exam", {
-            examId,
-            sectionCount: formData.sections?.length,
-            error: sectionError,
-          });
           toast.error(
-            `⚠️ Exam created (ID: ${examId}) but sections failed to save: ${sectionError.message || "Unknown error"}. Your exam structure may be incomplete.`,
-            {
-              duration: 10000,
-            }
+            `Exam created but sections failed: ${sectionError.message}`
           );
-          // Don't re-throw - sections are optional, continue with questions
         }
       }
 
       // Step 2: Create questions
-      if (finalFormData.questions.length > 0) {
+      if (formData.questions.length > 0) {
         try {
-          const questionsPayload = finalFormData.questions.map(
-            (question, index) => {
-              // Prepare base question
-              const baseQuestion: any = {
-                type: question.type,
-                question: question.question || "",
-                points: question.points || 1,
-                order: index + 1,
-                examPart: question.examPart || 1,
-                section: question.section || undefined,
-                imageUrl: question.imageUrl,
-                videoUrl: question.videoUrl,
-                attachmentUrl: question.attachmentUrl,
-                explanation: question.explanation,
-                groupId: question.groupId,
-                showNumber: question.showNumber !== false,
-                numbering: question.numbering,
-              };
+          const questionsPayload = formData.questions.map((question, index) => {
+            // Prepare base question
+            const baseQuestion: any = {
+              type: question.type,
+              question: question.question || "",
+              points: question.points || 1,
+              order: index + 1,
+              examPart: question.examPart || 1,
+              section: question.section || undefined,
+              imageUrl: question.imageUrl,
+              videoUrl: question.videoUrl,
+              attachmentUrl: question.attachmentUrl,
+              explanation: question.explanation,
+              sectionId: question.sectionId,
+              groupId: question.groupId,
+              showNumber: question.showNumber !== false,
+              numbering: question.numbering,
+            };
 
-              // Handle sectionId mapping
-              if (question.sectionId && createdSectionIds.length > 0) {
-                const mappedId = sectionIdMap.get(question.sectionId);
-                if (mappedId) {
-                  baseQuestion.sectionId = mappedId;
-                  console.log(
-                    `✓ Question "${question.question}" mapped section: ${question.sectionId} → ${mappedId}`
-                  );
-                } else {
-                  // No exact mapping, use first created section as fallback
-                  baseQuestion.sectionId = createdSectionIds[0];
-                  console.log(
-                    `⚠ Question "${question.question}" - using first created section: ${createdSectionIds[0]}`
-                  );
-                }
-              } else {
-                // Either no sectionId provided OR no sections were created
-                // Let backend create/assign default section
-                console.log(
-                  `ℹ Question "${question.question}" - omitting sectionId, backend will handle`
-                );
-                // Don't set sectionId, backend will use default
-              }
-
-              // Add type-specific fields
-              switch (question.type) {
-                case "MULTIPLE_CHOICE":
-                case "TRUE_FALSE":
-                  // Convert options to MCQOption format
-                  baseQuestion.options = (
-                    (question.options || []) as any[]
-                  ).map((opt, idx) => ({
+            // Add type-specific fields
+            switch (question.type) {
+              case "MULTIPLE_CHOICE":
+              case "TRUE_FALSE":
+                // Convert options to MCQOption format
+                baseQuestion.options = ((question.options || []) as any[]).map(
+                  (opt, idx) => ({
                     id: `opt_${idx + 1}`,
                     text:
                       typeof opt === "string" ? opt : (opt as any).text || "",
                     isCorrect:
                       (typeof opt === "string" ? opt : (opt as any).text) ===
                       question.correctAnswer,
-                  }));
-                  baseQuestion.correctAnswer = question.correctAnswer || "";
-                  break;
-                case "FILL_BLANK":
-                  baseQuestion.correctAnswer = question.correctAnswer || "";
-                  break;
-                case "MATCHING":
-                  baseQuestion.matchingPairs = question.matchingPairs || "";
-                  break;
-                case "SHORT_ANSWER":
-                case "ESSAY":
-                  baseQuestion.correctAnswer = question.correctAnswer || "";
-                  break;
-              }
-
-              return baseQuestion;
+                  })
+                );
+                baseQuestion.correctAnswer = question.correctAnswer || "";
+                break;
+              case "FILL_BLANK":
+                baseQuestion.correctAnswer = question.correctAnswer || "";
+                break;
+              case "MATCHING":
+                baseQuestion.matchingPairs = question.matchingPairs || "";
+                break;
+              case "SHORT_ANSWER":
+              case "ESSAY":
+                baseQuestion.correctAnswer = question.correctAnswer || "";
+                break;
             }
-          );
 
-          console.log(
-            "Section ID Map:",
-            Array.from(sectionIdMap.entries()).map(([k, v]) => `${k} → ${v}`)
-          );
-          console.log("Created Section IDs:", createdSectionIds);
+            return baseQuestion;
+          });
 
           console.log("Creating questions:", questionsPayload.length);
           console.log(
-            "Questions payload[0]:",
+            "Questions payload:",
             JSON.stringify(questionsPayload[0], null, 2)
           );
-          console.log(
-            "All questions sectionIds:",
-            questionsPayload.map((q) => ({
-              question: q.question,
-              sectionId: q.sectionId,
-            }))
-          );
-
           await ApiClient.post(`/exams/${examId}/questions/bulk`, {
             questions: questionsPayload,
           });
@@ -883,21 +774,8 @@ export default function ExamBuilderWizard({
           console.log("Questions created successfully");
         } catch (questionsError: any) {
           console.error("Failed to create questions:", questionsError);
-          logger.error("Failed to create questions for exam", {
-            examId,
-            questionCount: formData.questions.length,
-            error: questionsError,
-          });
-          // Show error with longer duration and more visibility
           toast.error(
-            `⚠️ Exam created (ID: ${examId}) but questions failed to save: ${questionsError.message || "Unknown error"}. Please add questions manually or contact support.`,
-            {
-              duration: 10000, // 10 seconds
-            }
-          );
-          // Re-throw to prevent marking submission as successful
-          throw new Error(
-            `Questions failed to save: ${questionsError.message || "Unknown error"}`
+            `Exam created but questions failed: ${questionsError.message}`
           );
         }
       }

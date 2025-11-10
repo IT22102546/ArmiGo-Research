@@ -3,7 +3,7 @@ import { Redirect } from "expo-router";
 import useAuthStore from "@/stores/authStore";
 
 const Home = () => {
-  const { isSignedIn, checkAuthStatus } = useAuthStore();
+  const { currentUser, isSignedIn, checkAuthStatus } = useAuthStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,7 +17,14 @@ const Home = () => {
   if (loading) return null;
 
   return isSignedIn ? (
-    <Redirect href="/(root)/(tabs)/home" />
+    currentUser?.role === "Teacher" ||
+    currentUser?.role === "TEACHER" ||
+    currentUser?.role === "INTERNAL_TEACHER" ||
+    currentUser?.role === "EXTERNAL_TEACHER" ? (
+      <Redirect href="/(root)/(tabs)/TeacherHome" />
+    ) : (
+      <Redirect href="/(root)/(tabs)/home" />
+    )
   ) : (
     <Redirect href="/(auth)/onBoard1" />
   );

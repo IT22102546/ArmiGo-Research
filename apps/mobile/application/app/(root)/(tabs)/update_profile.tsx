@@ -354,7 +354,7 @@ const UpdateProfile = () => {
             text: "Sign In",
             onPress: () => {
               signOut();
-              router.replace("/(auth)/selectSignIn");
+              router.replace("/(auth)/sign-in");
             },
           },
         ]);

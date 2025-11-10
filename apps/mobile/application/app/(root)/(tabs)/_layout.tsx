@@ -180,7 +180,7 @@ const TabsLayout = () => {
           }}
         />
 
-        <Tabs.Screen
+                <Tabs.Screen
           name="SearchMatches"
           options={{
             title: "Search & Matches",
@@ -331,7 +331,7 @@ const TabsLayout = () => {
                   activeTab === "search" && styles.navTextActive,
                 ]}
               >
-                Search
+                Search 
               </Text>
             </TouchableOpacity>
           )}
@@ -377,7 +377,7 @@ const TabsLayout = () => {
               style={styles.navItem}
               onPress={() =>
                 handleTabPress(
-                  "TransferRequest",
+                  "TransferRequests",
                   "/(tabs)/TeacherTransferRequests"
                 )
               }
@@ -385,14 +385,15 @@ const TabsLayout = () => {
               <View
                 style={[
                   styles.iconContainer,
-                  activeTab === "TransferRequest" && styles.iconContainerActive,
+                  activeTab === "TransferRequests" &&
+                    styles.iconContainerActive,
                 ]}
               >
                 <Image
                   source={icons.requests}
                   style={[
                     styles.navIcon,
-                    activeTab === "TransferRequest" && styles.navIconActive,
+                    activeTab === "TransferRequests" && styles.navIconActive,
                   ]}
                   resizeMode="contain"
                 />
@@ -400,7 +401,7 @@ const TabsLayout = () => {
               <Text
                 style={[
                   styles.navText,
-                  activeTab === "TransferRequest" && styles.navTextActive,
+                  activeTab === "TransferRequests" && styles.navTextActive,
                 ]}
               >
                 Requests

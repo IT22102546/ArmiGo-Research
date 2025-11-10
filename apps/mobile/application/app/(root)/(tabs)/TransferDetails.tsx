@@ -1,3 +1,4 @@
+// apps/frontend/app/teacher/transfer/details.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,

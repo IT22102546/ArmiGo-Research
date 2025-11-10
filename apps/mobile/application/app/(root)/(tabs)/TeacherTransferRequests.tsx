@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Image,
   ActivityIndicator,
   Alert,
   TextInput,
@@ -22,23 +23,36 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  MessageSquare,
+  Paperclip,
+  ChevronRight,
   Filter,
   X,
+  Calendar,
+  MapPin,
+  School,
+  User,
+  Award,
+  Mail,
+  Home,
+  Send,
+  Users,
   Clock,
   ArrowLeft,
   ChevronDown,
   ChevronUp,
   Trash2,
   AlertCircle,
-  Send,
-  Users,
   ArrowRight,
   FileText,
   Download,
+  Building,
+  BookOpen,
+  Mail as MailIcon,
+  Phone,
 } from "lucide-react-native";
 import { apiFetch } from "@/utils/api";
 import useAuthStore from "@/stores/authStore";
-import { MaterialIcons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
 
@@ -46,34 +60,55 @@ const { width } = Dimensions.get("window");
 interface TransferRequest {
   id: string;
   uniqueId?: string;
+  registrationId?: string;
   requester?: {
     id: string;
     firstName: string;
     lastName: string;
     email?: string;
     phone?: string;
+    avatar?: string;
   };
   fromZone?: { id: string; name: string } | string;
-  toZones?: Array<{ id: string; name: string } | string>;
+  toZones?: Array<{ id: string; name: string }>;
   subject?: { id: string; name: string } | string;
   medium?: { id: string; name: string } | string;
-  currentSchool?: string;
+  currentSchool: string;
   currentSchoolType?: string;
   currentDistrict?: string;
-  currentZone?: string;
+  currentZone: string;
   yearsOfService?: number;
-  qualifications?: string[];
-  isInternalTeacher?: boolean;
-  preferredSchoolTypes?: string[];
+  qualifications: string[];
+  isInternalTeacher: boolean;
+  preferredSchoolTypes: string[];
   additionalRequirements?: string;
   notes?: string;
-  status?: string;
-  verified?: boolean;
+  status: string;
+  verified: boolean;
   verifiedAt?: string;
-  level?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  level: string;
+  createdAt: string;
+  updatedAt: string;
   attachments?: string[];
+}
+
+interface TransferMatch {
+  id: string;
+  matchScore?: number;
+  teacher: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    avatar?: string;
+  };
+  currentSchool: string;
+  currentZone: string;
+  desiredZones: string[];
+  subject: string;
+  medium: string;
+  level: string;
+  yearsOfService: number;
 }
 
 interface TransferStats {
@@ -89,11 +124,10 @@ interface TransferStats {
 
 // Helper function to extract field name
 const getFieldName = (field: any): string => {
-  if (!field) return "N/A";
+  if (!field) return "Unknown";
   if (typeof field === "string") return field;
   if (field.name) return field.name;
-  if (field.code) return field.code;
-  return "N/A";
+  return "Unknown";
 };
 
 export default function TeacherTransferRequests() {
@@ -106,11 +140,13 @@ export default function TeacherTransferRequests() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<"sent" | "received">("received");
+  const [activeTab, setActiveTab] = useState<"sent" | "received">("sent");
 
   // Data states
   const [sentRequests, setSentRequests] = useState<TransferRequest[]>([]);
-  const [receivedRequests, setReceivedRequests] = useState<TransferRequest[]>([]);
+  const [receivedRequests, setReceivedRequests] = useState<TransferRequest[]>(
+    []
+  );
   const [stats, setStats] = useState<TransferStats>({});
 
   // Filters
@@ -120,12 +156,20 @@ export default function TeacherTransferRequests() {
 
   // Detail modal
   const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<TransferRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] =
+    useState<TransferRequest | null>(null);
 
   // Action dialogs
   const [showActionDialog, setShowActionDialog] = useState(false);
-  const [actionType, setActionType] = useState<"accept" | "decline" | "withdraw">("accept");
+  const [actionType, setActionType] = useState<
+    "accept" | "decline" | "withdraw"
+  >("accept");
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Message modal
+  const [messageModalVisible, setMessageModalVisible] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   // Fetch data on mount
   useEffect(() => {
@@ -170,8 +214,8 @@ export default function TeacherTransferRequests() {
     try {
       setLoading(true);
       await Promise.all([
-        fetchSentRequests(),
-        fetchAvailableRequests(),
+        fetchMyRequests(),
+        fetchReceivedRequests(),
         fetchStats(),
       ]);
     } catch (error: any) {
@@ -183,9 +227,9 @@ export default function TeacherTransferRequests() {
     }
   };
 
-  const fetchSentRequests = async () => {
+  const fetchMyRequests = async () => {
     try {
-      const response = await apiFetch("/api/v1/transfer/matches");
+      const response = await apiFetch("/api/v1/transfer/browse");
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -195,63 +239,23 @@ export default function TeacherTransferRequests() {
       setSentRequests(Array.isArray(data) ? data : data.data || []);
     } catch (error: any) {
       console.error("Failed to fetch sent requests:", error);
-      setSentRequests([]);
+      throw error;
     }
   };
 
-  const fetchAvailableRequests = async () => {
+  const fetchReceivedRequests = async () => {
     try {
-      const response = await apiFetch("/api/v1/transfer/browse");
+      const response = await apiFetch("/api/v1/transfer/matches");
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
-      
-      let requests: TransferRequest[] = [];
-      
-      if (Array.isArray(data)) {
-        requests = data;
-      } else if (data.requests && Array.isArray(data.requests)) {
-        requests = data.requests;
-      } else if (data.data && Array.isArray(data.data)) {
-        requests = data.data;
-      }
-      
-      const mappedRequests: TransferRequest[] = requests.map((item: any) => ({
-        id: item.id || item._id || Math.random().toString(),
-        uniqueId: item.uniqueId || `TR-${(item.id || Math.random().toString()).slice(0, 8)}`,
-        requester: item.requester || {
-          firstName: "Teacher",
-          lastName: "",
-        },
-        fromZone: item.fromZone || "Unknown Zone",
-        toZones: item.toZones || item.desiredZones || [],
-        subject: item.subject || "Unknown Subject",
-        medium: item.medium || "Unknown Medium",
-        currentSchool: item.currentSchool || "Unknown School",
-        currentSchoolType: item.currentSchoolType,
-        currentDistrict: item.currentDistrict,
-        currentZone: item.currentZone || item.fromZone || "Unknown Zone",
-        yearsOfService: item.yearsOfService || 0,
-        qualifications: item.qualifications || [],
-        isInternalTeacher: item.isInternalTeacher !== undefined ? item.isInternalTeacher : true,
-        preferredSchoolTypes: item.preferredSchoolTypes || [],
-        additionalRequirements: item.additionalRequirements,
-        notes: item.notes,
-        status: item.status || "PENDING",
-        verified: item.verified || false,
-        verifiedAt: item.verifiedAt,
-        level: item.level || "PRIMARY",
-        createdAt: item.createdAt || new Date().toISOString(),
-        updatedAt: item.updatedAt || new Date().toISOString(),
-        attachments: item.attachments || [],
-      }));
-      
-      setReceivedRequests(mappedRequests);
+      setReceivedRequests(Array.isArray(data) ? data : data.data || []);
     } catch (error: any) {
-      console.error("Failed to fetch available requests:", error);
+      console.error("Failed to fetch received requests:", error);
+      // If endpoint doesn't exist, set empty array
       setReceivedRequests([]);
     }
   };
@@ -285,35 +289,6 @@ export default function TeacherTransferRequests() {
       Alert.alert("Error", "Failed to load request details");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSendRequest = async (requestId: string) => {
-    try {
-      setActionLoading(true);
-      
-      const response = await apiFetch(`/api/v1/transfer/${requestId}/accept`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          notes: "Request sent for mutual transfer"
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      Alert.alert("Success", "Transfer request sent successfully!");
-      await fetchData();
-      
-    } catch (error: any) {
-      console.error("Failed to send request:", error);
-      Alert.alert("Error", error.message || "Failed to send request");
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -356,6 +331,34 @@ export default function TeacherTransferRequests() {
     }
   };
 
+  const handleSendMessage = async () => {
+    if (!selectedRequest || !messageText.trim()) return;
+
+    try {
+      setSendingMessage(true);
+      const response = await apiFetch("/api/v1/transfer/messages", {
+        method: "POST",
+        body: JSON.stringify({
+          transferRequestId: selectedRequest.id,
+          content: messageText,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      Alert.alert("Success", "Message sent successfully");
+      setMessageText("");
+      setMessageModalVisible(false);
+    } catch (error: any) {
+      console.error("Failed to send message:", error);
+      Alert.alert("Error", error.message || "Failed to send message");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchData();
@@ -382,9 +385,7 @@ export default function TeacherTransferRequests() {
     }
   };
 
-  const getStatusBadge = (status: string | undefined) => {
-    const actualStatus = status || "PENDING";
-    
+  const getStatusBadge = (status: string) => {
     const configs = {
       PENDING: {
         color: "#F59E0B",
@@ -422,15 +423,9 @@ export default function TeacherTransferRequests() {
         label: "Cancelled",
         icon: XCircle,
       },
-      MATCHED: {
-        color: "#8B5CF6",
-        bgColor: "#F3E8FF",
-        label: "Matched",
-        icon: Users,
-      },
     };
 
-    return configs[actualStatus as keyof typeof configs] || configs.PENDING;
+    return configs[status as keyof typeof configs] || configs.PENDING;
   };
 
   const filterRequests = (requests: TransferRequest[]) => {
@@ -445,10 +440,8 @@ export default function TeacherTransferRequests() {
       filtered = filtered.filter(
         (request) =>
           request.uniqueId?.toLowerCase().includes(term) ||
-          request.currentSchool?.toLowerCase().includes(term) ||
-          (typeof request.fromZone === 'string' 
-            ? request.fromZone.toLowerCase().includes(term)
-            : request.fromZone?.name?.toLowerCase().includes(term)) ||
+          request.currentSchool.toLowerCase().includes(term) ||
+          request.currentZone.toLowerCase().includes(term) ||
           getFieldName(request.subject).toLowerCase().includes(term)
       );
     }
@@ -457,8 +450,11 @@ export default function TeacherTransferRequests() {
   };
 
   const canWithdraw = (request: TransferRequest) => {
-    const status = request.status || "PENDING";
-    return ["PENDING", "VERIFIED"].includes(status);
+    return ["PENDING", "VERIFIED"].includes(request.status);
+  };
+
+  const canRespond = (request: TransferRequest) => {
+    return request.status === "PENDING";
   };
 
   // Render Stats Cards
@@ -472,152 +468,180 @@ export default function TeacherTransferRequests() {
     </View>
   );
 
-// Render Request Card - Fixed with error handling
-const RequestCard = ({
-  request,
-  type,
-}: {
-  request: TransferRequest;
-  type: "sent" | "received";
-}) => {
-  const statusConfig = getStatusBadge(request.status);
-  const StatusIcon = statusConfig.icon;
-  const canWithdrawRequest = type === "sent" && canWithdraw(request);
+  // Render Request Card
+  const RequestCard = ({
+    request,
+    type,
+  }: {
+    request: TransferRequest;
+    type: "sent" | "received";
+  }) => {
+    const statusConfig = getStatusBadge(request.status);
+    const StatusIcon = statusConfig.icon;
+    const canWithdrawRequest = type === "sent" && canWithdraw(request);
+    const canRespondRequest = type === "received" && canRespond(request);
 
-  const location = request.currentSchool && typeof request.currentSchool === 'string' 
-    ? request.currentSchool.split(',')[0] 
-    : "Kaluthara";
-
-  return (
-    <TouchableOpacity
-      style={styles.requestCard}
-      onPress={() => fetchRequestDetail(request.id)}
-    >
-      {/* Header with ID and Location */}
-      <View style={styles.cardHeader}>
-        <View style={styles.headerIdContainer}>
-          <Text style={styles.headerId}># {request.uniqueId || `TR-${request.id.slice(0, 8)}`}</Text>
-        </View>
-        {/* Status Badge */}
-      <View style={styles.statusRow}>
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: statusConfig.bgColor },
-          ]}
-        >
-          <StatusIcon size={12} color={statusConfig.color} />
-          <Text
-            style={[styles.statusText, { color: statusConfig.color }]}
-          >
-            {statusConfig.label}
-          </Text>
-        </View>
-      </View>
-      </View>
-
-      
-      {/* Subject and Details - exactly like screenshot */}
-      <View className="flex flex-row justify-between" style={styles.subjectSection}>
-        <View className="flex flex-row gap-2">
-          <MaterialIcons name="library-books" size={16} color="#6B7280" />
-           <Text style={styles.subjectText}>
-          {getFieldName(request.subject)}
-        </Text>
-        </View>
-       
-        <View className="flex flex-row gap-2" style={styles.detailsRow}>
-                    <MaterialIcons name="language" size={16} color="#6B7280" />
-
-          <Text style={styles.detailText}>
-            {getFieldName(request.medium)} ,{request.level?.toLowerCase() || "Primary"}
-          </Text>
-        </View>
-      </View>
-
-      {/* Zones Container - exactly like screenshot */}
-      <View style={styles.zonesContainer}>
-        <View style={styles.zoneItem}>
-          <View style={[styles.zoneIcon, styles.wantZoneIcon]}>
-            <Text style={styles.zoneIconText}>+</Text>
-          </View>
-          <View style={styles.zoneInfo}>
-            <Text style={styles.zoneLabel}>Want to :</Text>
-            <View style={styles.zoneTags}>
-              {request.toZones && request.toZones.length > 0 ? (
-                <>
-                  {request.toZones.slice(0, 2).map((zone, idx) => (
-                    <View key={idx} style={styles.zoneTag}>
-                      <Text style={styles.zoneTagText}>
-                        {getFieldName(zone)}
-                      </Text>
-                    </View>
-                  ))}
-                  {request.toZones.length > 2 && (
-                    <View style={styles.moreZoneTag}>
-                      <Text style={styles.moreZoneTagText}>
-                        +{request.toZones.length - 2}
-                      </Text>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <View style={styles.zoneTag}>
-                  <Text style={styles.zoneTagText}>Any Zone</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-        
-        <View style={styles.zoneItem}>
-          <View style={[styles.zoneIcon, styles.currentZoneIcon]}>
-            <Text style={[styles.zoneIconText, { color: "#3B82F6" }]}>•</Text>
-          </View>
-          <View style={styles.zoneInfo}>
-            <Text style={styles.zoneLabel}>Current :</Text>
-            <View style={styles.zoneTags}>
-              <View style={styles.zoneTag}>
-                <Text style={styles.zoneTagText}>
-                  {getFieldName(request.fromZone)}
+    return (
+      <TouchableOpacity
+        style={styles.requestCard}
+        onPress={() => fetchRequestDetail(request.id)}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.requestInfo}>
+            <View style={styles.titleRow}>
+              <Text style={styles.subject}>
+                {getFieldName(request.subject)}
+              </Text>
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: statusConfig.bgColor },
+                ]}
+              >
+                <StatusIcon size={12} color={statusConfig.color} />
+                <Text
+                  style={[styles.statusText, { color: statusConfig.color }]}
+                >
+                  {statusConfig.label}
                 </Text>
               </View>
             </View>
+            <Text style={styles.schoolName}>{request.uniqueId}</Text>
           </View>
         </View>
-      </View>
 
-      {/* SINGLE BUTTON - Only Send Request button like in screenshot */}
-      {type === "received" && (request.status === "VERIFIED" || request.status === "PENDING")  && (
-        <TouchableOpacity
-          style={styles.sendRequestButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleSendRequest(request.id);
-          }}
-          disabled={actionLoading}
-        >
-          <Send size={16} color="#fff" />
-          <Text style={styles.sendRequestText}>Send Request</Text>
-        </TouchableOpacity>
-      )}
+        <View style={styles.cardDetails}>
+          <View style={styles.detailGrid}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>From Zone:</Text>
+              <Text style={styles.detailValue}>
+                {getFieldName(request.fromZone)}
+              </Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>To Zones:</Text>
+              <View style={styles.tags}>
+                {request.toZones?.slice(0, 2).map((zone, idx) => (
+                  <View key={idx} style={styles.smallTag}>
+                    <Text style={styles.smallTagText}>
+                      {getFieldName(zone)}
+                    </Text>
+                  </View>
+                ))}
+                {request.toZones && request.toZones.length > 2 && (
+                  <View style={styles.moreTag}>
+                    <Text style={styles.moreTagText}>
+                      +{request.toZones.length - 2}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Medium:</Text>
+              <Text style={styles.detailValue}>
+                {getFieldName(request.medium)}
+              </Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Level:</Text>
+              <Text style={styles.detailValue}>
+                {request.level?.toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Experience:</Text>
+              <Text style={styles.detailValue}>
+                {request.yearsOfService || 0} years
+              </Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Date:</Text>
+              <Text style={styles.detailValue}>
+                {new Date(request.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-      {/* For sent requests, show nothing - no withdraw button */}
-    </TouchableOpacity>
-  );
-};
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={styles.viewButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              fetchRequestDetail(request.id);
+            }}
+          >
+            <Eye size={16} color="#4F46E5" />
+            <Text style={styles.viewButtonText}>View Details</Text>
+          </TouchableOpacity>
+
+          {canRespondRequest && (
+            <>
+              <TouchableOpacity
+                style={styles.acceptButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setSelectedRequest(request);
+                  setActionType("accept");
+                  setShowActionDialog(true);
+                }}
+              >
+                <CheckCircle size={16} color="#fff" />
+                <Text style={styles.acceptButtonText}>Accept</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.declineButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setSelectedRequest(request);
+                  setActionType("decline");
+                  setShowActionDialog(true);
+                }}
+              >
+                <XCircle size={16} color="#EF4444" />
+                <Text style={styles.declineButtonText}>Decline</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {canWithdrawRequest && (
+            <TouchableOpacity
+              style={styles.withdrawButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                setSelectedRequest(request);
+                setActionType("withdraw");
+                setShowActionDialog(true);
+              }}
+            >
+              <Trash2 size={16} color="#EF4444" />
+              <Text style={styles.withdrawButtonText}>Withdraw</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const EmptyState = ({ type }: { type: "sent" | "received" }) => (
     <View style={styles.emptyState}>
       <Send size={48} color="#9CA3AF" />
-      <Text style={styles.emptyStateTitle}>
-        {type === "sent" ? "No requests sent yet" : "No available requests"}
-      </Text>
+      <Text style={styles.emptyStateTitle}>No {type} requests yet</Text>
       <Text style={styles.emptyStateText}>
         {type === "sent"
           ? "Start searching for compatible matches to send requests"
-          : "There are no transfer requests available at the moment"}
+          : "You haven't received any transfer requests yet"}
       </Text>
+      {type === "sent" && (
+        <TouchableOpacity
+          style={styles.searchButton}
+          onPress={() => router.push("/(root)/(tabs)/SearchMatches")}
+        >
+          <ArrowRight size={20} color="#fff" />
+          <Text style={styles.searchButtonText}>Start Searching</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -644,6 +668,7 @@ const RequestCard = ({
 
         {selectedRequest && (
           <ScrollView style={styles.modalContent}>
+            {/* Status */}
             <View style={styles.statusSection}>
               <Text style={styles.sectionLabel}>Status:</Text>
               <View
@@ -666,13 +691,14 @@ const RequestCard = ({
               </View>
             </View>
 
+            {/* Registration Information */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Registration Information</Text>
               <View style={styles.infoGrid}>
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Registration ID:</Text>
                   <Text style={styles.infoValue}>
-                    {selectedRequest.uniqueId || "N/A"}
+                    {selectedRequest.registrationId || "N/A"}
                   </Text>
                 </View>
                 <View style={styles.infoItem}>
@@ -684,13 +710,14 @@ const RequestCard = ({
               </View>
             </View>
 
+            {/* Current School */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Current School</Text>
               <View style={styles.infoGrid}>
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>School:</Text>
                   <Text style={styles.infoValue}>
-                    {selectedRequest.currentSchool || "N/A"}
+                    {selectedRequest.currentSchool}
                   </Text>
                 </View>
                 <View style={styles.infoItem}>
@@ -708,12 +735,13 @@ const RequestCard = ({
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Zone:</Text>
                   <Text style={styles.infoValue}>
-                    {selectedRequest.currentZone || "N/A"}
+                    {selectedRequest.currentZone}
                   </Text>
                 </View>
               </View>
             </View>
 
+            {/* Transfer Preferences */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Transfer Preferences</Text>
               <View style={styles.infoGrid}>
@@ -741,6 +769,7 @@ const RequestCard = ({
               </View>
             </View>
 
+            {/* Teaching Details */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Teaching Details</Text>
               <View style={styles.infoGrid}>
@@ -759,12 +788,36 @@ const RequestCard = ({
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Level:</Text>
                   <Text style={styles.infoValue}>
-                    {selectedRequest.level?.toUpperCase() || "PRIMARY"}
+                    {selectedRequest.level?.toUpperCase()}
                   </Text>
                 </View>
+                {selectedRequest.qualifications &&
+                  selectedRequest.qualifications.length > 0 && (
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Qualifications:</Text>
+                      <View style={styles.tagsContainer}>
+                        {selectedRequest.qualifications.map((qual, idx) => (
+                          <View
+                            key={idx}
+                            style={[styles.tag, styles.qualificationTag]}
+                          >
+                            <Text
+                              style={[
+                                styles.tagText,
+                                styles.qualificationTagText,
+                              ]}
+                            >
+                              {qual}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
               </View>
             </View>
 
+            {/* Additional Information */}
             {(selectedRequest.additionalRequirements ||
               selectedRequest.notes) && (
               <View style={styles.section}>
@@ -788,6 +841,7 @@ const RequestCard = ({
               </View>
             )}
 
+            {/* Attachments */}
             {selectedRequest.attachments &&
               selectedRequest.attachments.length > 0 && (
                 <View style={styles.section}>
@@ -808,57 +862,82 @@ const RequestCard = ({
                 </View>
               )}
 
+            {/* Dates */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Timeline</Text>
               <View style={styles.infoGrid}>
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Created:</Text>
                   <Text style={styles.infoValue}>
-                    {selectedRequest.createdAt ? new Date(selectedRequest.createdAt).toLocaleString() : "N/A"}
+                    {new Date(selectedRequest.createdAt).toLocaleString()}
                   </Text>
                 </View>
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Updated:</Text>
                   <Text style={styles.infoValue}>
-                    {selectedRequest.updatedAt ? new Date(selectedRequest.updatedAt).toLocaleString() : "N/A"}
+                    {new Date(selectedRequest.updatedAt).toLocaleString()}
                   </Text>
                 </View>
+                {selectedRequest.verifiedAt && (
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Verified:</Text>
+                    <Text style={styles.infoValue}>
+                      {new Date(selectedRequest.verifiedAt).toLocaleString()}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
 
-            {activeTab === "received" && selectedRequest.status === "VERIFIED" && (
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.sendActionButton]}
-                  onPress={() => handleSendRequest(selectedRequest.id)}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              {selectedRequest.status === "PENDING" && (
+                <>
+                  {activeTab === "received" && (
                     <>
-                      <Send size={20} color="#fff" />
-                      <Text style={styles.sendActionText}>Send Request</Text>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.acceptActionButton]}
+                        onPress={() => {
+                          setSelectedRequest(selectedRequest);
+                          setActionType("accept");
+                          setShowActionDialog(true);
+                        }}
+                      >
+                        <CheckCircle size={20} color="#fff" />
+                        <Text style={styles.acceptActionText}>Accept</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.actionButton,
+                          styles.declineActionButton,
+                        ]}
+                        onPress={() => {
+                          setSelectedRequest(selectedRequest);
+                          setActionType("decline");
+                          setShowActionDialog(true);
+                        }}
+                      >
+                        <XCircle size={20} color="#EF4444" />
+                        <Text style={styles.declineActionText}>Decline</Text>
+                      </TouchableOpacity>
                     </>
                   )}
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {activeTab === "sent" && selectedRequest.status === "PENDING" && (
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.withdrawActionButton]}
-                  onPress={() => {
-                    setActionType("withdraw");
-                    setShowActionDialog(true);
-                  }}
-                >
-                  <Trash2 size={20} color="#EF4444" />
-                  <Text style={styles.withdrawActionText}>Withdraw Request</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                  {activeTab === "sent" && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.withdrawActionButton]}
+                      onPress={() => {
+                        setSelectedRequest(selectedRequest);
+                        setActionType("withdraw");
+                        setShowActionDialog(true);
+                      }}
+                    >
+                      <Trash2 size={20} color="#EF4444" />
+                      <Text style={styles.withdrawActionText}>Withdraw</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
 
             <View style={styles.modalSpacer} />
           </ScrollView>
@@ -946,19 +1025,20 @@ const RequestCard = ({
 
   return (
     <View style={styles.container}>
+      {/* Stats */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.statsContainer}
       >
         <StatCard
-          title="Received "
+          title="Sent "
           value={stats.reqSend || sentRequests.length}
           color="#3B82F6"
           icon={Send}
         />
         <StatCard
-          title="Transfer "
+          title="Received "
           value={stats.reqReceived || receivedRequests.length}
           color="#22C55E"
           icon={Send}
@@ -984,8 +1064,7 @@ const RequestCard = ({
           icon={CheckCircle}
         />
       </ScrollView>
-      
-      <View style={styles.refreshContainer}>
+      <View className="justify-end content-end flex-row mb- mr-4">
         <TouchableOpacity
           style={styles.refreshButton}
           onPress={fetchData}
@@ -994,21 +1073,8 @@ const RequestCard = ({
           <RefreshCw size={20} color="#4F46E5" />
         </TouchableOpacity>
       </View>
-
+      {/* Tabs */}
       <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === "received" && styles.activeTab]}
-          onPress={() => setActiveTab("received")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "received" && styles.activeTabText,
-            ]}
-          >
-            Transfer Requests ({receivedRequests.length})
-          </Text>
-        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === "sent" && styles.activeTab]}
           onPress={() => setActiveTab("sent")}
@@ -1019,11 +1085,25 @@ const RequestCard = ({
               activeTab === "sent" && styles.activeTabText,
             ]}
           >
-            Received Requests ({sentRequests.length})
+            Transfer Requests({sentRequests.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === "received" && styles.activeTab]}
+          onPress={() => setActiveTab("received")}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "received" && styles.activeTabText,
+            ]}
+          >
+            Received Requests({receivedRequests.length})
           </Text>
         </TouchableOpacity>
       </View>
 
+      {/* Filters */}
       <View style={styles.filtersContainer}>
         <View style={styles.searchContainer}>
           <View style={styles.searchInputContainer}>
@@ -1056,6 +1136,7 @@ const RequestCard = ({
         </TouchableOpacity>
       </View>
 
+      {/* Status Filters */}
       {showFilters && (
         <ScrollView
           horizontal
@@ -1086,7 +1167,6 @@ const RequestCard = ({
             "REJECTED",
             "COMPLETED",
             "CANCELLED",
-            "MATCHED",
           ].map((status) => (
             <TouchableOpacity
               key={status}
@@ -1109,6 +1189,7 @@ const RequestCard = ({
         </ScrollView>
       )}
 
+      {/* Content */}
       <FlatList
         data={filteredRequests}
         keyExtractor={(item) => item.id}
@@ -1123,6 +1204,7 @@ const RequestCard = ({
         showsVerticalScrollIndicator={false}
       />
 
+      {/* Modals */}
       {renderDetailModal()}
       {renderActionDialog()}
     </View>
@@ -1148,13 +1230,37 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontFamily: "Inter-Medium",
   },
-  refreshContainer: {
-    alignItems: "flex-end",
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
-    marginBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    fontFamily: "Inter-Bold",
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 2,
+    fontFamily: "Inter-Regular",
   },
   refreshButton: {
-    padding: 8,
+    padding: 4,
   },
   statsContainer: {
     paddingHorizontal: 16,
@@ -1297,8 +1403,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 100,
   },
-  
-  // REQUEST CARD STYLES - UPDATED TO MATCH SCREENSHOT
   requestCard: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -1313,30 +1417,29 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  headerIdContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerId: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-    fontFamily: "Inter-Bold",
-  },
-  statusRow: {
     marginBottom: 12,
+  },
+  requestInfo: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  subject: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    fontFamily: "Inter-SemiBold",
+    flex: 1,
+    marginRight: 8,
   },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -1346,114 +1449,127 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontFamily: "Inter-SemiBold",
   },
-  locationText: {
+  schoolName: {
     fontSize: 14,
     color: "#6B7280",
     fontFamily: "Inter-Regular",
   },
-  subjectSection: {
+  cardDetails: {
     marginBottom: 16,
   },
-  subjectText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#6B7280",
-    fontFamily: "poppins",
-    marginBottom: 4,
+  detailGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
   },
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  detailItem: {
+    width: "48%",
+    marginBottom: 8,
   },
-  detailText: {
-    fontSize: 16,
-    color: "#6B7280",
-    fontFamily: "poppins",
-  },
-  zonesContainer: {
-    marginBottom: 16,
-  },
-  zoneItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  zoneIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2,
-  },
-  wantZoneIcon: {
-    backgroundColor: "#10B98120",
-  },
-  currentZoneIcon: {
-    backgroundColor: "#3B82F620",
-  },
-  zoneIconText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#10B981",
-  },
-  zoneInfo: {
-    flex: 1,
-  },
-  zoneLabel: {
+  detailLabel: {
     fontSize: 12,
     color: "#6B7280",
-    marginBottom: 4,
+    marginBottom: 2,
     fontFamily: "Inter-Medium",
   },
-  zoneTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+  detailValue: {
+    fontSize: 14,
+    color: "#111827",
+    fontFamily: "Inter-Regular",
   },
-  zoneTag: {
+  tags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 4,
+  },
+  smallTag: {
     backgroundColor: "#F3F4F6",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  zoneTagText: {
-    fontSize: 12,
+  smallTagText: {
+    fontSize: 10,
     color: "#4B5563",
     fontFamily: "Inter-Medium",
   },
-  moreZoneTag: {
+  moreTag: {
     backgroundColor: "#E5E7EB",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  moreZoneTagText: {
-    fontSize: 12,
+  moreTagText: {
+    fontSize: 10,
     color: "#6B7280",
     fontFamily: "Inter-Medium",
   },
-  // Send Request Button - Full width like in screenshot
-  sendRequestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardActions: {
+    flexDirection: "row",
     gap: 8,
-    backgroundColor: "#4F46E5",
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 4,
+    flexWrap: "wrap",
   },
-  sendRequestText: {
-    fontSize: 14,
-    color: "#fff",
-    fontWeight: "600",
+  viewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#EEF2FF",
+    borderRadius: 6,
+  },
+  viewButtonText: {
+    fontSize: 12,
+    color: "#4F46E5",
     fontFamily: "Inter-SemiBold",
   },
-  // Removed styles that are no longer needed:
-  // cardButtonsContainer, viewButton, viewButtonText, withdrawButton, withdrawButtonText
-  
+  acceptButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#10B981",
+    borderRadius: 6,
+  },
+  acceptButtonText: {
+    fontSize: 12,
+    color: "#fff",
+    fontFamily: "Inter-SemiBold",
+  },
+  declineButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  declineButtonText: {
+    fontSize: 12,
+    color: "#EF4444",
+    fontFamily: "Inter-SemiBold",
+  },
+  withdrawButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  withdrawButtonText: {
+    fontSize: 12,
+    color: "#EF4444",
+    fontFamily: "Inter-SemiBold",
+  },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
@@ -1473,6 +1589,21 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 24,
     fontFamily: "Inter-Regular",
+  },
+  searchButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#4F46E5",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  searchButtonText: {
+    fontSize: 14,
+    color: "#fff",
+    fontWeight: "600",
+    fontFamily: "Inter-SemiBold",
   },
   // Modal Styles
   modalContainer: {
@@ -1571,6 +1702,12 @@ const styles = StyleSheet.create({
     color: "#4B5563",
     fontFamily: "Inter-Medium",
   },
+  qualificationTag: {
+    backgroundColor: "#E0F2FE",
+  },
+  qualificationTagText: {
+    color: "#0369A1",
+  },
   attachmentsContainer: {
     gap: 8,
   },
@@ -1605,12 +1742,23 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
   },
-  sendActionButton: {
-    backgroundColor: "#4F46E5",
+  acceptActionButton: {
+    backgroundColor: "#10B981",
   },
-  sendActionText: {
+  acceptActionText: {
     fontSize: 16,
     color: "#fff",
+    fontWeight: "600",
+    fontFamily: "Inter-SemiBold",
+  },
+  declineActionButton: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  declineActionText: {
+    fontSize: 16,
+    color: "#EF4444",
     fontWeight: "600",
     fontFamily: "Inter-SemiBold",
   },

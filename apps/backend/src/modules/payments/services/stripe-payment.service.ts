@@ -34,7 +34,7 @@ export class StripePaymentService {
       // Don't initialize Stripe if key is missing
     } else {
       this.stripe = new Stripe(stripeSecretKey, {
-        apiVersion: "2025-12-15.clover",
+        apiVersion: "2025-11-17.clover",/**2025-12-15.clover */
       });
       this.logger.log("Stripe payment gateway initialized successfully");
     }

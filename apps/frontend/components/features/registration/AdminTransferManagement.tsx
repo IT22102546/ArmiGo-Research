@@ -80,25 +80,17 @@ export default function AdminTransferManagement() {
 
   const handleVerify = async (requestId: string, approved: boolean) => {
     try {
-      if (approved) {
-        await teacherTransferApi.verify(requestId, {
-          verificationNotes: "Transfer request verified by admin",
-        });
-        toast.success("Transfer request verified successfully");
-      } else {
-        await teacherTransferApi.reject(requestId, {
-          verificationNotes: "Transfer request rejected by admin",
-        });
-        toast.success("Transfer request rejected successfully");
-      }
+      await teacherTransferApi.verify({
+        requestId,
+        approved,
+        notes: approved ? "Approved by admin" : "Rejected by admin",
+      });
+      toast.success(
+        approved ? "Transfer request verified" : "Transfer request rejected"
+      );
       fetchData();
     } catch (error) {
-      console.error("Verification error:", error);
-      toast.error(
-        approved
-          ? "Failed to verify transfer request"
-          : "Failed to reject transfer request"
-      );
+      toast.error("Failed to verify transfer request");
     }
   };
 
@@ -308,7 +300,7 @@ export default function AdminTransferManagement() {
         </div>
 
         {/* Filters */}
-        {/* <div className="mb-6">
+        <div className="mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Filter className="h-5 w-5 text-gray-600" />
             <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
@@ -432,7 +424,7 @@ export default function AdminTransferManagement() {
               </select>
             </div>
           </div>
-        </div> */}
+        </div>
 
         {/* Transfer Requests List */}
         <div className="space-y-4">

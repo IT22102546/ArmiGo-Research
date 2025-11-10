@@ -679,13 +679,17 @@ export class ExamsService {
         data: {
           ...createQuestionDto,
           examId,
-          // Prisma handles JSON serialization for @db.Json fields automatically
-          // Do not stringify - pass the object/array directly
-          options: createQuestionDto.options,
+          options: JSON.stringify(createQuestionDto.options),
         },
       }),
-      // NOTE: Do NOT update totalMarks here - it's set by the user at exam creation time
-      // totalMarks should not be automatically calculated from question points
+      this.prisma.exam.update({
+        where: { id: examId },
+        data: {
+          totalMarks: {
+            increment: createQuestionDto.points,
+          },
+        },
+      }),
     ]);
 
     return question;
@@ -745,8 +749,29 @@ export class ExamsService {
       updateQuestionData.options = JSON.stringify(updateData.options);
     }
 
-    // Update question - do NOT adjust totalMarks based on question points
-    // totalMarks is set by the user at exam creation and should not be auto-calculated
+    // Update question and adjust total marks if points changed - in a transaction
+    if (updateData.points && updateData.points !== existingQuestion.points) {
+      const pointsDifference = updateData.points - existingQuestion.points;
+
+      const [updatedQuestion] = await this.prisma.$transaction([
+        this.prisma.examQuestion.update({
+          where: { id: questionId },
+          data: updateQuestionData,
+        }),
+        this.prisma.exam.update({
+          where: { id: existingQuestion.examId },
+          data: {
+            totalMarks: {
+              increment: pointsDifference,
+            },
+          },
+        }),
+      ]);
+
+      return updatedQuestion;
+    }
+
+    // No points change, simple update
     return this.prisma.examQuestion.update({
       where: { id: questionId },
       data: updateQuestionData,
@@ -797,11 +822,20 @@ export class ExamsService {
       );
     }
 
-    // Delete question - do NOT update totalMarks
-    // totalMarks is set by the user and should not be auto-calculated from question points
-    await this.prisma.examQuestion.delete({
-      where: { id: questionId },
-    });
+    // Delete question and update total marks in a transaction
+    await this.prisma.$transaction([
+      this.prisma.exam.update({
+        where: { id: existingQuestion.examId },
+        data: {
+          totalMarks: {
+            decrement: existingQuestion.points,
+          },
+        },
+      }),
+      this.prisma.examQuestion.delete({
+        where: { id: questionId },
+      }),
+    ]);
   }
 
   async bulkAddQuestions(
@@ -848,66 +882,13 @@ export class ExamsService {
       );
     }
 
-    // Create all questions in a single transaction
+    // Calculate total points before transaction
+    const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
+
+    // Create all questions AND update exam total marks in a single transaction
     const result = await this.prisma.$transaction(async (tx) => {
-      // Get all existing sections for this exam to validate section IDs
-      const existingSections = await tx.examSection.findMany({
-        where: { examId },
-        orderBy: { order: "asc" },
-      });
-      const validSectionIds = new Set(existingSections.map((s) => s.id));
-      this.logger.debug(
-        `Valid section IDs for exam ${examId}: ${Array.from(validSectionIds).join(", ")}`
-      );
-
-      // If sectionId is required but not provided OR invalid, get the first section or create a default one
-      let defaultSectionId: string | null = null;
-      const hasInvalidSectionIds = questions.some(
-        (q) => q.sectionId && !validSectionIds.has(q.sectionId)
-      );
-      const hasMissingSectionIds = questions.some((q) => !q.sectionId);
-
-      if (hasInvalidSectionIds || hasMissingSectionIds) {
-        if (existingSections.length > 0) {
-          defaultSectionId = existingSections[0].id;
-          this.logger.debug(
-            `Using existing section ${defaultSectionId} for questions with invalid or missing sectionId`
-          );
-        } else {
-          // Create a default section for questions without a valid section
-          const defaultSection = await tx.examSection.create({
-            data: {
-              examId,
-              title: "Questions",
-              description: "Default section for questions",
-              order: 1,
-              examPart: 1,
-            },
-          });
-          defaultSectionId = defaultSection.id;
-          this.logger.debug(
-            `Created default section ${defaultSectionId} for questions with invalid or missing sectionId`
-          );
-        }
-      }
-
       const createdQuestions = await Promise.all(
         questions.map(async (q) => {
-          // Determine the correct sectionId to use
-          let finalSectionId = defaultSectionId;
-          if (q.sectionId && validSectionIds.has(q.sectionId)) {
-            // Use provided sectionId only if it's valid
-            finalSectionId = q.sectionId;
-            this.logger.debug(
-              `Question "${q.question}" using provided valid section: ${q.sectionId}`
-            );
-          } else if (q.sectionId) {
-            // sectionId was provided but invalid
-            this.logger.warn(
-              `Question "${q.question}" has invalid sectionId "${q.sectionId}", using default: ${defaultSectionId}`
-            );
-          }
-
           // Prepare question data based on type
           const questionData: any = {
             examId,
@@ -920,37 +901,58 @@ export class ExamsService {
             imageUrl: q.imageUrl,
             videoUrl: q.videoUrl,
             attachmentUrl: q.attachmentUrl,
-            // Hierarchical properties - use validated section ID
-            sectionId: finalSectionId,
+            // Hierarchical properties
+            sectionId: q.sectionId,
             groupId: q.groupId,
             showNumber: q.showNumber !== undefined ? q.showNumber : true,
             numbering: q.numbering,
           };
 
           // Store options as JSON (for backward compatibility)
+          // and also create separate option records
           let optionsToCreate = [];
           if (q.options && Array.isArray(q.options)) {
             // Debug log to see what we're receiving
             this.logger.debug(
-              `Question "${q.question}" received ${q.options.length} options: ${JSON.stringify(q.options)}`
+              `Received options for question: ${JSON.stringify(q.options)}`
             );
 
-            // Store options as JSON for Prisma (will be stored as JSON in DB)
-            questionData.options = q.options;
-
-            // Extract correct answer from options
+            questionData.options = JSON.stringify(q.options);
             const correctOption = q.options.find((opt: any) => opt.isCorrect);
-            if (correctOption) {
-              questionData.correctAnswer = correctOption.text;
-              this.logger.debug(
-                `Set correct answer to "${correctOption.text}" for question "${q.question}"`
-              );
-            } else {
-              // If no option is marked isCorrect, use the provided correctAnswer field
-              if (q.correctAnswer) {
-                questionData.correctAnswer = q.correctAnswer;
-              }
-            }
+            questionData.correctAnswer = correctOption?.text;
+
+            // Prepare options for separate table
+            optionsToCreate = q.options
+              .map((opt: any, idx: number) => {
+                // Handle both string and object formats
+                const optionText =
+                  typeof opt === "string"
+                    ? opt
+                    : opt.text || opt.optionText || "";
+
+                // Skip if no text
+                if (!optionText) {
+                  this.logger.warn(
+                    `Skipping option with no text at index ${idx}, received: ${JSON.stringify(opt)}`
+                  );
+                  return null;
+                }
+
+                const optionData: any = {
+                  optionText,
+                  isCorrect:
+                    typeof opt === "object" ? opt.isCorrect || false : false,
+                  order: idx,
+                };
+
+                // Only add imageUrl if it exists
+                if (typeof opt === "object" && opt.imageUrl) {
+                  optionData.imageUrl = opt.imageUrl;
+                }
+
+                return optionData;
+              })
+              .filter((opt: any) => opt !== null); // Remove null entries
           }
 
           // Handle option images
@@ -986,9 +988,10 @@ export class ExamsService {
             questionData.correctAnswer = q.correctAnswer;
           }
 
-          // NOTE: options should already be set as JSON string above
-          // DO NOT overwrite with array - Prisma stores JSON field as object/array
-          // The JSON.stringify() call above ensures it's a string when needed
+          // Store options as JSON in the question itself
+          if (optionsToCreate.length > 0) {
+            questionData.options = optionsToCreate;
+          }
 
           // Create the question
           const createdQuestion = await tx.examQuestion.create({
@@ -999,8 +1002,15 @@ export class ExamsService {
         })
       );
 
-      // NOTE: Do NOT update exam total marks here
-      // totalMarks is set by the user at exam creation time and should not be auto-calculated from question points
+      // Update exam total marks within the same transaction
+      await tx.exam.update({
+        where: { id: examId },
+        data: {
+          totalMarks: {
+            increment: totalPoints,
+          },
+        },
+      });
 
       return createdQuestions;
     });

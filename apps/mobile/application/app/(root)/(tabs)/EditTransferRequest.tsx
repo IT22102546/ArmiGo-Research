@@ -1,3 +1,4 @@
+// apps/frontend/app/teacher/transfer/edit.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -1298,6 +1299,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-
-
-

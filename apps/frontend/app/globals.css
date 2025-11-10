@@ -1,22 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
-/* Language-specific fonts for exam creation */
-@font-face {
-  font-family: 'Baamini';
-  src: url('https://fonts.gstatic.com/s/droidsans/v7/aWJC8FV_6KH8pqJFc8O-2FHXVi3oGHPU.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'FMabhaya';
-  src: url('https://cdn.jsdelivr.net/gh/google/fonts@master/ofl/fm_abhaya_libre/FMAbhayaLibre-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -140,23 +123,6 @@
 .rich-text-content ol {
   list-style-type: decimal !important;
   margin-left: 1.25rem !important;
-}
-
-/* Language-specific font classes for exam creation */
-.font-baamini {
-  font-family: Baamini, system-ui, sans-serif !important;
-  font-size: 16px !important;
-  line-height: 1.8 !important;
-}
-
-.font-fmabhaya {
-  font-family: FMabhaya, system-ui, sans-serif !important;
-  font-size: 16px !important;
-  line-height: 1.8 !important;
-}
-
-.font-default {
-  font-family: system-ui, -apple-system, sans-serif !important;
 }
 
 /* Custom Scrollbar Styles */

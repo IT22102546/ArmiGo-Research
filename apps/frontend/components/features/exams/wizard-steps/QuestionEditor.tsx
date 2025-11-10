@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,13 +31,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Question, QuestionType } from "../ExamBuilderWizard";
+import ImageUpload from "@/components/shared/ImageUpload";
 import RichTextEditor from "@/components/shared/RichTextEditor";
-import { LanguageInput } from "@/components/shared/LanguageInput";
 
 interface QuestionEditorProps {
   question: Question;
   onUpdate: (updates: Partial<Question>) => void;
-  mediumName?: string;
 }
 
 const QUESTION_TYPE_OPTIONS: { value: QuestionType; label: string }[] = [
@@ -58,13 +57,7 @@ const SECTION_OPTIONS = [
 export default function QuestionEditor({
   question,
   onUpdate,
-  mediumName,
 }: QuestionEditorProps) {
-  const imageUploadRef = useRef<HTMLInputElement>(null);
-  const optionImageRefs = useRef<{ [key: number]: HTMLInputElement | null }>(
-    {}
-  );
-
   // Parse matching pairs from JSON string
   const [matchingPairs, setMatchingPairs] = useState<
     Array<{ left: string; right: string }>
@@ -108,7 +101,7 @@ export default function QuestionEditor({
     }
 
     onUpdate(updates);
-  };
+  };;
 
   // Update option text
   const updateOption = (index: number, value: string) => {
@@ -150,71 +143,8 @@ export default function QuestionEditor({
     updateMatchingPairs(newPairs);
   };
 
-  const handleImageUploadClick = () => {
-    imageUploadRef.current?.click();
-  };
-
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      onUpdate({ imageUrl: base64 });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleOptionImageUploadClick = (index: number) => {
-    optionImageRefs.current[index]?.click();
-  };
-
-  const handleOptionImageFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    index: number
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      const newOptionImages = [...(question.optionImages || [])];
-      while (newOptionImages.length <= index) {
-        newOptionImages.push("");
-      }
-      newOptionImages[index] = base64;
-      onUpdate({ optionImages: newOptionImages });
-    };
-    reader.readAsDataURL(file);
-  };
-
   return (
     <div className="space-y-4">
-      {/* Hidden file input for image upload */}
-      <input
-        ref={imageUploadRef}
-        type="file"
-        accept="image/*"
-        onChange={handleImageFileChange}
-        className="hidden"
-      />
-
-      {/* Hidden file inputs for option images */}
-      {(question.options || []).map((_, index) => (
-        <input
-          key={`option-image-${index}`}
-          ref={(el) => {
-            if (el) optionImageRefs.current[index] = el;
-          }}
-          type="file"
-          accept="image/*"
-          onChange={(e) => handleOptionImageFileChange(e, index)}
-          className="hidden"
-        />
-      ))}
-
       {/* Question Text with Rich Formatting */}
       <Card>
         <CardHeader className="pb-3">
@@ -242,97 +172,20 @@ export default function QuestionEditor({
             placeholder="Enter your question here..."
             rows={3}
             showFormatting={true}
-            mediumName={mediumName}
-            showVirtualKeyboard={true}
-            onImageUploadClick={handleImageUploadClick}
           />
 
-          {/* Question Image Upload - Compact inline */}
-          {question.imageUrl && (
-            <div className="relative w-full max-w-xs">
-              <div className="relative w-full h-32 bg-muted rounded-md overflow-hidden">
-                <img
-                  src={question.imageUrl}
-                  alt="Question"
-                  className="w-full h-full object-cover"
-                />
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => onUpdate({ imageUrl: undefined })}
-                  className="absolute top-1 right-1 h-6 w-6 p-0"
-                  title="Remove image"
-                >
-                  ×
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Question Settings */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Question Settings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Points */}
-            <div className="space-y-2">
-              <Label className="text-sm">Points</Label>
-              <Input
-                type="number"
-                min={1}
-                max={100}
-                step="0.01"
-                value={question.points ?? 1}
-                onChange={(e) =>
-                  onUpdate({
-                    points: Math.max(1, parseFloat(e.target.value) || 1),
-                  })
-                }
-                className="w-full"
-              />
-            </div>
-
-            {/* Section */}
-            <div className="space-y-2">
-              <Label className="text-sm">Section (Optional)</Label>
-              <Select
-                value={
-                  question.section && question.section !== ""
-                    ? question.section
-                    : "none"
-                }
-                onValueChange={(value) =>
-                  onUpdate({ section: value === "none" ? undefined : value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select section" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Section</SelectItem>
-                  {SECTION_OPTIONS.filter((opt) => opt.value).map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Question Type - Read Only Display */}
-            <div className="space-y-2">
-              <Label className="text-sm">Question Type</Label>
-              <div className="h-10 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm flex items-center">
-                {QUESTION_TYPE_OPTIONS.find(
-                  (opt) => opt.value === question.type
-                )?.label || question.type}
-              </div>
-            </div>
+          {/* Question Image Upload */}
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">
+              Question Image (Optional)
+            </Label>
+            <ImageUpload
+              value={question.imageUrl}
+              onChange={(url) => onUpdate({ imageUrl: url })}
+              placeholder="Click to upload question image"
+              category="exam-question"
+              aspectRatio="auto"
+            />
           </div>
         </CardContent>
       </Card>
@@ -401,44 +254,34 @@ export default function QuestionEditor({
 
                     {/* Option Input */}
                     <div className="flex-1 space-y-2">
-                      <LanguageInput
-                        mediumName={mediumName}
-                        showVirtualKeyboard={true}
-                        onImageUploadClick={() =>
-                          handleOptionImageUploadClick(index)
-                        }
+                      <Input
                         value={option}
                         onChange={(e) => updateOption(index, e.target.value)}
                         placeholder={`Option ${String.fromCharCode(65 + index)}`}
                         className="h-9"
                       />
 
-                      {/* Option Image Preview */}
-                      {question.optionImages?.[index] && (
-                        <div className="relative w-20 h-20 rounded-md overflow-hidden border border-gray-300">
-                          <img
-                            src={question.optionImages[index]}
-                            alt={`Option ${String.fromCharCode(65 + index)}`}
-                            className="w-full h-full object-cover"
-                          />
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              const newOptionImages = [
-                                ...(question.optionImages || []),
-                              ];
-                              newOptionImages[index] = "";
-                              onUpdate({ optionImages: newOptionImages });
-                            }}
-                            className="absolute -top-2 -right-2 h-5 w-5 p-0 text-xs"
-                            title="Remove image"
-                          >
-                            ×
-                          </Button>
-                        </div>
-                      )}
+                      {/* Option Image Upload */}
+                      <div className="pl-1">
+                        <ImageUpload
+                          value={question.optionImages?.[index]}
+                          onChange={(url) => {
+                            const newOptionImages = [
+                              ...(question.optionImages || []),
+                            ];
+                            // Ensure array is long enough
+                            while (newOptionImages.length <= index) {
+                              newOptionImages.push("");
+                            }
+                            newOptionImages[index] = url || "";
+                            onUpdate({ optionImages: newOptionImages });
+                          }}
+                          placeholder="Add image to this option (optional)"
+                          category="exam-question"
+                          aspectRatio="auto"
+                          className="h-24"
+                        />
+                      </div>
                     </div>
 
                     {/* Remove Option Button */}
@@ -507,8 +350,6 @@ export default function QuestionEditor({
                 placeholder="Enter the expected answer or keywords for grading reference..."
                 rows={2}
                 showFormatting={false}
-                mediumName={mediumName}
-                showVirtualKeyboard={true}
               />
               <p className="text-xs text-muted-foreground">
                 This will be shown to graders as a reference. Multiple
@@ -527,8 +368,6 @@ export default function QuestionEditor({
                 placeholder="Enter grading guidelines, rubric, or expected points to cover..."
                 rows={4}
                 showFormatting={true}
-                mediumName={mediumName}
-                showVirtualKeyboard={true}
               />
               <p className="text-xs text-muted-foreground">
                 Provide detailed grading criteria for manual marking.
@@ -547,9 +386,7 @@ export default function QuestionEditor({
               </div>
               <div className="space-y-2">
                 <Label className="text-sm">Correct Answer(s)</Label>
-                <LanguageInput
-                  mediumName={mediumName}
-                  showVirtualKeyboard={true}
+                <Input
                   value={question.correctAnswer || ""}
                   onChange={(e) => onUpdate({ correctAnswer: e.target.value })}
                   placeholder="Enter correct answer (use | for multiple acceptable answers)"
@@ -585,9 +422,7 @@ export default function QuestionEditor({
                     className="flex items-center gap-2 p-2 rounded-lg border bg-gray-50/50 dark:bg-gray-900/20"
                   >
                     <GripVertical className="h-4 w-4 text-gray-400" />
-                    <LanguageInput
-                      mediumName={mediumName}
-                      showVirtualKeyboard={true}
+                    <Input
                       value={pair.left}
                       onChange={(e) =>
                         updatePair(index, "left", e.target.value)
@@ -596,9 +431,7 @@ export default function QuestionEditor({
                       className="flex-1"
                     />
                     <ArrowRight className="h-4 w-4 text-gray-400 shrink-0" />
-                    <LanguageInput
-                      mediumName={mediumName}
-                      showVirtualKeyboard={true}
+                    <Input
                       value={pair.right}
                       onChange={(e) =>
                         updatePair(index, "right", e.target.value)
@@ -629,6 +462,70 @@ export default function QuestionEditor({
         </CardContent>
       </Card>
 
+      {/* Question Settings */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Question Settings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Points */}
+            <div className="space-y-2">
+              <Label className="text-sm">Points</Label>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={question.points || 1}
+                onChange={(e) =>
+                  onUpdate({
+                    points: Math.max(1, parseInt(e.target.value) || 1),
+                  })
+                }
+                className="w-full"
+              />
+            </div>
+
+            {/* Section */}
+            <div className="space-y-2">
+              <Label className="text-sm">Section (Optional)</Label>
+              <Select
+                value={
+                  question.section && question.section !== ""
+                    ? question.section
+                    : "none"
+                }
+                onValueChange={(value) =>
+                  onUpdate({ section: value === "none" ? undefined : value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select section" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Section</SelectItem>
+                  {SECTION_OPTIONS.filter((opt) => opt.value).map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Question Type - Read Only Display */}
+            <div className="space-y-2">
+              <Label className="text-sm">Question Type</Label>
+              <div className="h-10 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm flex items-center">
+                {QUESTION_TYPE_OPTIONS.find(
+                  (opt) => opt.value === question.type
+                )?.label || question.type}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Explanation Section */}
       <Card>
         <CardHeader className="pb-3">
@@ -646,8 +543,6 @@ export default function QuestionEditor({
             placeholder="Add an explanation that will be shown after the exam (optional)..."
             rows={2}
             showFormatting={true}
-            mediumName={mediumName}
-            showVirtualKeyboard={true}
           />
           <p className="text-xs text-muted-foreground mt-2">
             This explanation will be shown to students when reviewing their

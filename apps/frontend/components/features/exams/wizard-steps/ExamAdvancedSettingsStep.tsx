@@ -191,7 +191,7 @@ export default function ExamAdvancedSettingsStep({
       </Card>
 
       {/* Ranking & Results Settings */}
-      {/* <Card>
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <Trophy className="h-5 w-5" />
@@ -257,7 +257,7 @@ export default function ExamAdvancedSettingsStep({
             </div>
           )}
         </CardContent>
-      </Card> */}
+      </Card>
     </div>
   );
 }

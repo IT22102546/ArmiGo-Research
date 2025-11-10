@@ -1,3 +1,4 @@
+// apps/frontend/app/(root)/(tabs)/TeacherTransferDashboard.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -127,8 +128,7 @@ export default function TeacherHome() {
     {
       id: "2",
       title: "Document Verification",
-      content:
-        "Ensure all your documents are verified before applying for transfers.",
+      content: "Ensure all your documents are verified before applying for transfers.",
       type: "warning",
       date: "2024-11-10",
       isRead: true,
@@ -433,31 +433,23 @@ export default function TeacherHome() {
   );
 
   // Render announcement card
-  const AnnouncementCard = ({
-    announcement,
-  }: {
-    announcement: Announcement;
-  }) => {
+  const AnnouncementCard = ({ announcement }: { announcement: Announcement }) => {
     const color = getAnnouncementColor(announcement.type);
-
+    
     return (
       <TouchableOpacity style={styles.announcementCard}>
         <View style={styles.announcementHeader}>
           <View style={styles.announcementTitleRow}>
-            <View
-              style={[
-                styles.announcementBadge,
-                { backgroundColor: color + "20" },
-              ]}
-            >
+            <View style={[styles.announcementBadge, { backgroundColor: color + "20" }]}>
               <Megaphone size={14} color={color} />
             </View>
             <Text style={styles.announcementTitle}>{announcement.title}</Text>
-            {!announcement.isRead && <View style={styles.unreadDot} />}
+            {!announcement.isRead && (
+              <View style={styles.unreadDot} />
+            )}
           </View>
           <Text style={styles.announcementDate}>
-            <Calendar size={12} color="#9CA3AF" />{" "}
-            {new Date(announcement.date).toLocaleDateString()}
+            <Calendar size={12} color="#9CA3AF" /> {new Date(announcement.date).toLocaleDateString()}
           </Text>
         </View>
         <Text style={styles.announcementContent} numberOfLines={2}>
@@ -471,9 +463,7 @@ export default function TeacherHome() {
   const RequestCard = ({ request }: { request: TeacherTransferRequest }) => (
     <TouchableOpacity
       style={styles.requestCard}
-      onPress={() =>
-        router.push(`/(root)/(tabs)/TransferDetails?id=${request.id}`)
-      }
+      onPress={() => router.push(`/(root)/(tabs)/TransferDetails?id=${request.id}`)}
     >
       <View style={styles.requestHeader}>
         <View style={styles.requestInfo}>
@@ -583,17 +573,12 @@ export default function TeacherHome() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0057FF" />
-
+      
       {/* Fixed Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerText}>
-            <Text className="font-Poppins" style={styles.headerTitle}>
-              Welcome,{" "}
-              <Text className="text-lg font-Poppins">
-                {currentUser?.firstName || "Teacher"} !
-              </Text>
-            </Text>
+            <Text className="font-Poppins" style={styles.headerTitle}>Welcome, <Text className="text-lg font-Poppins">{currentUser?.firstName || "Teacher"} !</Text></Text>
             <Text style={styles.headerSubtitle}>
               Manage your mutual transfers
             </Text>
@@ -659,11 +644,11 @@ export default function TeacherHome() {
           />
         </View>
 
-        {/* Quick Actions*/}
+        {/* Quick Actions*/} 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.quickActions}>
-            <QuickActionCard
+           {/*} <QuickActionCard
               title="New Transfer Request"
               description="Create a new mutual transfer request"
               icon={Send}
@@ -671,7 +656,7 @@ export default function TeacherHome() {
               onPress={() =>
                 router.push("/(root)/(tabs)/CreateTransferRequest")
               }
-            />
+            />*/}
 
             <QuickActionCard
               title="Search & Match"
@@ -686,13 +671,7 @@ export default function TeacherHome() {
               description="View latest transfer request"
               icon={FileText}
               color="#10B981"
-              onPress={() =>
-                router.push(
-                  RequestCard.length > 0
-                    ? `/(root)/(tabs)/TransferDetails?id=${myRequests[0].id}`
-                    : "/(root)/(tabs)/CreateTransferRequest"
-                )
-              }
+              onPress={() => router.push(RequestCard.length > 0 ? `/(root)/(tabs)/TransferDetails?id=${myRequests[0].id}` : "/(root)/(tabs)/CreateTransferRequest" )}
             />
           </View>
         </View>
@@ -710,10 +689,7 @@ export default function TeacherHome() {
 
           <View style={styles.announcementsList}>
             {announcements.slice(0, 2).map((announcement) => (
-              <AnnouncementCard
-                key={announcement.id}
-                announcement={announcement}
-              />
+              <AnnouncementCard key={announcement.id} announcement={announcement} />
             ))}
           </View>
         </View>

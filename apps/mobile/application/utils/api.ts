@@ -1,37 +1,46 @@
-
 // In your utils/api.ts or wherever apiFetch is defined
 import useAuthStore from "../stores/authStore";
-
-
-// utils/api.ts
-import * as SecureStore from 'expo-secure-store';
-
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
-
 export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  // Get token directly from the auth store
+  const authState = useAuthStore.getState();
+    const url = `${API_BASE_URL}${endpoint}`;
 
-  // Get token from SecureStore
-  const accessToken = await SecureStore.getItemAsync("access_token");
+  // Try different ways to get the token
+  let token = null;
+  if (authState.getToken && typeof authState.getToken === 'function') {
+    token = authState.getToken();
+  } else if (authState.accessToken) {
+    token = authState.accessToken;
+  } else if (authState.currentUser?.token) {
+    token = authState.currentUser.token;
+  }
+  
+  console.log('🔍 [API FETCH] Token check:', {
+    hasToken: !!token,
+    tokenLength: token?.length,
+    endpoint: endpoint
+  });
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "x-client-type": "mobile",
-    ...(accessToken && { Authorization: `Bearer ${accessToken}` }), // CRITICAL: Add token
-    ...(options.headers as Record<string, string>),
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-client-type': 'mobile',
+    ...options.headers,
   };
 
-  try {
-    const response = await fetch(url, {
-      headers,
-      credentials: "include",
-      ...options,
-    });
-
-    return response;
-  } catch (error) {
-    console.error(`❌ API Error for ${endpoint}:`, error);
-    throw error;
+  // ADD Authorization header if token exists
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    console.warn('⚠️ [API FETCH] No token available for request to:', endpoint);
   }
-};;
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  console.log('📡 Response for', endpoint, ':', response.status);
+  return response;
+};
