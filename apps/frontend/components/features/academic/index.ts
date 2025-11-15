@@ -1,2 +1,0 @@
-﻿// academic feature components
-export {};
