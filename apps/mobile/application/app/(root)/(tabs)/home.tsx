@@ -37,51 +37,33 @@ const Home = () => {
     ]);
   };
 
-  // Dummy data for upcoming schedules with images
+  // Dummy data for upcoming schedules (physiotherapy focused)
   const upcomingSchedules = [
     {
       id: 1,
-      courseTitle: "INTRODUCTION TO MICROBIOLOGY",
-      scheduleTitle: "Microbiology Introduction",
+      courseTitle: "Elbow Rehabilitation",
+      scheduleTitle: "Elbow Rehabilitation",
       date: "12th June 2025",
-      time: "3:00 pm - 5:00 pm",
+      time: "3:00 pm - 3:15 pm",
       instructor: "Dr. Sarah Johnson",
-      image: images.test, // Using test image as example
+      image: images.test,
     },
     {
       id: 2,
-      courseTitle: "ADVANCED BIOCHEMISTRY",
-      scheduleTitle: "Protein Structure Analysis",
-      date: "15th June 2025",
-      time: "10:00 am - 12:00 pm",
-      instructor: "Dr. Michael Chen",
+      courseTitle: "Finger Rehabilitation",
+      scheduleTitle: "Finger Rehabilitation",
+      date: "12th June 2025",
+      time: "3:30 pm - 4:00 pm",
+      instructor: "Dr. Sarah Johnson",
       image: images.test,
     },
     {
       id: 3,
-      courseTitle: "CELL BIOLOGY",
-      scheduleTitle: "Cell Division Process",
-      date: "18th June 2025",
-      time: "2:00 pm - 4:00 pm",
-      instructor: "Dr. Emily Rodriguez",
-      image: images.test,
-    },
-    {
-      id: 4,
-      courseTitle: "GENETICS",
-      scheduleTitle: "Mendelian Inheritance",
-      date: "20th June 2025",
-      time: "11:00 am - 1:00 pm",
-      instructor: "Dr. James Wilson",
-      image: images.test,
-    },
-    {
-      id: 5,
-      courseTitle: "IMMUNOLOGY",
-      scheduleTitle: "Immune System Response",
-      date: "25th June 2025",
-      time: "4:00 pm - 6:00 pm",
-      instructor: "Dr. Lisa Thompson",
+      courseTitle: "Knee Strengthening",
+      scheduleTitle: "Knee Strengthening",
+      date: "15th June 2025",
+      time: "10:00 am - 10:45 am",
+      instructor: "Dr. Michael Chen",
       image: images.test,
     },
   ];
@@ -101,13 +83,23 @@ const Home = () => {
       {/* Blue Header Area with Rounded Bottom */}
       <View style={styles.header}>
         <View style={styles.welcomeContainer}>
-          <View className="flex flex-row justify-between">
-            <Text style={styles.welcomeText}>Welcome Back</Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View>
+              <Text style={styles.welcomeText}>Welcome Back</Text>
+              <Text style={styles.userName}>{currentUser?.firstName + " " + currentUser?.lastName || "Randy Perera"}</Text>
+            </View>
+
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <TouchableOpacity style={styles.notificationButton} onPress={() => router.push("/(root)/(tabs)/notifications") }>
+                <Image source={icons.notifications} style={styles.notificationIcon} />
+                <View style={styles.notificationBadge} />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => router.push("/(root)/(tabs)/profile") }>
+                <Image source={ currentUser?.profilePicture ? { uri: currentUser.profilePicture } : icons.profile } style={styles.avatar} />
+              </TouchableOpacity>
+            </View>
           </View>
-          <Text style={styles.userName}>
-            {currentUser?.firstName + " " + currentUser?.lastName ||
-              "Randy Wigham"}
-          </Text>
         </View>
 
         {/* Search Bar on Blue Background */}
@@ -145,7 +137,7 @@ const Home = () => {
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={styles.quickAccessText}>Exams</Text>
+                <Text style={styles.quickAccessText}>Exercise</Text>
               </View>
             </TouchableOpacity>
 
@@ -161,7 +153,7 @@ const Home = () => {
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={styles.quickAccessText}>Publications</Text>
+                <Text style={styles.quickAccessText}>Progress</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -219,7 +211,7 @@ const Home = () => {
                 </View>
 
                 <TouchableOpacity style={styles.joinButton}>
-                  <Text style={styles.joinButtonText}>Join Seminar</Text>
+                  <Text style={styles.joinButtonText}>Join Session</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -295,12 +287,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#1e293b",
   },
-  notificationButton: {
-    right: 5,
-    width: 25,
-    height: 25,
-    color: "#fff",
-  },
   content: {
     flex: 1,
     backgroundColor: "#f8fafc",
@@ -374,6 +360,37 @@ const styles = StyleSheet.create({
     color: "#1e293b",
     fontWeight: "600",
     textAlign: "center",
+  },
+  notificationButton: {
+    marginRight: 12,
+    width: 36,
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notificationIcon: {
+    width: 22,
+    height: 22,
+    tintColor: "#fff",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#ff3b30",
+    borderWidth: 1,
+    borderColor: "#fff",
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginLeft: 8,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   scheduleCard: {
     backgroundColor: "#fff",

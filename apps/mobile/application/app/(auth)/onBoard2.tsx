@@ -552,7 +552,7 @@ const OnBoard2: React.FC = () => {
           <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
 
           {/* Title */}
-          <Text style={styles.header}>Learn APP</Text>
+          <Text style={styles.header}>ArmiGo</Text>
 
           {/* Light Blue Wave - BELOW the white wave */}
           <View style={styles.lightBlueWaveContainer}>
@@ -636,7 +636,7 @@ const OnBoard2: React.FC = () => {
                 maskElement={
                   <View style={styles.maskElement}>
                     <Text style={styles.gradientTitleMask}>
-                      Take Exams Securely
+                      Therapy
                     </Text>
                   </View>
                 }
@@ -651,7 +651,7 @@ const OnBoard2: React.FC = () => {
 
               {/* Description text */}
               <Text style={styles.description}>
-                Answer MCQ, written, and{"\n"}uploaded papers with Face ID{"\n"}
+                Therapy with ArmiGo Hand daily{"\n"}basis{"\n"}
                 security
               </Text>
 

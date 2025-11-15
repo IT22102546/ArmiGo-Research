@@ -284,12 +284,12 @@ const SignIn = () => {
       
       if (userRole) {
         // Define which roles are allowed based on the selected portal
-        if (userRole === "Teacher" || userRole === "TEACHER") {
-          // Teacher portal - allow only teacher roles
-          allowedRoles = ["INTERNAL_TEACHER", "EXTERNAL_TEACHER"];
-        } else if (userRole === "Internal" || userRole === "INTERNAL_STUDENT") {
-          // Student portal - allow only student roles
-          allowedRoles = ["INTERNAL_STUDENT", "EXTERNAL_STUDENT"];
+        if (userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST") {
+          // Physiotherapist portal - allow only physiotherapist roles
+          allowedRoles = ["INTERNAL_PHYSIOTHERAPIST", "EXTERNAL_PHYSIOTHERAPIST"];
+        } else if (userRole === "Parent" || userRole === "PARENT") {
+          // Parent portal - allow only parent roles
+          allowedRoles = ["INTERNAL_PARENT", "EXTERNAL_PARENT"];
         }
       }
 
@@ -301,6 +301,68 @@ const SignIn = () => {
       // Only add allowedRoles if we have them
       if (allowedRoles.length > 0) {
         requestBody.allowedRoles = allowedRoles;
+      }
+
+      // --- Mock accounts for local frontend testing (no backend required) ---
+      const mockAccounts = [
+        {
+          identifier: "parent@example.com",
+          password: "parent123",
+          role: "INTERNAL_PARENT",
+          firstName: "Randy",
+          lastName: "Perera",
+        },
+        {
+          identifier: "physio@example.com",
+          password: "physio123",
+          role: "INTERNAL_PHYSIOTHERAPIST",
+          firstName: "Dr. John",
+          lastName: "Doe",
+        },
+      ];
+
+      const matchedMock = mockAccounts.find(
+        (m) =>
+          m.identifier.toLowerCase() === formattedIdentifier.toLowerCase() &&
+          m.password === credentials.password
+      );
+
+      if (matchedMock) {
+        // Ensure selected portal matches the mock account role (if a portal was selected)
+        if (userRole) {
+          const isParentPortal = userRole === "Parent" || userRole === "PARENT";
+          const isPhysioPortal = userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST";
+
+          if ((isParentPortal && matchedMock.role !== "INTERNAL_PARENT") || (isPhysioPortal && matchedMock.role !== "INTERNAL_PHYSIOTHERAPIST")) {
+            Alert.alert(
+              "Invalid Portal Access",
+              `This account cannot access the selected portal. Please choose the correct portal.`
+            );
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Build mock user and sign in locally
+        const user = {
+          id: `mock-${matchedMock.role}`,
+          firstName: matchedMock.firstName,
+          lastName: matchedMock.lastName,
+          role: matchedMock.role,
+          email: matchedMock.identifier,
+          phone: "",
+        };
+
+        await signIn(user as any, "mockAccessToken", "mockRefreshToken");
+
+        if (matchedMock.role === "INTERNAL_PARENT") {
+          router.replace("/(root)/(tabs)/home");
+        } else {
+          router.replace("/(root)/(tabs)/PhysiotherapistHome");
+        }
+
+        setLoading(false);
+        return;
       }
 
       const response = await fetch(`${API}/api/v1/auth/login`, {
@@ -321,7 +383,7 @@ const SignIn = () => {
         if (errorData.message?.includes("role") || errorData.message?.includes("Role") || errorData.message?.includes("not allowed")) {
           Alert.alert(
             "Role Mismatch",
-            `This account cannot access the ${userRole === "Teacher" || userRole === "TEACHER" ? "Teacher" : "Student"} portal. Please use the correct portal for your account type.`,
+            `This account cannot access the ${userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST" ? "Physiotherapist" : "Parent"} portal. Please use the correct portal for your account type.`,
             [
               {
                 text: "Go Back",
@@ -358,16 +420,16 @@ const SignIn = () => {
 
       // Verify the user role matches the expected portal
       if (userRole) {
-        const isTeacherPortal = userRole === "Teacher" || userRole === "TEACHER";
-        const isStudentPortal = userRole === "Internal" || userRole === "INTERNAL_STUDENT";
+        const isPhysiotherapistPortal = userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST";
+        const isParentPortal = userRole === "Parent" || userRole === "PARENT";
         
-        const userIsTeacher = user.role === "INTERNAL_TEACHER" || user.role === "EXTERNAL_TEACHER";
-        const userIsStudent = user.role === "INTERNAL_STUDENT" || user.role === "EXTERNAL_STUDENT";
+        const userIsPhysiotherapist = user.role === "INTERNAL_PHYSIOTHERAPIST" || user.role === "EXTERNAL_PHYSIOTHERAPIST";
+        const userIsParent = user.role === "INTERNAL_PARENT" || user.role === "EXTERNAL_PARENT";
         
-        if ((isTeacherPortal && !userIsTeacher) || (isStudentPortal && !userIsStudent)) {
+        if ((isPhysiotherapistPortal && !userIsPhysiotherapist) || (isParentPortal && !userIsParent)) {
           Alert.alert(
             "Invalid Portal Access",
-            `You are trying to access the ${isTeacherPortal ? "Teacher" : "Student"} portal with a ${user.role} account. Please use the correct portal.`,
+            `You are trying to access the ${isPhysiotherapistPortal ? "Physiotherapist" : "Parent"} portal with a ${user.role} account. Please use the correct portal.`,
             [
               {
                 text: "Go Back",
@@ -385,10 +447,10 @@ const SignIn = () => {
       await signIn(user, accessToken, refreshToken);
 
       console.log("✅ Sign in successful!");
-      if(userRole === "Internal" || userRole === "INTERNAL_STUDENT" || userRole === "External" || userRole === "EXTERNAL_STUDENT") {
+      if(userRole === "Parent" || userRole === "PARENT") {
               router.replace("/(root)/(tabs)/home");
-      } else if(userRole === "Teacher" || userRole === "TEACHER" || userRole === "INTERNAL_TEACHER" || userRole === "EXTERNAL_TEACHER") {
-              router.replace("/(root)/(tabs)/TeacherHome");
+      } else if(userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST") {
+              router.replace("/(root)/(tabs)/PhysiotherapistHome");
       }
     } catch (error: any) {
       console.error("❌ Sign in error:", error);
@@ -524,8 +586,8 @@ const SignIn = () => {
         {/* Icons Layer with Animation */}
         <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
 
-        {/* Title - Only Learn APP in top section */}
-        <Text style={styles.header}>Learn APP</Text>
+        {/* Title - Changed to Armigo */}
+        <Text style={styles.header}>Armigo</Text>
 
         {/* Light Blue Wave - BELOW the white wave */}
         <View style={styles.lightBlueWaveContainer}>
@@ -571,9 +633,9 @@ const SignIn = () => {
         {userRole && (
           <View style={styles.roleIndicator}>
             <Text style={styles.roleIndicatorText}>
-              {userRole === "Teacher" || userRole === "TEACHER" 
-                ? "Signing in as Teacher" 
-                : "Signing in as Student"}
+              {userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST" 
+                ? "Signing in as Physiotherapist" 
+                : "Signing in as Parent"}
             </Text>
           </View>
         )}
@@ -718,13 +780,13 @@ const SignIn = () => {
             )}
           </TouchableOpacity>
 
+          {/* NOTE: Mock accounts for local testing (no backend required) */}
+          <Text style={styles.mockInfoText}>
+            For testing: Parent — parent@example.com / parent123  •  Physiotherapist — physio@example.com / physio123
+          </Text>
+
           {/* Sign Up Link */}
-          <View style={styles.signUpContainer}>
-            <Text style={styles.signUpText}>Don't You Have An Account? </Text>
-            <TouchableOpacity onPress={handleSignUp}>
-              <Text style={styles.signUpLink}>Sign Up</Text>
-            </TouchableOpacity>
-          </View>
+         
         </View>
       </ScrollView>
     </View>
@@ -893,6 +955,13 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontFamily: "Poppins-SemiBold",
+  },
+  mockInfoText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 12,
+    marginBottom: 12,
+    paddingHorizontal: 16,
   },
   signUpContainer: {
     flexDirection: "row",

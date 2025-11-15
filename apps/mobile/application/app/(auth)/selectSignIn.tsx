@@ -8,7 +8,7 @@ import {
   ScrollView,
   Animated,
 } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
 import { icons } from "@/constants"; 
 import { useRouter } from "expo-router";
@@ -16,7 +16,6 @@ import { useRouter } from "expo-router";
 const SelectSignIn = () => {
   const router = useRouter();
   const [selectedRole, setSelectedRole] = React.useState<string | null>(null);
-  const [studentExpanded, setStudentExpanded] = React.useState(false);
 
   // Animation values for icons
   const animatedValues = useRef(
@@ -27,15 +26,10 @@ const SelectSignIn = () => {
 
   const handleSelect = (role: string) => {
     setSelectedRole(role);
-    if (role === "Student") {
-      setStudentExpanded(!studentExpanded);
-    } else {
-      setStudentExpanded(false);
-    }
-  };
+  }; 
 
-  // Check if a valid role is selected (Teacher, Internal, or External)
-  const isRoleSelected = selectedRole && selectedRole !== "Student";
+  // Check if a valid role is selected
+  const isRoleSelected = selectedRole !== null;
 
   // Start icon animations
   useEffect(() => {
@@ -46,20 +40,16 @@ const SelectSignIn = () => {
         Animated.loop(
           Animated.sequence([
             Animated.delay(delay),
-            Animated.parallel([
-              Animated.sequence([
-                Animated.timing(animValue, {
-                  toValue: 1,
-                  duration: 2500 + Math.random() * 1500,
-                  useNativeDriver: true,
-                }),
-                Animated.timing(animValue, {
-                  toValue: 0,
-                  duration: 2500 + Math.random() * 1500,
-                  useNativeDriver: true,
-                }),
-              ]),
-            ]),
+            Animated.timing(animValue, {
+              toValue: 1,
+              duration: 2500 + Math.random() * 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(animValue, {
+              toValue: 0,
+              duration: 2500 + Math.random() * 1500,
+              useNativeDriver: true,
+            }),
           ])
         ).start();
       });
@@ -72,7 +62,6 @@ const SelectSignIn = () => {
     };
   }, []);
 
-  // Pick only the icons you want (same as onBoard3)
   const selectedIcons = [
     icons.Icon1,
     icons.Icon2,
@@ -92,56 +81,40 @@ const SelectSignIn = () => {
   ];
 
   const getPredefinedPositions = () => {
-    const positions = [
-      // Top row
+    return [
       { top: 25, left: 10 },
       { top: 25, left: 50 },
       { top: 25, left: 90 },
-      // Upper middle row
       { top: 60, left: 20 },
       { top: 60, left: 80 },
-      // Middle row
       { top: 95, left: 5 },
       { top: 95, left: 35 },
       { top: 95, left: 65 },
       { top: 95, left: 95 },
-      // Lower middle row
       { top: 130, left: 15 },
       { top: 130, left: 50 },
       { top: 130, left: 85 },
-      // Bottom row
       { top: 165, left: 25 },
       { top: 165, left: 75 },
-      // Very bottom row
       { top: 200, left: 5 },
       { top: 200, left: 40 },
       { top: 200, left: 60 },
       { top: 200, left: 95 },
     ];
-    return positions;
   };
 
   const renderDistributedIcons = () => {
     const predefinedPositions = getPredefinedPositions();
 
     return selectedIcons.map((icon, index) => {
-      let position;
-
-      if (index < predefinedPositions.length) {
-        position = predefinedPositions[index];
-      } else {
-        position = {
-          top: 30 + Math.random() * 140,
-          left: 15 + Math.random() * 70,
-        };
-      }
+      let position = index < predefinedPositions.length 
+        ? predefinedPositions[index]
+        : { top: 30 + Math.random() * 140, left: 15 + Math.random() * 70 };
 
       const randomOpacity = 0.8 + Math.random() * 0.2;
-      // CHANGED: Made icon sizes smaller to match previous screens - reduced from 32-48 to 20-32
-      const randomSize = 20 + Math.random() * 12; // Now ranges from 20 to 32
+      const randomSize = 20 + Math.random() * 12;
       const randomRotation = Math.random() * 20 - 10;
 
-      // Animation transforms
       const translateY = animatedValues[index].interpolate({
         inputRange: [0, 1],
         outputRange: [0, -8],
@@ -175,11 +148,7 @@ const SelectSignIn = () => {
             opacity: opacity,
             tintColor: "#FFFFFF",
             zIndex: 2,
-            transform: [
-              { translateY: translateY },
-              { scale: scale },
-              { rotate: rotate },
-            ],
+            transform: [{ translateY }, { scale }, { rotate }],
             shadowColor: "#FFFFFF",
             shadowOffset: { width: 0, height: 0 },
             shadowOpacity: 0.8,
@@ -192,32 +161,16 @@ const SelectSignIn = () => {
     });
   };
 
-  // Dropdown Arrow Component
-  const DropdownArrow = ({ expanded }: { expanded: boolean }) => (
-    <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <Path
-        d={expanded ? "M7 15l5-5 5 5" : "M7 10l5 5 5-5"}
-        stroke="#333"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-
   const handleContinue = () => {
     if (!isRoleSelected) return;
 
-    // Map frontend role names to backend role constants
     const roleMapping: { [key: string]: string } = {
-      "Teacher": "TEACHER",
-      "Internal": "INTERNAL_STUDENT",
+      "Physiotherapist": "PHYSIOTHERAPIST",
+      "Parent": "PARENT",
     };
 
-    // Get the backend role from mapping, fallback to selectedRole
     const backendRole = roleMapping[selectedRole] || selectedRole;
 
-    // Navigate to sign-in screen with the selected role as a parameter
     router.push({
       pathname: "/sign-in",
       params: { 
@@ -229,27 +182,17 @@ const SelectSignIn = () => {
 
   return (
     <View style={styles.container}>
-      {/* Top Gradient with Icons and Waves - EXACTLY like onBoard3 */}
       <LinearGradient
         colors={["#4B3AFF", "#5C6CFF"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.topSection}
       >
-        {/* Icons Layer */}
         <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
+        <Text style={styles.header}>Armigo</Text>
 
-        {/* Title - Only Learn APP in top section */}
-        <Text style={styles.header}>Learn APP</Text>
-
-        {/* Light Blue Wave - BELOW the white wave */}
         <View style={styles.lightBlueWaveContainer}>
-          <Svg
-            height="92"
-            width="90%"
-            viewBox="0 0 1440 320"
-            style={styles.lightBlueWaveSvg}
-          >
+          <Svg height="92" width="90%" viewBox="0 0 1440 320">
             <Path
               fill="#4B9BFF"
               d="M0,180L48,170C96,160,192,140,288,130C384,120,480,120,576,135C672,150,768,180,864,190C960,200,1056,190,1152,175C1248,160,1344,130,1392,115L1440,100L1440,320L0,320Z"
@@ -257,13 +200,7 @@ const SelectSignIn = () => {
           </Svg>
         </View>
 
-        {/* White Wave - ABOVE the blue wave */}
-        <Svg
-          height="92"
-          width="100%"
-          viewBox="0 0 1440 320"
-          style={styles.whiteWaveWrapper}
-        >
+        <Svg height="92" width="100%" viewBox="0 0 1440 320" style={styles.whiteWaveWrapper}>
           <Path
             fill="#ffffff"
             d="M0,224L48,202.7C96,181,192,139,288,128C384,117,480,139,576,165.3C672,192,768,224,864,234.7C960,245,1056,235,1152,213.3C1248,192,1344,160,1392,144L1440,128L1440,320L0,320Z"
@@ -271,88 +208,55 @@ const SelectSignIn = () => {
         </Svg>
       </LinearGradient>
 
-      {/* Role Selection */}
       <ScrollView contentContainerStyle={styles.rolesContainer}>
-        {/* Centered Title Section */}
         <View style={styles.titleSection}>
           <Text style={styles.loginAsText}>Login As</Text>
           <Text style={styles.subHeader}>Choose your role to continue</Text>
         </View>
 
-        {/* Teacher */}
         <TouchableOpacity
-          style={[
-            styles.roleCard,
-            selectedRole === "Teacher" && styles.selectedCard,
-          ]}
-          onPress={() => handleSelect("Teacher")}
+          style={[styles.roleCard, selectedRole === "Physiotherapist" && styles.selectedCard]}
+          onPress={() => handleSelect("Physiotherapist")}
         >
           <View style={styles.roleContent}>
             <View style={styles.roleLeft}>
               <Image source={icons.Teacher} style={styles.icon} />
               <View style={styles.roleTextContainer}>
-                <Text style={styles.roleTitle}>Teacher</Text>
-                <Text style={styles.roleDesc}>
-                  Access teaching tools & resources
-                </Text>
+                <Text style={styles.roleTitle}>Physiotherapist</Text>
+                <Text style={styles.roleDesc}>Access physiotherapy tools & resources</Text>
               </View>
             </View>
             <View style={styles.roleRight}>
-              <View
-                style={[
-                  styles.radioButton,
-                  selectedRole === "Teacher" && styles.radioButtonSelected,
-                ]}
-              >
-                {selectedRole === "Teacher" && (
-                  <View style={styles.radioButtonInner} />
-                )}
+              <View style={[styles.radioButton, selectedRole === "Physiotherapist" && styles.radioButtonSelected]}>
+                {selectedRole === "Physiotherapist" && <View style={styles.radioButtonInner} />}
               </View>
             </View>
           </View>
-        </TouchableOpacity>
+        </TouchableOpacity> 
 
-        {/* Student */}
         <TouchableOpacity
-          style={[
-            styles.roleCard,
-            selectedRole === "Internal" && styles.selectedCard,
-          ]}
-          onPress={() => setSelectedRole("Internal")}
+          style={[styles.roleCard, selectedRole === "Parent" && styles.selectedCard]}
+          onPress={() => handleSelect("Parent")}
         >
           <View style={styles.roleContent}>
             <View style={styles.roleLeft}>
               <Image source={icons.Student} style={styles.icon} />
               <View style={styles.roleTextContainer}>
-                <Text style={styles.roleTitle}>Student</Text>
-                <Text style={styles.roleDesc}>
-                  Learn, track progress & more
-                </Text>
+                <Text style={styles.roleTitle}>Parent</Text>
+                <Text style={styles.roleDesc}>Manage child's progress & more</Text>
               </View>
             </View>
-
             <View style={styles.roleRight}>
-              <View
-                style={[
-                  styles.radioButton,
-                  selectedRole === "Internal" && styles.radioButtonSelected,
-                ]}
-              >
-                {selectedRole === "Internal" && (
-                  <View style={styles.radioButtonInner} />
-                )}
+              <View style={[styles.radioButton, selectedRole === "Parent" && styles.radioButtonSelected]}>
+                {selectedRole === "Parent" && <View style={styles.radioButtonInner} />}
               </View>
             </View>
           </View>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Continue Button */}
       <TouchableOpacity
-        style={[
-          styles.continueButton,
-          !isRoleSelected && styles.continueButtonDisabled,
-        ]}
+        style={[styles.continueButton, !isRoleSelected && styles.continueButtonDisabled]}
         disabled={!isRoleSelected}
         onPress={handleContinue}
       >
@@ -361,8 +265,6 @@ const SelectSignIn = () => {
     </View>
   );
 };
-
-export default SelectSignIn;
 
 const styles = StyleSheet.create({
   container: {
@@ -429,7 +331,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 2,
   },
-  lightBlueWaveSvg: {},
   roleCard: {
     backgroundColor: "#f9f9f9",
     borderRadius: 16,
@@ -479,46 +380,6 @@ const styles = StyleSheet.create({
     height: 50,
     resizeMode: "contain",
   },
-  dropdownArrow: {
-    padding: 5,
-  },
-  dropdownContainer: {
-    marginHorizontal: 20,
-    marginBottom: 15,
-  },
-  dropdownItem: {
-    padding: 20,
-    borderRadius: 12,
-    backgroundColor: "#f0f4ff",
-    marginTop: 8,
-    marginLeft: 20,
-    height: 80,
-  },
-  dropdownItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  dropdownIcon: {
-    width: 40,
-    height: 40,
-    resizeMode: "contain",
-  },
-  dropdownTextContainer: {
-    marginLeft: 15,
-    flex: 1,
-  },
-  dropdownTitle: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 16,
-    color: "#333",
-    marginBottom: 4,
-  },
-  dropdownDesc: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    color: "#666",
-  },
   radioButton: {
     width: 20,
     height: 20,
@@ -554,3 +415,5 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 });
+
+export default SelectSignIn;
