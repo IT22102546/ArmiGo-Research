@@ -217,7 +217,7 @@ export default function SignIn() {
                 className="flex items-center justify-center gap-2 w-full h-10 text-sm font-medium text-muted-foreground hover:text-primary border border-border rounded-lg hover:border-primary transition-colors"
               >
                 <Phone className="h-4 w-4" />
-                New Teacher? Register Here
+                New Doctor? Register Here
               </Link>
             </div>
           </form>
@@ -235,7 +235,7 @@ export default function SignIn() {
 
         <div className="relative z-10 text-center px-12">
           <h2 className="text-4xl font-bold text-white mb-2">
-            Welcome to <span className="block">LearnApp Teachers Portal</span>
+            Welcome to <span className="block">ArmiGo Doctors Portal</span>
           </h2>
           <p className="text-white/90 text-lg mb-8">
             Inspiring minds starts with you
@@ -244,8 +244,7 @@ export default function SignIn() {
           <div className="mt-8 flex justify-center">
             <div className="w-full max-w-2xl rounded-lg shadow-2xl bg-white/10 p-8">
               <p className="text-white text-lg">
-                Empowering teachers to inspire and shape every learner’s
-                journey.
+                Empowering doctors to inspire and shape every patient’s journey.
               </p>
             </div>
           </div>
