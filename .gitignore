@@ -19,11 +19,6 @@ out/
 .env.*.local
 *.env
 
-# Keep example env files
-!.env.example
-!.env.development.example
-!.env.docker.example
-!**/.env.example
 
 # OS files
 .DS_Store

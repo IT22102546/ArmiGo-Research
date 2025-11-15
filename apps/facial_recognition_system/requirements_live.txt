@@ -1,6 +1,0 @@
-# streamlit-webrtc
-streamlit-webrtc>=0.47.0
-aiortc>=1.6.0
-
-# For better real-time performance
-imutils>=0.5.4

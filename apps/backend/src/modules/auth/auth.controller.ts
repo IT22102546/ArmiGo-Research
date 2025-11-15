@@ -165,7 +165,17 @@ async register(
 
   @Post("login")
   @Public()
-  @Throttle(50, 60000) // 5 login attempts per minute
+  @Throttle(5, 60000) // 5 login attempts per minute
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Login user" })
+  @ApiResponse({ status: 200, description: "User successfully logged in" })
+  @ApiResponse({ status: 401, description: "Invalid credentials" })
+  @ApiResponse({
+    status: 429,
+    description: "Too many requests - try again later",
+  })
+  @Post("login")
+  @Throttle(5, 60000) // 5 login attempts per minute
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Login user" })
   @ApiResponse({ status: 200, description: "User successfully logged in" })

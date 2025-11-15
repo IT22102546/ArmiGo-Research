@@ -7,7 +7,7 @@ import { ScheduleModule } from "@nestjs/schedule";
 import { ServeStaticModule } from "@nestjs/serve-static";
 import { APP_GUARD } from "@nestjs/core";
 import * as path from "path";
-import * as config from './config';
+import * as config from "./config";
 
 // Configuration
 import {
@@ -62,6 +62,7 @@ import { TeacherAvailabilityModule } from "./modules/teacher-availability/teache
 import { ClassReschedulingModule } from "./modules/class-rescheduling/class-rescheduling.module";
 import { PaymentReconciliationModule } from "./modules/payment-reconciliation/payment-reconciliation.module";
 import { InvoiceModule } from "./modules/invoice/invoice.module";
+import { UploadModule } from "./modules/uploads/uploads.module";
 
 // Infrastructure Modules
 import { StorageModule } from "./infrastructure/storage/storage.module";
@@ -164,6 +165,7 @@ import { RolesGuard } from "./common/guards/roles.guard";
     ClassReschedulingModule,
     PaymentReconciliationModule,
     InvoiceModule,
+    UploadModule,
   ],
   controllers: [],
   providers: [

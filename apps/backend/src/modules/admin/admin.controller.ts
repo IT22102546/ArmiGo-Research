@@ -43,7 +43,7 @@ import {
 
 @Controller("admin")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.EXTERNAL_TEACHER, UserRole.INTERNAL_TEACHER)
+@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.EXTERNAL_TEACHER)
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,

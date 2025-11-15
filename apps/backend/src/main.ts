@@ -50,6 +50,13 @@ async function bootstrap() {
     type: ["application/octet-stream", "image/*", "application/pdf"],
   });
 
+  // Configure JSON body parser limit (avoid 413 errors)
+  // NOTE: The primary fix is to NOT send base64 images in JSON.
+  // This limit is a safety measure and should NOT be the only defense.
+  app.useBodyParser("json", {
+    limit: "2mb", // Reasonable limit for actual JSON data
+  });
+
   // CORS configuration
   // SECURITY: Restrict origins in production
   const frontendUrl = configService.get<string>(

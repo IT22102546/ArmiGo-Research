@@ -33,6 +33,7 @@ import {
   CorrectAnswerInOptions,
   HasBlankMarker,
 } from "../validators/exam.validators";
+import { IsNotBase64Image } from "../validators/not-base64-image.validator";
 
 export class ExamSectionDto {
   @ApiProperty({
@@ -1235,11 +1236,14 @@ export class CreateQuestionBulkDto {
 
   // Media fields
   @ApiProperty({
-    description: "Image URL",
+    description:
+      "Image URL (relative path like /uploads/..., NOT base64 encoded data)",
+    example: "/uploads/exams/exam123/questions/q456/image-123456.jpg",
     required: false,
   })
   @IsOptional()
   @IsString()
+  @IsNotBase64Image()
   imageUrl?: string;
 
   @ApiProperty({
