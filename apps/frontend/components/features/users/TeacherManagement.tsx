@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -27,7 +26,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
@@ -57,22 +56,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   Search,
-  Plus,
+  UserPlus,
   Edit,
   Trash2,
   Eye,
-  UserPlus,
-  GraduationCap,
-  BookOpen,
   Loader2,
-  Download,
   RefreshCw,
   Users,
   UserCog,
@@ -81,1275 +70,830 @@ import {
   Ban,
   AlertTriangle,
   TrendingUp,
-  Calendar,
   ShieldCheck,
   Mail,
   Phone,
   Shield,
   MoreVertical,
-  ExternalLink,
-  XCircle,
-  MapPin,
-  UserCheck,
-  UserX,
-  Key,
-  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { createLogger } from "@/lib/utils/logger";
-import { handleApiError, handleApiSuccess } from "@/lib/error-handling";
-import { usersApi } from "@/lib/api/endpoints/users";
-import {
-  teacherAssignmentsApi,
-  TeacherAssignment,
-} from "@/lib/api/endpoints/teacher-assignments";
-import { gradesApi } from "@/lib/api/endpoints/grades";
-import { mediumsApi } from "@/lib/api/endpoints/mediums";
-import { subjectsApi } from "@/lib/api/endpoints/subjects";
-import { academicYearsApi } from "@/lib/api/endpoints/academic-years";
-import { ApiClient } from "@/lib/api/api-client";
-import type { User } from "@/lib/api/types/auth.types";
-import type {
-  TeacherProfile,
-  Grade,
-  Medium,
-  Subject,
-  AcademicYear,
-} from "@/lib/types";
-import type { CreateTeacherAssignmentDto } from "@/lib/api/endpoints/teacher-assignments";
-import { useTranslations } from "next-intl";
 
-const logger = createLogger("TeacherManagement");
-
-// Extended User type with profile information
-interface UserWithProfile {
+type Doctor = {
   id: string;
-  email?: string;
-  phone?: string;
+  doctorId: string;
   firstName: string;
   lastName: string;
-  role: User["role"];
-  status?: string;
-  isActive?: boolean;
-  avatar?: string;
-  teacherProfile?: TeacherProfile;
-  createdAt?: string;
-  updatedAt?: string;
-  emailVerified?: boolean;
-  phoneVerified?: boolean;
-  twoFactorEnabled?: boolean;
-}
+  email: string;
+  phone: string;
+  specialization: string;
+  department: string;
+  licenseNumber: string;
+  experienceYears: number;
+  shift: "Day" | "Night" | "Rotational";
+  type: "INTERNAL" | "VISITING";
+  status: "ACTIVE" | "PENDING";
+  languages: string[];
+  joinedDate: string;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  twoFactorEnabled: boolean;
+};
 
-interface TeacherStats {
-  totalUsers: number;
-  activeUsers: number;
-  pendingUsers: number;
-  suspendedUsers: number;
-  newUsersToday: number;
-  newUsersThisWeek: number;
-  verifiedUsers: number;
-  unverifiedUsers: number;
-}
+type DoctorStats = {
+  total: number;
+  active: number;
+  pending: number;
+  offDuty: number;
+  newToday: number;
+  newThisWeek: number;
+  verified: number;
+  unverified: number;
+};
 
-const TeacherManagement: React.FC = () => {
-  const t = useTranslations("users");
-  const [activeTab, setActiveTab] = useState<string>("INTERNAL_TEACHER");
-  const [teachers, setTeachers] = useState<UserWithProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingStats, setLoadingStats] = useState(false);
+const dummyDoctors: Doctor[] = [
+  {
+    id: "doc-001",
+    doctorId: "DOC-2024-001",
+    firstName: "Malith",
+    lastName: "Fernando",
+    email: "malith.fernando@hospital.lk",
+    phone: "+94 71 123 4567",
+    specialization: "Cardiology",
+    department: "Cardiac Care",
+    licenseNumber: "SLMC-10231",
+    experienceYears: 12,
+    shift: "Day",
+    type: "INTERNAL",
+    status: "ACTIVE",
+    languages: ["English", "Sinhala"],
+    joinedDate: "2022-04-10",
+    emailVerified: true,
+    phoneVerified: true,
+    twoFactorEnabled: true,
+  },
+  {
+    id: "doc-002",
+    doctorId: "DOC-2024-002",
+    firstName: "Ishara",
+    lastName: "Perera",
+    email: "ishara.perera@hospital.lk",
+    phone: "+94 76 555 7788",
+    specialization: "Neurology",
+    department: "Neuro",
+    licenseNumber: "SLMC-20456",
+    experienceYears: 9,
+    shift: "Rotational",
+    type: "VISITING",
+    status: "ACTIVE",
+    languages: ["English", "Sinhala", "Tamil"],
+    joinedDate: "2023-01-18",
+    emailVerified: true,
+    phoneVerified: false,
+    twoFactorEnabled: false,
+  },
+  {
+    id: "doc-003",
+    doctorId: "DOC-2024-003",
+    firstName: "Nipun",
+    lastName: "Jayasinghe",
+    email: "nipun.j@hospital.lk",
+    phone: "+94 77 999 1122",
+    specialization: "Pediatrics",
+    department: "Pediatrics",
+    licenseNumber: "SLMC-33421",
+    experienceYears: 5,
+    shift: "Night",
+    type: "INTERNAL",
+    status: "PENDING",
+    languages: ["English", "Sinhala"],
+    joinedDate: "2024-03-02",
+    emailVerified: false,
+    phoneVerified: false,
+    twoFactorEnabled: false,
+  },
+];
+
+const dummyStats: DoctorStats = {
+  total: 84,
+  active: 68,
+  pending: 10,
+  offDuty: 6,
+  newToday: 3,
+  newThisWeek: 11,
+  verified: 72,
+  unverified: 12,
+};
+
+const DoctorManagement: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"INTERNAL" | "VISITING">(
+    "INTERNAL"
+  );
+  const [doctors, setDoctors] = useState<Doctor[]>(dummyDoctors);
+  const [stats] = useState<DoctorStats>(dummyStats);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [selectedTeacher, setSelectedTeacher] =
-    useState<UserWithProfile | null>(null);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [filterDepartment, setFilterDepartment] = useState<string>("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [teacherToDelete, setTeacherToDelete] = useState<string | null>(null);
+  const [doctorToDelete, setDoctorToDelete] = useState<string | null>(null);
   const [quickViewOpen, setQuickViewOpen] = useState(false);
-  const [quickViewTeacher, setQuickViewTeacher] =
-    useState<UserWithProfile | null>(null);
+  const [quickViewDoctor, setQuickViewDoctor] = useState<Doctor | null>(null);
   const [loadingQuickView, setLoadingQuickView] = useState(false);
-  const [stats, setStats] = useState<TeacherStats>({
-    totalUsers: 0,
-    activeUsers: 0,
-    pendingUsers: 0,
-    suspendedUsers: 0,
-    newUsersToday: 0,
-    newUsersThisWeek: 0,
-    verifiedUsers: 0,
-    unverifiedUsers: 0,
+  const [addDoctorOpen, setAddDoctorOpen] = useState(false);
+  const [newDoctorForm, setNewDoctorForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    specialization: "General Medicine",
+    department: "General",
+    licenseNumber: "",
+    experienceYears: 1,
+    shift: "Day" as Doctor["shift"],
+    type: "INTERNAL" as Doctor["type"],
+    languages: "English,Sinhala",
   });
 
-  // Reference data
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [mediums, setMediums] = useState<Medium[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
-  const [currentAcademicYear, setCurrentAcademicYear] = useState<string>("");
-
-  // Load reference data on mount
-  useEffect(() => {
-    loadReferenceData();
-  }, []);
-
-  // Load teachers when tab changes
-  useEffect(() => {
-    loadTeachers();
-    fetchStats();
-  }, [activeTab]);
-
-  const fetchStats = async () => {
-    setLoadingStats(true);
-    try {
-      const response = (await ApiClient.get(
-        `/users/stats?role=${activeTab}`
-      )) as TeacherStats;
-      setStats(
-        response || {
-          totalUsers: 0,
-          activeUsers: 0,
-          pendingUsers: 0,
-          suspendedUsers: 0,
-          newUsersToday: 0,
-          newUsersThisWeek: 0,
-          verifiedUsers: 0,
-          unverifiedUsers: 0,
-        }
-      );
-    } catch (error) {
-      console.debug("Stats endpoint not available");
-    } finally {
-      setLoadingStats(false);
-    }
-  };
-
-  const loadReferenceData = async () => {
-    try {
-      const [gradesRes, mediumsRes, subjectsRes, yearsRes] = await Promise.all([
-        gradesApi.getAll({ includeInactive: false }),
-        mediumsApi.getAll({ includeInactive: false }),
-        subjectsApi.findAll(false),
-        academicYearsApi.getAll(),
-      ]);
-
-      setGrades(gradesRes.grades || []);
-      setMediums(mediumsRes.mediums || []);
-      setSubjects(subjectsRes || []);
-      setAcademicYears(yearsRes.academicYears || []);
-
-      const current = yearsRes.academicYears?.find(
-        (y: AcademicYear) => y.isCurrent
-      );
-      if (current) setCurrentAcademicYear(current.year);
-    } catch (error) {
-      logger.error("Error loading reference data:", error);
-      handleApiError(
-        error,
-        "TeacherManagement.loadReferenceData",
-        "Failed to load reference data"
-      );
-    }
-  };
-
-  const loadTeachers = async () => {
-    setLoading(true);
-    try {
-      const response = await usersApi.getAll({ role: activeTab });
-      console.log("[TeacherManagement] Teachers API Response:", response);
-      console.log("[TeacherManagement] Response structure:", {
-        hasUsers: !!response?.users,
-        usersLength: response?.users?.length || 0,
-        hasData: !!response?.data,
-        dataLength: response?.data?.length || 0,
-      });
-      const teachersData = response?.users || [];
-      console.log("[TeacherManagement] Teachers Data:", teachersData);
-      console.log("[TeacherManagement] First teacher sample:", teachersData[0]);
-      setTeachers(teachersData as UserWithProfile[]);
-    } catch (error) {
-      logger.error("Error loading teachers:", error);
-      handleApiError(
-        error,
-        "TeacherManagement.loadTeachers",
-        "Failed to load teachers"
-      );
-      setTeachers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Filter teachers based on search and filters
-  const filteredTeachers = teachers.filter((teacher) => {
-    const matchesSearch =
-      searchTerm === "" ||
-      `${teacher.firstName} ${teacher.lastName}`
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      teacher.email?.toLowerCase().includes(searchTerm.toLowerCase());
-
+  const filteredDoctors = doctors.filter((doctor) => {
+    const matchesTab = doctor.type === activeTab;
     const matchesStatus =
-      filterStatus === "all" || teacher.status === filterStatus;
+      filterStatus === "all" || doctor.status === filterStatus.toUpperCase();
+    const matchesDepartment =
+      filterDepartment === "all" || doctor.department === filterDepartment;
+    const matchesSearch =
+      `${doctor.firstName} ${doctor.lastName} ${doctor.email}`
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
-    return matchesSearch && matchesStatus;
+    return matchesTab && matchesStatus && matchesDepartment && matchesSearch;
   });
 
-  // Debug filtering
-  React.useEffect(() => {
-    console.log("[TeacherManagement] Filtering debug:", {
-      totalTeachers: teachers.length,
-      filteredTeachers: filteredTeachers.length,
-      filterStatus,
-      searchTerm,
-      sampleStatus: teachers[0]?.status,
-    });
-  }, [teachers.length, filteredTeachers.length, filterStatus, searchTerm]);
-
-  const handleDelete = async () => {
-    if (!teacherToDelete) return;
-
-    try {
-      await usersApi.delete(teacherToDelete);
-      toast.success(t("teacherManagement.deleteSuccess"));
-      loadTeachers();
-      fetchStats();
-      setDeleteDialogOpen(false);
-      setTeacherToDelete(null);
-    } catch (error) {
-      logger.error("Error deleting teacher:", error);
-      handleApiError(
-        error,
-        "TeacherManagement.handleDelete",
-        "Failed to delete teacher"
-      );
-    }
-  };
-
-  const fetchQuickViewData = async (teacher: UserWithProfile) => {
+  const openQuickView = (doctor: Doctor) => {
     setLoadingQuickView(true);
-    setQuickViewTeacher(teacher);
+    setQuickViewDoctor(doctor);
     setQuickViewOpen(true);
-    try {
-      // Fetch additional data if needed (assignments, workload, etc.)
-      const enrichedTeacher = { ...teacher };
-      setQuickViewTeacher(enrichedTeacher);
-    } catch (error) {
-      console.debug("Quick view data not fully available");
-    } finally {
-      setLoadingQuickView(false);
-    }
+    setTimeout(() => setLoadingQuickView(false), 300);
   };
 
-  const openDeleteDialog = (teacherId: string) => {
-    setTeacherToDelete(teacherId);
+  const confirmDelete = (doctorId: string) => {
+    setDoctorToDelete(doctorId);
     setDeleteDialogOpen(true);
   };
 
-  const openAssignModal = (teacher: UserWithProfile) => {
-    setSelectedTeacher(teacher);
-    setIsAssignModalOpen(true);
+  const handleDelete = () => {
+    if (!doctorToDelete) return;
+    setDoctors((prev) => prev.filter((doc) => doc.id !== doctorToDelete));
+    setDeleteDialogOpen(false);
+    toast.success("Doctor removed");
   };
 
-  const handleExport = () => {
-    usersApi.exportUsers({
-      role: activeTab,
-      status: filterStatus === "all" ? undefined : filterStatus,
-      search: searchTerm || undefined,
-    });
-    toast.success(t("teacherManagement.exportStarted"));
+  const handleAddDoctor = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const newDoctor: Doctor = {
+      id: `doc-${Date.now()}`,
+      doctorId: `DOC-${Date.now()}`,
+      firstName: newDoctorForm.firstName || "New",
+      lastName: newDoctorForm.lastName || "Doctor",
+      email: newDoctorForm.email || "new.doctor@hospital.lk",
+      phone: newDoctorForm.phone || "N/A",
+      specialization: newDoctorForm.specialization,
+      department: newDoctorForm.department,
+      licenseNumber: newDoctorForm.licenseNumber || "Pending",
+      experienceYears: Number(newDoctorForm.experienceYears) || 0,
+      shift: newDoctorForm.shift,
+      type: newDoctorForm.type,
+      status: "ACTIVE",
+      languages: newDoctorForm.languages
+        .split(",")
+        .map((l) => l.trim())
+        .filter(Boolean),
+      joinedDate: new Date().toISOString().split("T")[0],
+      emailVerified: true,
+      phoneVerified: false,
+      twoFactorEnabled: false,
+    };
+
+    setDoctors((prev) => [newDoctor, ...prev]);
+    setAddDoctorOpen(false);
+    toast.success("Doctor added");
   };
 
-  const handleRefresh = () => {
-    loadTeachers();
-    fetchStats();
-  };
-
-  // Verification badges component
-  const getVerificationBadges = (user: UserWithProfile) => {
-    const badges: React.ReactNode[] = [];
-
-    if (user.emailVerified) {
-      badges.push(
-        <TooltipProvider key="email">
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge
-                variant="outline"
-                className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1"
-              >
-                <Mail className="h-3 w-3" />
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>Email Verified</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
+  const statusBadge = (status: Doctor["status"]) => {
+    switch (status) {
+      case "ACTIVE":
+        return (
+          <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 className="h-4 w-4 mr-1" /> Active
+          </Badge>
+        );
+      case "PENDING":
+      default:
+        return (
+          <Badge className="bg-amber-100 text-amber-700 border border-amber-200">
+            <Clock className="h-4 w-4 mr-1" /> Pending
+          </Badge>
+        );
     }
-
-    if (user.phoneVerified) {
-      badges.push(
-        <TooltipProvider key="phone">
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge
-                variant="outline"
-                className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1"
-              >
-                <Phone className="h-3 w-3" />
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>Phone Verified</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
-
-    if (user.twoFactorEnabled) {
-      badges.push(
-        <TooltipProvider key="2fa">
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge
-                variant="outline"
-                className="bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-1"
-              >
-                <Shield className="h-3 w-3" />
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>2FA Enabled</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
-
-    return badges.length > 0 ? (
-      <div className="flex items-center gap-1">{badges}</div>
-    ) : (
-      <span className="text-xs text-muted-foreground">-</span>
-    );
   };
+
+  const verificationBadges = (doctor: Doctor) => (
+    <div className="flex gap-2">
+      {doctor.emailVerified ? (
+        <Badge
+          variant="outline"
+          className="border-emerald-200 text-emerald-700"
+        >
+          <Mail className="h-3.5 w-3.5 mr-1" /> Email
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="border-amber-200 text-amber-700">
+          <Mail className="h-3.5 w-3.5 mr-1" /> Email
+        </Badge>
+      )}
+      {doctor.phoneVerified ? (
+        <Badge
+          variant="outline"
+          className="border-emerald-200 text-emerald-700"
+        >
+          <Phone className="h-3.5 w-3.5 mr-1" /> Phone
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="border-amber-200 text-amber-700">
+          <Phone className="h-3.5 w-3.5 mr-1" /> Phone
+        </Badge>
+      )}
+      {doctor.twoFactorEnabled ? (
+        <Badge variant="outline" className="border-sky-200 text-sky-700">
+          <Shield className="h-3.5 w-3.5 mr-1" /> 2FA
+        </Badge>
+      ) : null}
+    </div>
+  );
+
+  const departmentOptions = Array.from(
+    new Set(doctors.map((doc) => doc.department))
+  );
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" />
-            {t("teacherManagement.title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {t("teacherManagement.subtitle")}
-          </p>
+          <p className="text-sm text-muted-foreground">Hospital Workforce</p>
+          <h1 className="text-2xl font-semibold">Doctor Management</h1>
         </div>
-        <div className="flex gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={handleRefresh}>
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Refresh Data</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-1.5" />
-            {t("teacherManagement.export")}
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info("Data refreshed (demo)")}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
-          <Button size="sm" onClick={() => setIsAddModalOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-1.5" />
-            {t("teacherManagement.addTeacher")}
+          <Button size="sm" onClick={() => setAddDoctorOpen(true)}>
+            <UserPlus className="h-4 w-4 mr-2" /> Add Doctor
           </Button>
         </div>
       </div>
 
-      {/* Statistics Dashboard */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.total")}
-                </p>
-                <p className="text-xl font-bold">
-                  {loadingStats ? "-" : stats.totalUsers}
-                </p>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="shadow-sm">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Total Doctors</p>
+              <p className="text-2xl font-semibold">{stats.total}</p>
+              <div className="flex items-center gap-1 text-xs text-emerald-600">
+                <TrendingUp className="h-3.5 w-3.5" /> +{stats.newThisWeek} this
+                week
               </div>
-              <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              </div>
+            </div>
+            <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <Users className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.active")}
-                </p>
-                <p className="text-xl font-bold text-green-600">
-                  {loadingStats ? "-" : stats.activeUsers}
-                </p>
+        <Card className="shadow-sm">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">On Duty</p>
+              <p className="text-2xl font-semibold">{stats.active}</p>
+              <div className="flex items-center gap-1 text-xs text-emerald-600">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Verified:{" "}
+                {stats.verified}
               </div>
-              <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-              </div>
+            </div>
+            <div className="h-12 w-12 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center">
+              <UserCog className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.pending")}
-                </p>
-                <p className="text-xl font-bold text-yellow-600">
-                  {loadingStats ? "-" : stats.pendingUsers}
-                </p>
+        <Card className="shadow-sm">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Pending</p>
+              <p className="text-2xl font-semibold">{stats.pending}</p>
+              <div className="flex items-center gap-1 text-xs text-amber-600">
+                <Clock className="h-3.5 w-3.5" /> {stats.newToday} new today
               </div>
-              <div className="h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-              </div>
+            </div>
+            <div className="h-12 w-12 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center">
+              <AlertTriangle className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.suspended")}
-                </p>
-                <p className="text-xl font-bold text-red-600">
-                  {loadingStats ? "-" : stats.suspendedUsers}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <Ban className="h-4 w-4 text-red-600 dark:text-red-400" />
+        <Card className="shadow-sm">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Off Duty</p>
+              <p className="text-2xl font-semibold">{stats.offDuty}</p>
+              <div className="flex items-center gap-1 text-xs text-rose-600">
+                <Ban className="h-3.5 w-3.5" /> Unverified: {stats.unverified}
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.newToday")}
-                </p>
-                <p className="text-xl font-bold">
-                  {loadingStats ? "-" : stats.newUsersToday}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                <TrendingUp className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.thisWeek")}
-                </p>
-                <p className="text-xl font-bold">
-                  {loadingStats ? "-" : stats.newUsersThisWeek}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <Calendar className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.verified")}
-                </p>
-                <p className="text-xl font-bold text-green-600">
-                  {loadingStats ? "-" : stats.verifiedUsers}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.unverified")}
-                </p>
-                <p className="text-xl font-bold text-orange-600">
-                  {loadingStats ? "-" : stats.unverifiedUsers}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-              </div>
+            <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center">
+              <ShieldCheck className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs for Internal/External Teachers */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger
-            value="INTERNAL_TEACHER"
-            className="flex items-center gap-2"
+      <Card className="shadow-sm">
+        <CardContent className="p-6 space-y-4">
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as "INTERNAL" | "VISITING")}
           >
-            <Users className="h-4 w-4" />
-            {t("tabs.internalTeachers")}
-          </TabsTrigger>
-          <TabsTrigger
-            value="EXTERNAL_TEACHER"
-            className="flex items-center gap-2"
-          >
-            <UserCog className="h-4 w-4" />
-            {t("tabs.externalTeachers")}
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={activeTab} className="space-y-4 mt-4">
-          {/* Filters */}
-          <Card>
-            <CardContent className="py-4">
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder={t("teacherManagement.searchPlaceholder")}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8 h-9"
-                  />
-                </div>
-
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[120px] h-9">
-                    <SelectValue placeholder={t("table.status")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("table.allStatus")}</SelectItem>
-                    <SelectItem value="ACTIVE">{t("table.active")}</SelectItem>
-                    <SelectItem value="INACTIVE">
-                      {t("table.inactive")}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Results count */}
-                <div className="text-xs text-muted-foreground ml-auto">
-                  {t("teacherManagement.showingTeachers", {
-                    filtered: filteredTeachers.length,
-                    total: teachers.length,
-                  })}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Teachers Table */}
-          <Card>
-            <CardContent className="pt-6">
-              {loading ? (
-                <div className="flex justify-center items-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : filteredTeachers.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  {t("teacherManagement.noTeachersFound")}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("table.name")}</TableHead>
-                        <TableHead>{t("table.email")}</TableHead>
-                        <TableHead>{t("table.phone")}</TableHead>
-                        <TableHead>{t("assignSubjects.department")}</TableHead>
-                        <TableHead>
-                          {t("assignSubjects.specialization")}
-                        </TableHead>
-                        <TableHead>{t("table.verified")}</TableHead>
-                        <TableHead>{t("table.status")}</TableHead>
-                        <TableHead className="text-right">
-                          {t("table.actions")}
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTeachers.map((teacher) => (
-                        <TableRow key={teacher.id}>
-                          <TableCell className="font-medium">
-                            {teacher.firstName} {teacher.lastName}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {teacher.email}
-                          </TableCell>
-                          <TableCell>{teacher.phone || "-"}</TableCell>
-                          <TableCell>
-                            {teacher.teacherProfile?.department || "-"}
-                          </TableCell>
-                          <TableCell>
-                            {teacher.teacherProfile?.specialization || "-"}
-                          </TableCell>
-                          <TableCell>
-                            {getVerificationBadges(teacher)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                teacher.status === "ACTIVE"
-                                  ? "success"
-                                  : "destructive"
-                              }
-                            >
-                              {teacher.status === "ACTIVE"
-                                ? t("table.active")
-                                : teacher.status === "PENDING"
-                                  ? t("table.pending")
-                                  : teacher.status === "SUSPENDED"
-                                    ? t("table.suspended")
-                                    : t("table.inactive")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() =>
-                                        fetchQuickViewData(teacher)
-                                      }
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    {t("table.quickView")}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="w-56"
-                                >
-                                  <DropdownMenuLabel>
-                                    {t("table.actions")}
-                                  </DropdownMenuLabel>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      window.location.href = `/admin/teachers/${teacher.id}`;
-                                    }}
-                                  >
-                                    <ExternalLink className="h-4 w-4 mr-2" />
-                                    {t("table.viewProfile")}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setSelectedTeacher(teacher);
-                                      setIsEditModalOpen(true);
-                                    }}
-                                  >
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    {t("table.edit")}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => openAssignModal(teacher)}
-                                  >
-                                    <GraduationCap className="h-4 w-4 mr-2" />
-                                    {t("table.assignSubjects")}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      const status =
-                                        teacher.status === "ACTIVE"
-                                          ? "INACTIVE"
-                                          : "ACTIVE";
-                                      usersApi
-                                        .updateStatus(teacher.id, status)
-                                        .then(() => {
-                                          toast.success(
-                                            "Status updated successfully"
-                                          );
-                                          loadTeachers();
-                                          fetchStats();
-                                        })
-                                        .catch((error) => {
-                                          handleApiError(
-                                            error,
-                                            "TeacherManagement",
-                                            "Failed to update status"
-                                          );
-                                        });
-                                    }}
-                                  >
-                                    {teacher.status === "ACTIVE" ? (
-                                      <>
-                                        <UserX className="h-4 w-4 mr-2" />
-                                        {t("table.deactivate")}
-                                      </>
-                                    ) : (
-                                      <>
-                                        <UserCheck className="h-4 w-4 mr-2" />
-                                        {t("table.activate")}
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => openDeleteDialog(teacher.id)}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    {t("table.delete")}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <TabsList className="w-full md:w-auto">
+                  <TabsTrigger value="INTERNAL" className="w-full md:w-auto">
+                    Internal Doctors
+                  </TabsTrigger>
+                  <TabsTrigger value="VISITING" className="w-full md:w-auto">
+                    Visiting Doctors
+                  </TabsTrigger>
+                </TabsList>
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3 w-full md:w-auto">
+                  <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Search doctors"
+                      className="pl-9"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-full md:w-40">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All status</SelectItem>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="PENDING">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={filterDepartment}
+                    onValueChange={setFilterDepartment}
+                  >
+                    <SelectTrigger className="w-full md:w-44">
+                      <SelectValue placeholder="Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All departments</SelectItem>
+                      {departmentOptions.map((dept) => (
+                        <SelectItem key={dept} value={dept}>
+                          {dept}
+                        </SelectItem>
                       ))}
-                    </TableBody>
-                  </Table>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    className="w-full md:w-auto"
+                    onClick={() => setAddDoctorOpen(true)}
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" /> Add Doctor
+                  </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              </div>
 
-      {/* Delete Confirmation Dialog */}
+              <TabsContent value="INTERNAL" className="mt-0">
+                <DoctorTable
+                  doctors={filteredDoctors.filter((d) => d.type === "INTERNAL")}
+                  onQuickView={openQuickView}
+                  onDelete={confirmDelete}
+                />
+              </TabsContent>
+              <TabsContent value="VISITING" className="mt-0">
+                <DoctorTable
+                  doctors={filteredDoctors.filter((d) => d.type === "VISITING")}
+                  onQuickView={openQuickView}
+                  onDelete={confirmDelete}
+                />
+              </TabsContent>
+            </div>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      <Sheet open={quickViewOpen} onOpenChange={setQuickViewOpen}>
+        <SheetContent className="sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>Doctor quick view</SheetTitle>
+            <SheetDescription>
+              Profile, contact, and verification
+            </SheetDescription>
+          </SheetHeader>
+          {loadingQuickView || !quickViewDoctor ? (
+            <div className="flex items-center justify-center h-40 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading
+            </div>
+          ) : (
+            <div className="space-y-4 mt-4">
+              <div className="flex items-start gap-3">
+                <Avatar className="h-12 w-12">
+                  <AvatarFallback>
+                    {quickViewDoctor.firstName.charAt(0)}
+                    {quickViewDoctor.lastName.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-lg font-semibold">
+                      {quickViewDoctor.firstName} {quickViewDoctor.lastName}
+                    </p>
+                    {statusBadge(quickViewDoctor.status)}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {quickViewDoctor.specialization} �{" "}
+                    {quickViewDoctor.department}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    License {quickViewDoctor.licenseNumber}
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Doctor ID</p>
+                  <p className="font-medium">{quickViewDoctor.doctorId}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Shift</p>
+                  <p className="font-medium">{quickViewDoctor.shift}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Experience</p>
+                  <p className="font-medium">
+                    {quickViewDoctor.experienceYears} years
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Languages</p>
+                  <p className="font-medium">
+                    {quickViewDoctor.languages.join(", ")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span>{quickViewDoctor.email}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>{quickViewDoctor.phone}</span>
+                </div>
+              </div>
+
+              <div>{verificationBadges(quickViewDoctor)}</div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("teacherManagement.deleteTitle")}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Remove doctor</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("teacherManagement.deleteDescription")}
+              This action cannot be undone. The doctor will be removed from the
+              roster.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>
-              {t("teacherManagement.cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              {t("teacherManagement.delete")}
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Quick View Sheet */}
-      <Sheet open={quickViewOpen} onOpenChange={setQuickViewOpen}>
-        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-3">
-              {quickViewTeacher && (
-                <>
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={quickViewTeacher.avatar} />
-                    <AvatarFallback className="bg-primary/10 text-primary font-medium text-lg">
-                      {quickViewTeacher.firstName?.[0]}
-                      {quickViewTeacher.lastName?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-semibold">
-                      {quickViewTeacher.firstName} {quickViewTeacher.lastName}
-                    </p>
-                    <p className="text-sm text-muted-foreground font-normal">
-                      {quickViewTeacher.email}
-                    </p>
-                  </div>
-                </>
-              )}
-            </SheetTitle>
-            <SheetDescription>Teacher Quick View</SheetDescription>
-          </SheetHeader>
-
-          {loadingQuickView ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <Dialog open={addDoctorOpen} onOpenChange={setAddDoctorOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Doctor</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleAddDoctor}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                placeholder="First name"
+                value={newDoctorForm.firstName}
+                onChange={(e) =>
+                  setNewDoctorForm({
+                    ...newDoctorForm,
+                    firstName: e.target.value,
+                  })
+                }
+                required
+              />
+              <Input
+                placeholder="Last name"
+                value={newDoctorForm.lastName}
+                onChange={(e) =>
+                  setNewDoctorForm({
+                    ...newDoctorForm,
+                    lastName: e.target.value,
+                  })
+                }
+                required
+              />
+              <Input
+                placeholder="Email"
+                type="email"
+                value={newDoctorForm.email}
+                onChange={(e) =>
+                  setNewDoctorForm({ ...newDoctorForm, email: e.target.value })
+                }
+                required
+              />
+              <Input
+                placeholder="Phone"
+                value={newDoctorForm.phone}
+                onChange={(e) =>
+                  setNewDoctorForm({ ...newDoctorForm, phone: e.target.value })
+                }
+              />
+              <Input
+                placeholder="Specialization"
+                value={newDoctorForm.specialization}
+                onChange={(e) =>
+                  setNewDoctorForm({
+                    ...newDoctorForm,
+                    specialization: e.target.value,
+                  })
+                }
+              />
+              <Input
+                placeholder="Department"
+                value={newDoctorForm.department}
+                onChange={(e) =>
+                  setNewDoctorForm({
+                    ...newDoctorForm,
+                    department: e.target.value,
+                  })
+                }
+              />
+              <Input
+                placeholder="License number"
+                value={newDoctorForm.licenseNumber}
+                onChange={(e) =>
+                  setNewDoctorForm({
+                    ...newDoctorForm,
+                    licenseNumber: e.target.value,
+                  })
+                }
+              />
+              <Input
+                placeholder="Experience (years)"
+                type="number"
+                min={0}
+                value={newDoctorForm.experienceYears}
+                onChange={(e) =>
+                  setNewDoctorForm({
+                    ...newDoctorForm,
+                    experienceYears: Number(e.target.value),
+                  })
+                }
+              />
             </div>
-          ) : (
-            quickViewTeacher && (
-              <div className="mt-6 space-y-6">
-                {/* Status Badge */}
-                <div className="flex items-center justify-between">
-                  <Badge
-                    variant={
-                      quickViewTeacher.status === "ACTIVE"
-                        ? "success"
-                        : "destructive"
-                    }
-                  >
-                    {quickViewTeacher.status === "ACTIVE"
-                      ? t("table.active")
-                      : quickViewTeacher.status === "PENDING"
-                        ? t("table.pending")
-                        : quickViewTeacher.status === "SUSPENDED"
-                          ? t("table.suspended")
-                          : t("table.inactive")}
-                  </Badge>
-                </div>
-
-                <Separator />
-
-                {/* Contact Information */}
-                <div className="space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
-                    Contact Information
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Phone</p>
-                      <p className="font-medium">
-                        {quickViewTeacher.phone || "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Email</p>
-                      <p className="font-medium truncate">
-                        {quickViewTeacher.email}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Registered</p>
-                      <p className="font-medium">
-                        {quickViewTeacher.createdAt
-                          ? format(new Date(quickViewTeacher.createdAt), "PP")
-                          : "-"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Professional Information */}
-                <div className="space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4" />
-                    Professional Information
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Department</p>
-                      <p className="font-medium">
-                        {quickViewTeacher.teacherProfile?.department || "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Specialization</p>
-                      <p className="font-medium">
-                        {quickViewTeacher.teacherProfile?.specialization || "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Experience</p>
-                      <p className="font-medium">
-                        {quickViewTeacher.teacherProfile?.experience
-                          ? `${quickViewTeacher.teacherProfile.experience} years`
-                          : "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Type</p>
-                      <p className="font-medium">
-                        {quickViewTeacher.teacherProfile?.isExternalTransferOnly
-                          ? "External"
-                          : "Internal"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Verification Status */}
-                <div className="space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <Shield className="h-4 w-4" />
-                    Verification Status
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                      <span className="flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        Email Verified
-                      </span>
-                      {quickViewTeacher.emailVerified ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                      <span className="flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
-                        Phone Verified
-                      </span>
-                      {quickViewTeacher.phoneVerified ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                      <span className="flex items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        2FA Enabled
-                      </span>
-                      {quickViewTeacher.twoFactorEnabled ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          )}
-        </SheetContent>
-      </Sheet>
-
-      {/* Assign Subjects Modal */}
-      {isAssignModalOpen && selectedTeacher && (
-        <AssignSubjectsModal
-          teacher={selectedTeacher}
-          open={isAssignModalOpen}
-          onClose={() => {
-            setIsAssignModalOpen(false);
-            setSelectedTeacher(null);
-          }}
-          grades={grades}
-          mediums={mediums}
-          subjects={subjects}
-          currentAcademicYear={currentAcademicYear}
-          onSuccess={loadTeachers}
-        />
-      )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Select
+                value={newDoctorForm.shift}
+                onValueChange={(v) =>
+                  setNewDoctorForm({
+                    ...newDoctorForm,
+                    shift: v as Doctor["shift"],
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Shift" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Day">Day</SelectItem>
+                  <SelectItem value="Night">Night</SelectItem>
+                  <SelectItem value="Rotational">Rotational</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={newDoctorForm.type}
+                onValueChange={(v) =>
+                  setNewDoctorForm({
+                    ...newDoctorForm,
+                    type: v as Doctor["type"],
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INTERNAL">Internal</SelectItem>
+                  <SelectItem value="VISITING">Visiting</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Input
+              placeholder="Languages (comma separated)"
+              value={newDoctorForm.languages}
+              onChange={(e) =>
+                setNewDoctorForm({
+                  ...newDoctorForm,
+                  languages: e.target.value,
+                })
+              }
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddDoctorOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-// Assign Subjects Modal Component
-interface AssignSubjectsModalProps {
-  teacher: UserWithProfile;
-  open: boolean;
-  onClose: () => void;
-  grades: Grade[];
-  mediums: Medium[];
-  subjects: Subject[];
-  currentAcademicYear: string;
-  onSuccess: () => void;
-}
-
-const AssignSubjectsModal: React.FC<AssignSubjectsModalProps> = ({
-  teacher,
-  open,
-  onClose,
-  grades,
-  mediums,
-  subjects,
-  currentAcademicYear,
-  onSuccess,
-}) => {
-  const t = useTranslations("users");
-  const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Form state
-  const [gradeId, setGradeId] = useState("");
-  const [mediumId, setMediumId] = useState("");
-  const [subjectId, setSubjectId] = useState("");
-
-  useEffect(() => {
-    if (open && teacher.teacherProfile?.id) {
-      loadAssignments();
-    }
-  }, [open, teacher]);
-
-  const loadAssignments = async () => {
-    if (!teacher.teacherProfile?.id) return;
-
-    setLoading(true);
-    try {
-      const response = await teacherAssignmentsApi.getByTeacher(
-        teacher.teacherProfile.id
-      );
-      setAssignments(response.assignments || []);
-    } catch (error) {
-      logger.error("Error loading assignments:", error);
-      handleApiError(
-        error,
-        "TeacherManagement.AssignModal.loadAssignments",
-        "Failed to load teacher assignments"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddAssignment = async () => {
-    if (!teacher.teacherProfile?.id || !gradeId || !mediumId || !subjectId) {
-      toast.error("Please fill all fields");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const data: CreateTeacherAssignmentDto = {
-        teacherProfileId: teacher.teacherProfile.id,
-        gradeId,
-        mediumId,
-        subjectId,
-        academicYear: currentAcademicYear,
-      };
-
-      await teacherAssignmentsApi.create(data);
-      handleApiSuccess("Assignment added successfully");
-      loadAssignments();
-      setGradeId("");
-      setMediumId("");
-      setSubjectId("");
-    } catch (error) {
-      logger.error("Error adding assignment:", error);
-      handleApiError(
-        error,
-        "TeacherManagement.AssignModal.handleAddAssignment",
-        "Failed to add assignment"
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDeleteAssignment = async (id: string) => {
-    try {
-      await teacherAssignmentsApi.delete(id);
-      handleApiSuccess("Assignment removed successfully");
-      loadAssignments();
-    } catch (error) {
-      logger.error("Error deleting assignment:", error);
-      handleApiError(
-        error,
-        "TeacherManagement.AssignModal.handleDeleteAssignment",
-        "Failed to remove assignment"
-      );
-    }
-  };
-
+const DoctorTable: React.FC<{
+  doctors: Doctor[];
+  onQuickView: (doctor: Doctor) => void;
+  onDelete: (id: string) => void;
+}> = ({ doctors, onQuickView, onDelete }) => {
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {t("assignSubjects.title", {
-              name: `${teacher.firstName} ${teacher.lastName}`,
-            })}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-6">
-          {/* Add New Assignment */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">
-                {t("assignSubjects.addNew")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label>{t("table.grade")}</Label>
-                  <Select value={gradeId} onValueChange={setGradeId}>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={t("assignSubjects.selectGrade")}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {grades
-                        .filter((grade) => grade.id)
-                        .map((grade) => (
-                          <SelectItem key={grade.id} value={grade.id}>
-                            {grade.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>{t("table.medium")}</Label>
-                  <Select value={mediumId} onValueChange={setMediumId}>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={t("assignSubjects.selectMedium")}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {mediums
-                        .filter((medium) => medium.id)
-                        .map((medium) => (
-                          <SelectItem key={medium.id} value={medium.id}>
-                            {medium.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>{t("table.subject")}</Label>
-                  <Select value={subjectId} onValueChange={setSubjectId}>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={t("assignSubjects.selectSubject")}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subjects
-                        .filter((subject) => subject.id)
-                        .map((subject) => (
-                          <SelectItem key={subject.id} value={subject.id}>
-                            {subject.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Button
-                onClick={handleAddAssignment}
-                disabled={submitting || !gradeId || !mediumId || !subjectId}
+    <div className="overflow-x-auto border rounded-md">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Contact</TableHead>
+            <TableHead>Department</TableHead>
+            <TableHead>Specialization</TableHead>
+            <TableHead>Doctor ID</TableHead>
+            <TableHead>Shift</TableHead>
+            <TableHead>Verification</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="w-14 text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {doctors.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={9}
+                className="text-center text-muted-foreground"
               >
-                {submitting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
-                )}
-                {t("assignSubjects.addAssignment")}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Current Assignments */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">
-                {t("assignSubjects.currentAssignments")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : assignments.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  {t("assignSubjects.noAssignments")}
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("table.grade")}</TableHead>
-                      <TableHead>{t("table.medium")}</TableHead>
-                      <TableHead>{t("table.subject")}</TableHead>
-                      <TableHead>{t("assignSubjects.academicYear")}</TableHead>
-                      <TableHead>{t("table.status")}</TableHead>
-                      <TableHead className="text-right">
-                        {t("table.actions")}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {assignments.map((assignment) => (
-                      <TableRow key={assignment.id}>
-                        <TableCell>{assignment.grade?.name || "-"}</TableCell>
-                        <TableCell>{assignment.medium?.name || "-"}</TableCell>
-                        <TableCell>{assignment.subject?.name || "-"}</TableCell>
-                        <TableCell>{assignment.academicYear}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              assignment.isActive ? "success" : "secondary"
-                            }
-                          >
-                            {assignment.isActive
-                              ? t("table.active")
-                              : t("table.inactive")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              handleDeleteAssignment(assignment.id)
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            {t("common.close")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+                No doctors found
+              </TableCell>
+            </TableRow>
+          ) : (
+            doctors.map((doctor) => (
+              <TableRow key={doctor.id}>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback>
+                        {doctor.firstName.charAt(0)}
+                        {doctor.lastName.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">
+                        {doctor.firstName} {doctor.lastName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {doctor.type}
+                      </p>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center gap-1">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{doctor.email}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{doctor.phone}</span>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>{doctor.department}</TableCell>
+                <TableCell>{doctor.specialization}</TableCell>
+                <TableCell>{doctor.doctorId}</TableCell>
+                <TableCell>{doctor.shift}</TableCell>
+                <TableCell>
+                  <div className="flex gap-1 flex-wrap text-xs">
+                    {doctor.emailVerified ? (
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-200 text-emerald-700"
+                      >
+                        <Mail className="h-3 w-3 mr-1" /> Email
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-200 text-amber-700"
+                      >
+                        <Mail className="h-3 w-3 mr-1" /> Email
+                      </Badge>
+                    )}
+                    {doctor.phoneVerified ? (
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-200 text-emerald-700"
+                      >
+                        <Phone className="h-3 w-3 mr-1" /> Phone
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-200 text-amber-700"
+                      >
+                        <Phone className="h-3 w-3 mr-1" /> Phone
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {doctor.status === "ACTIVE" ? (
+                    <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">
+                      Active
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-100 text-amber-700 border border-amber-200">
+                      Pending
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => onQuickView(doctor)}>
+                        <Eye className="h-4 w-4 mr-2" /> Quick view
+                      </DropdownMenuItem>
+                      <DropdownMenuItem>
+                        <Edit className="h-4 w-4 mr-2" /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => onDelete(doctor.id)}
+                        className="text-rose-600"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
   );
 };
 
-export default TeacherManagement;
+export default DoctorManagement;
