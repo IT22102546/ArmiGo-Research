@@ -38,8 +38,8 @@ const Toaster = dynamicImport(
 );
 
 export const metadata = {
-  title: "LearnApp Platform",
-  description: "Empowering education",
+  title: "ArmiGo Platform",
+  description: "Empowering Rehabilation",
 };
 
 // Force dynamic rendering - no static generation

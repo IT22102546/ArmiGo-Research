@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -32,27 +31,24 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar } from "@/components/ui/calendar";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
-  Plus,
   Search,
   Filter,
   Clock,
   CheckCircle,
   XCircle,
-  Calendar as CalendarIcon,
   Eye,
   RefreshCw,
   ArrowRight,
+  Activity,
 } from "lucide-react";
 
 type RescheduleStatus =
@@ -62,9 +58,9 @@ type RescheduleStatus =
   | "CANCELLED"
   | "COMPLETED";
 
-interface ClassRescheduling {
+interface TherapySessionRescheduling {
   id: string;
-  classSessionId: string;
+  therapySessionId: string;
   originalStartTime: string;
   originalEndTime: string;
   newStartTime: string;
@@ -76,19 +72,22 @@ interface ClassRescheduling {
   approvedAt?: string;
   rejectedReason?: string;
   notificationSent: boolean;
-  classSession?: {
-    subject?: {
+  therapySession?: {
+    therapyType?: {
       name: string;
     };
-    teacher?: {
-      firstName: string;
-      lastName: string;
-    };
-    class?: {
+    therapist?: {
       name: string;
-      grade?: {
-        name: string;
-      };
+      specialty: string;
+    };
+    patient?: {
+      name: string;
+      age: number;
+      diagnosis: string;
+    };
+    clinic?: {
+      name: string;
+      location: string;
     };
   };
   requestedBy?: {
@@ -98,7 +97,155 @@ interface ClassRescheduling {
   createdAt: string;
 }
 
-export default function ClassReschedulingPage() {
+const DUMMY_RESCHEDULING_DATA: TherapySessionRescheduling[] = [
+  {
+    id: "res-001",
+    therapySessionId: "ts-001",
+    originalStartTime: new Date(
+      Date.now() + 2 * 24 * 60 * 60 * 1000
+    ).toISOString(),
+    originalEndTime: new Date(
+      Date.now() + 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    ).toISOString(),
+    newStartTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    newEndTime: new Date(
+      Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    ).toISOString(),
+    reason: "Patient requested afternoon slot instead of morning",
+    status: "PENDING",
+    requestedById: "user-001",
+    notificationSent: false,
+    therapySession: {
+      therapyType: { name: "Speech Therapy" },
+      therapist: { name: "Dr. Sarah Johnson", specialty: "Speech & Language" },
+      patient: {
+        name: "Emma Davis",
+        age: 8,
+        diagnosis: "Articulation Disorder",
+      },
+      clinic: { name: "City Therapy Center", location: "Downtown" },
+    },
+    requestedBy: { firstName: "Sarah", lastName: "Johnson" },
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "res-002",
+    therapySessionId: "ts-002",
+    originalStartTime: new Date(
+      Date.now() + 5 * 24 * 60 * 60 * 1000
+    ).toISOString(),
+    originalEndTime: new Date(
+      Date.now() + 5 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    ).toISOString(),
+    newStartTime: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+    newEndTime: new Date(
+      Date.now() + 6 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    ).toISOString(),
+    reason: "Therapist needs to reschedule due to emergency",
+    status: "APPROVED",
+    requestedById: "user-002",
+    approvedById: "admin-001",
+    approvedAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+    notificationSent: true,
+    therapySession: {
+      therapyType: { name: "Occupational Therapy" },
+      therapist: {
+        name: "Dr. Michael Chen",
+        specialty: "Motor Skills Development",
+      },
+      patient: {
+        name: "Lucas Martinez",
+        age: 6,
+        diagnosis: "Developmental Delay",
+      },
+      clinic: { name: "Riverside Therapy", location: "Westside" },
+    },
+    requestedBy: { firstName: "Michael", lastName: "Chen" },
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "res-003",
+    therapySessionId: "ts-003",
+    originalStartTime: new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000
+    ).toISOString(),
+    originalEndTime: new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000
+    ).toISOString(),
+    newStartTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    newEndTime: new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000
+    ).toISOString(),
+    reason: "Conflicting appointment",
+    status: "REJECTED",
+    requestedById: "user-003",
+    rejectedReason: "Cannot accommodate - therapist on annual leave",
+    notificationSent: true,
+    therapySession: {
+      therapyType: { name: "Physical Therapy" },
+      therapist: { name: "Dr. Jessica Brown", specialty: "Pediatric PT" },
+      patient: { name: "Oliver Wilson", age: 10, diagnosis: "Cerebral Palsy" },
+      clinic: { name: "Central Medical Complex", location: "Midtown" },
+    },
+    requestedBy: { firstName: "Jessica", lastName: "Brown" },
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "res-004",
+    therapySessionId: "ts-004",
+    originalStartTime: new Date(
+      Date.now() - 2 * 24 * 60 * 60 * 1000
+    ).toISOString(),
+    originalEndTime: new Date(
+      Date.now() - 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    ).toISOString(),
+    newStartTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    newEndTime: new Date(
+      Date.now() - 1 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    ).toISOString(),
+    reason: "Session completed as rescheduled",
+    status: "COMPLETED",
+    requestedById: "user-004",
+    approvedById: "admin-001",
+    notificationSent: true,
+    therapySession: {
+      therapyType: { name: "Behavioral Therapy" },
+      therapist: { name: "Dr. Amanda Lee", specialty: "Behavioral Health" },
+      patient: { name: "Sophia Garcia", age: 9, diagnosis: "ADHD" },
+      clinic: { name: "Wellness Therapy Hub", location: "Eastside" },
+    },
+    requestedBy: { firstName: "Amanda", lastName: "Lee" },
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "res-005",
+    therapySessionId: "ts-005",
+    originalStartTime: new Date(
+      Date.now() + 10 * 24 * 60 * 60 * 1000
+    ).toISOString(),
+    originalEndTime: new Date(
+      Date.now() + 10 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    ).toISOString(),
+    newStartTime: new Date(Date.now() + 11 * 24 * 60 * 60 * 1000).toISOString(),
+    newEndTime: new Date(
+      Date.now() + 11 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    ).toISOString(),
+    reason: "Patient family vacation conflict",
+    status: "PENDING",
+    requestedById: "user-005",
+    notificationSent: false,
+    therapySession: {
+      therapyType: { name: "Speech Therapy" },
+      therapist: { name: "Dr. Robert Taylor", specialty: "Voice & Fluency" },
+      patient: { name: "Noah Anderson", age: 7, diagnosis: "Stuttering" },
+      clinic: { name: "Premier Therapy Services", location: "Northside" },
+    },
+    requestedBy: { firstName: "Robert", lastName: "Taylor" },
+    createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+export default function TherapySessionReschedulingPage() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
     status: "",
@@ -106,82 +253,124 @@ export default function ClassReschedulingPage() {
     dateTo: "",
     search: "",
   });
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedRescheduling, setSelectedRescheduling] =
-    useState<ClassRescheduling | null>(null);
+    useState<TherapySessionRescheduling | null>(null);
 
-  const { data: reschedulingData, isLoading } = useQuery({
-    queryKey: ["class-rescheduling", filters],
-    queryFn: async () => {
-      const params: any = {};
-      if (filters.status) params.status = filters.status;
-      if (filters.dateFrom) params.dateFrom = filters.dateFrom;
-      if (filters.dateTo) params.dateTo = filters.dateTo;
+  const { data: reschedulingData = DUMMY_RESCHEDULING_DATA, isLoading } =
+    useQuery({
+      queryKey: ["therapy-session-rescheduling", filters],
+      queryFn: async () => {
+        const params: Record<string, string> = {};
+        if (filters.status) params.status = filters.status;
+        if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+        if (filters.dateTo) params.dateTo = filters.dateTo;
 
-      const response = await ApiClient.get<any>("/class-rescheduling", {
-        params,
-      });
-      return response?.data || response || [];
-    },
-  });
+        const response = await ApiClient.get<
+          | {
+              data?: TherapySessionRescheduling[];
+            }
+          | TherapySessionRescheduling[]
+        >("/therapy-session-rescheduling", {
+          params,
+        });
+        if (Array.isArray(response)) return response;
+        return response?.data || DUMMY_RESCHEDULING_DATA;
+      },
+    });
 
   const { data: statistics } = useQuery({
-    queryKey: ["class-rescheduling-stats"],
+    queryKey: ["therapy-session-rescheduling-stats"],
     queryFn: async () => {
-      const response = await ApiClient.get<any>(
-        "/class-rescheduling/statistics"
+      const response = await ApiClient.get<{
+        total?: number;
+        pending?: number;
+        approved?: number;
+        completed?: number;
+      }>("/therapy-session-rescheduling/statistics");
+      if (response && typeof response === "object" && "data" in response) {
+        return response.data || {};
+      }
+      // Fallback to calculated stats from dummy data
+      return (
+        response || {
+          total: DUMMY_RESCHEDULING_DATA.length,
+          pending: DUMMY_RESCHEDULING_DATA.filter((r) => r.status === "PENDING")
+            .length,
+          approved: DUMMY_RESCHEDULING_DATA.filter(
+            (r) => r.status === "APPROVED"
+          ).length,
+          completed: DUMMY_RESCHEDULING_DATA.filter(
+            (r) => r.status === "COMPLETED"
+          ).length,
+        }
       );
-      return response?.data || response || {};
     },
   });
 
   const approveMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await ApiClient.patch(`/class-rescheduling/${id}/approve`, {});
+      return await ApiClient.patch(
+        `/therapy-session-rescheduling/${id}/approve`,
+        {}
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["class-rescheduling"] });
-      queryClient.invalidateQueries({ queryKey: ["class-rescheduling-stats"] });
-      toast.success("Rescheduling approved");
+      queryClient.invalidateQueries({
+        queryKey: ["therapy-session-rescheduling"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["therapy-session-rescheduling-stats"],
+      });
+      toast.success("Session rescheduling approved");
     },
     onError: () => {
-      toast.error("Failed to approve rescheduling");
+      toast.error("Failed to approve session rescheduling");
     },
   });
 
   const rejectMutation = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      return await ApiClient.patch(`/class-rescheduling/${id}/reject`, {
-        reason,
-      });
+      return await ApiClient.patch(
+        `/therapy-session-rescheduling/${id}/reject`,
+        {
+          reason,
+        }
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["class-rescheduling"] });
-      queryClient.invalidateQueries({ queryKey: ["class-rescheduling-stats"] });
-      toast.success("Rescheduling rejected");
+      queryClient.invalidateQueries({
+        queryKey: ["therapy-session-rescheduling"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["therapy-session-rescheduling-stats"],
+      });
+      toast.success("Session rescheduling rejected");
     },
     onError: () => {
-      toast.error("Failed to reject rescheduling");
+      toast.error("Failed to reject session rescheduling");
     },
   });
 
   const completeMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await ApiClient.patch(`/class-rescheduling/${id}/complete`, {});
+      return await ApiClient.patch(
+        `/therapy-session-rescheduling/${id}/complete`,
+        {}
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["class-rescheduling"] });
-      toast.success("Rescheduling marked as completed");
+      queryClient.invalidateQueries({
+        queryKey: ["therapy-session-rescheduling"],
+      });
+      toast.success("Session rescheduling marked as completed");
     },
     onError: () => {
-      toast.error("Failed to complete rescheduling");
+      toast.error("Failed to complete session rescheduling");
     },
   });
 
-  const reschedulings = Array.isArray(reschedulingData)
-    ? reschedulingData
-    : reschedulingData?.reschedulings || [];
+  const reschedulings = reschedulingData || [];
 
   const getStatusBadge = (status: RescheduleStatus) => {
     const styles: Record<RescheduleStatus, string> = {
@@ -194,7 +383,7 @@ export default function ClassReschedulingPage() {
     return <Badge className={styles[status]}>{status}</Badge>;
   };
 
-  const handleView = (rescheduling: ClassRescheduling) => {
+  const handleView = (rescheduling: TherapySessionRescheduling) => {
     setSelectedRescheduling(rescheduling);
     setViewDialogOpen(true);
   };
@@ -219,19 +408,22 @@ export default function ClassReschedulingPage() {
   };
 
   const stats = {
-    total: statistics?.total || reschedulings.length,
+    total: (statistics as { total?: number })?.total || reschedulings.length,
     pending:
-      statistics?.pending ||
-      reschedulings.filter((r: ClassRescheduling) => r.status === "PENDING")
-        .length,
+      (statistics as { pending?: number })?.pending ||
+      reschedulings.filter(
+        (r: TherapySessionRescheduling) => r.status === "PENDING"
+      ).length,
     approved:
-      statistics?.approved ||
-      reschedulings.filter((r: ClassRescheduling) => r.status === "APPROVED")
-        .length,
+      (statistics as { approved?: number })?.approved ||
+      reschedulings.filter(
+        (r: TherapySessionRescheduling) => r.status === "APPROVED"
+      ).length,
     completed:
-      statistics?.completed ||
-      reschedulings.filter((r: ClassRescheduling) => r.status === "COMPLETED")
-        .length,
+      (statistics as { completed?: number })?.completed ||
+      reschedulings.filter(
+        (r: TherapySessionRescheduling) => r.status === "COMPLETED"
+      ).length,
   };
 
   if (isLoading) {
@@ -252,15 +444,14 @@ export default function ClassReschedulingPage() {
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Class Rescheduling</h1>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Activity className="h-8 w-8" />
+            Therapy Session Rescheduling
+          </h1>
           <p className="text-muted-foreground">
-            Manage class schedule changes and teacher requests
+            Manage therapy session schedule changes and rescheduling requests
           </p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Request
-        </Button>
       </div>
 
       {/* Statistics */}
@@ -327,7 +518,7 @@ export default function ClassReschedulingPage() {
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by class or teacher..."
+                placeholder="Search by patient or therapist..."
                 className="pl-10"
                 value={filters.search}
                 onChange={(e) =>
@@ -388,8 +579,8 @@ export default function ClassReschedulingPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Class/Subject</TableHead>
-                <TableHead>Teacher</TableHead>
+                <TableHead>Patient/Therapy Type</TableHead>
+                <TableHead>Therapist</TableHead>
                 <TableHead>Original Time</TableHead>
                 <TableHead>New Time</TableHead>
                 <TableHead>Reason</TableHead>
@@ -408,22 +599,21 @@ export default function ClassReschedulingPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                reschedulings.map((item: ClassRescheduling) => (
+                reschedulings.map((item: TherapySessionRescheduling) => (
                   <TableRow key={item.id}>
                     <TableCell>
                       <div>
                         <div className="font-medium">
-                          {item.classSession?.subject?.name || "N/A"}
+                          {item.therapySession?.therapyType?.name || "N/A"}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {item.classSession?.class?.name} -{" "}
-                          {item.classSession?.class?.grade?.name}
+                          {item.therapySession?.patient?.name} (
+                          {item.therapySession?.patient?.age}y)
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      {item.classSession?.teacher?.firstName}{" "}
-                      {item.classSession?.teacher?.lastName}
+                      {item.therapySession?.therapist?.name}
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
@@ -513,15 +703,15 @@ export default function ClassReschedulingPage() {
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Rescheduling Request Details</DialogTitle>
+            <DialogTitle>Session Rescheduling Request Details</DialogTitle>
           </DialogHeader>
           {selectedRescheduling && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-muted-foreground">Subject</Label>
+                  <Label className="text-muted-foreground">Therapy Type</Label>
                   <p className="font-medium">
-                    {selectedRescheduling.classSession?.subject?.name}
+                    {selectedRescheduling.therapySession?.therapyType?.name}
                   </p>
                 </div>
                 <div>
@@ -534,19 +724,32 @@ export default function ClassReschedulingPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-muted-foreground">Class</Label>
+                  <Label className="text-muted-foreground">Patient</Label>
                   <p className="font-medium">
-                    {selectedRescheduling.classSession?.class?.name} -{" "}
-                    {selectedRescheduling.classSession?.class?.grade?.name}
+                    {selectedRescheduling.therapySession?.patient?.name} (
+                    {selectedRescheduling.therapySession?.patient?.age}y)
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedRescheduling.therapySession?.patient?.diagnosis}
                   </p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">Teacher</Label>
+                  <Label className="text-muted-foreground">Therapist</Label>
                   <p className="font-medium">
-                    {selectedRescheduling.classSession?.teacher?.firstName}{" "}
-                    {selectedRescheduling.classSession?.teacher?.lastName}
+                    {selectedRescheduling.therapySession?.therapist?.name}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedRescheduling.therapySession?.therapist?.specialty}
                   </p>
                 </div>
+              </div>
+
+              <div>
+                <Label className="text-muted-foreground">Clinic</Label>
+                <p className="font-medium">
+                  {selectedRescheduling.therapySession?.clinic?.name} -{" "}
+                  {selectedRescheduling.therapySession?.clinic?.location}
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
