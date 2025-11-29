@@ -175,22 +175,6 @@ export default function AdminSidebar({
         icon: AlertTriangle,
         label: t("nav.errorLogs"),
       },
-      { href: "/admin/system/jobs", icon: Clock, label: t("nav.jobsMonitor") },
-      {
-        href: "/admin/chat",
-        icon: MessageCircle,
-        label: t("nav.chatModeration"),
-      },
-      {
-        href: "/admin/mutual-transfers",
-        icon: ArrowLeftRight,
-        label: t("nav.mutualTransfers"),
-      },
-      {
-        href: "/admin/feature-flags",
-        icon: Settings,
-        label: t("nav.featureFlags"),
-      },
     ],
   };
 
