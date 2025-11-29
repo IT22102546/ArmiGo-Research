@@ -135,16 +135,6 @@ export default function AdminSidebar({
     payments: [
       { href: "/admin/payments", icon: CreditCard, label: t("nav.payments") },
       { href: "/admin/invoices", icon: Receipt, label: t("nav.invoices") },
-      {
-        href: "/admin/payments/reconciliation",
-        icon: ClipboardList,
-        label: t("nav.reconciliation"),
-      },
-      {
-        href: "/admin/wallet-management",
-        icon: CreditCard,
-        label: t("nav.wallets"),
-      },
     ],
     content: [
       {
