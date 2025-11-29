@@ -8,715 +8,342 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Dimensions,
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
-import { icons } from "@/constants";
+import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { icons, images } from "@/constants";
 import useAuthStore from "../../../stores/authStore";
-import { apiFetch } from "../../../utils/api";
-import { router, useRouter } from "expo-router";
+import { router } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 
-export default function Exams() {
-  const [grade, setGrade] = useState("Grade");
-  const [medium, setMedium] = useState("Medium");
-  const [subject, setSubject] = useState("Subject");
-  const [grades, setGrades] = useState([]);
-  const [mediums, setMediums] = useState([]);
-  const [subjects, setSubjects] = useState([]);
+const { width: screenWidth } = Dimensions.get("window");
+
+export default function Exercises() {
+  const [bodyPart, setBodyPart] = useState("All Body Parts");
+  const [difficulty, setDifficulty] = useState("All Levels");
+  const [exercises, setExercises] = useState<any[]>([]);
+  const [filteredExercises, setFilteredExercises] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showGradeDropdown, setShowGradeDropdown] = useState(false);
-  const [showMediumDropdown, setShowMediumDropdown] = useState(false);
-  const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
-  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
-  const [selectedMediumId, setSelectedMediumId] = useState<string | null>(null);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(
+  const [showBodyPartDropdown, setShowBodyPartDropdown] = useState(false);
+  const [showDifficultyDropdown, setShowDifficultyDropdown] = useState(false);
+  const [selectedBodyPart, setSelectedBodyPart] = useState<string | null>(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(
     null
   );
-  const [zIndexGrade, setZIndexGrade] = useState(1);
-  const [zIndexMedium, setZIndexMedium] = useState(1);
-  const [zIndexSubject, setZIndexSubject] = useState(1);
-  const [allExams, setAllExams] = useState<any[]>([]);
-  const [filteredExams, setFilteredExams] = useState<any[]>([]);
+  const [zIndexBodyPart, setZIndexBodyPart] = useState(1);
+  const [zIndexDifficulty, setZIndexDifficulty] = useState(1);
 
-  const { currentUser, isSignedIn, refreshTokens } = useAuthStore();
-  const router = useRouter();
+  const { currentUser, isSignedIn } = useAuthStore();
 
-  // Enhanced API call function
-  const makeAuthenticatedRequest = async (
-    endpoint: string,
-    options: any = {}
-  ) => {
-    try {
-      console.log(` Making request to: ${endpoint}`);
-      let response = await apiFetch(endpoint, options);
+  // Define available body parts and difficulties
+  const bodyParts = [
+    { id: "all", name: "All Body Parts" },
+    { id: "fingers", name: "Fingers" },
+    { id: "wrist", name: "Wrist" },
+    { id: "elbow", name: "Elbow" },
+    { id: "shoulder", name: "Shoulder" },
+    { id: "hand", name: "Hand" },
+    { id: "arm", name: "Arm" },
+  ];
 
-      if (response.status === 401) {
-        console.log(" Token expired, attempting refresh...");
-        const refreshSuccess = await refreshTokens();
+  const difficultyLevels = [
+    { id: "all", name: "All Levels" },
+    { id: "beginner", name: "Beginner" },
+    { id: "intermediate", name: "Intermediate" },
+    { id: "advanced", name: "Advanced" },
+  ];
 
-        if (refreshSuccess) {
-          response = await apiFetch(endpoint, options);
-        } else {
-          throw new Error("Authentication failed. Please login again.");
-        }
-      }
+  // Mock exercises data for physiotherapy
+  const mockExercises = [
+    {
+      id: 1,
+      title: "Finger Extensions",
+      description: "Gently extend and flex each finger individually",
+      bodyPart: "fingers",
+      difficulty: "beginner",
+      duration: "5-10 minutes",
+      sets: "3 sets of 10 reps",
+      benefits: "Improves finger mobility and reduces stiffness",
+      icon: "hand",
+      color: "#4B9BFF",
+      image: images.test,
+    },
+    {
+      id: 2,
+      title: "Wrist Flexion",
+      description: "Bend wrist forward and backward with gentle pressure",
+      bodyPart: "wrist",
+      difficulty: "beginner",
+      duration: "5 minutes",
+      sets: "3 sets of 15 reps",
+      benefits: "Increases wrist flexibility and strength",
+      icon: "fitness",
+      color: "#6BCF7F",
+      image: images.test,
+    },
+    {
+      id: 3,
+      title: "Elbow Bends",
+      description: "Slow elbow flexion and extension exercises",
+      bodyPart: "elbow",
+      difficulty: "beginner",
+      duration: "8-10 minutes",
+      sets: "4 sets of 12 reps",
+      benefits: "Improves elbow range of motion",
+      icon: "accessibility",
+      color: "#FF6B6B",
+      image: images.test,
+    },
+    {
+      id: 4,
+      title: "Shoulder Circles",
+      description: "Forward and backward shoulder rotations",
+      bodyPart: "shoulder",
+      difficulty: "intermediate",
+      duration: "10 minutes",
+      sets: "3 sets of 20 reps",
+      benefits: "Enhances shoulder mobility",
+      icon: "body",
+      color: "#FFB74D",
+      image: images.test,
+    },
+    {
+      id: 5,
+      title: "Grip Strengthening",
+      description: "Squeeze stress ball or therapy putty",
+      bodyPart: "hand",
+      difficulty: "beginner",
+      duration: "5 minutes",
+      sets: "4 sets of 8 reps",
+      benefits: "Builds hand and grip strength",
+      icon: "grip-horizontal",
+      color: "#9575CD",
+      image: images.test,
+    },
+    {
+      id: 6,
+      title: "Forearm Rotation",
+      description: "Pronation and supination exercises",
+      bodyPart: "arm",
+      difficulty: "intermediate",
+      duration: "8 minutes",
+      sets: "3 sets of 15 reps",
+      benefits: "Improves forearm rotation ability",
+      icon: "rotate-right",
+      color: "#4DB6AC",
+      image: images.test,
+    },
+    {
+      id: 7,
+      title: "Finger Opposition",
+      description: "Touch each finger to thumb sequentially",
+      bodyPart: "fingers",
+      difficulty: "beginner",
+      duration: "5 minutes",
+      sets: "2 sets of 10 reps each hand",
+      benefits: "Enhances finger coordination",
+      icon: "hand-peace",
+      color: "#4B9BFF",
+      image: images.test,
+    },
+    {
+      id: 8,
+      title: "Resisted Wrist Extension",
+      description: "Extend wrist against light resistance",
+      bodyPart: "wrist",
+      difficulty: "intermediate",
+      duration: "10 minutes",
+      sets: "3 sets of 12 reps",
+      benefits: "Strengthens wrist extensors",
+      icon: "fitness",
+      color: "#6BCF7F",
+      image: images.test,
+    },
+    {
+      id: 9,
+      title: "Shoulder Press",
+      description: "Gentle overhead pressing motion",
+      bodyPart: "shoulder",
+      difficulty: "advanced",
+      duration: "12 minutes",
+      sets: "4 sets of 10 reps",
+      benefits: "Builds shoulder strength",
+      icon: "weight-lifter",
+      color: "#FFB74D",
+      image: images.test,
+    },
+  ];
 
-      if (!response.ok) {
-        if (response.status === 400) {
-          const errorText = await response.text();
-          console.log(` 400 Error details for ${endpoint}:`, errorText);
-          throw new Error(`Bad request (400): ${errorText}`);
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log(` Response for ${endpoint}:`, result);
-
-      if (result.data !== undefined) {
-        if (
-          typeof result.data === "object" &&
-          result.data !== null &&
-          !Array.isArray(result.data)
-        ) {
-          for (const key in result.data) {
-            if (Array.isArray(result.data[key])) {
-              console.log(` Found array in data.${key}`);
-              return result;
-            }
-          }
-        }
-        return result.data;
-      } else if (Array.isArray(result)) {
-        return result;
-      } else {
-        return result;
-      }
-    } catch (error) {
-      console.error("API request error:", error);
-      throw error;
-    }
+  const getExerciseIcon = (iconName: string) => {
+    const iconMap: { [key: string]: any } = {
+      hand: "hand",
+      fitness: "fitness",
+      accessibility: "accessibility",
+      body: "body-outline",
+      "grip-horizontal": "hand-right",
+      "rotate-right": "refresh-circle",
+      "hand-peace": "hand-left",
+      "weight-lifter": "barbell",
+    };
+    return iconMap[iconName] || "fitness";
   };
 
-  // Main function to load all data
-  const loadAllData = async () => {
+  const getExerciseColor = (baseColor: string) => {
+    return {
+      iconBg: baseColor,
+      bg: `${baseColor}20`,
+      btnColor: baseColor,
+      waveColor: `${baseColor}33`,
+      textColor: baseColor,
+    };
+  };
+
+  const loadExercises = async () => {
     try {
       setLoading(true);
-
-      console.log(" Loading all data...");
-
-      // Fetch exams first
-      const examsResponse = await makeAuthenticatedRequest(
-        "/api/v1/exams/student/my-exams?&limit=100"
-      );
-
-      let examsArray: any[] = [];
-
-      if (
-        examsResponse &&
-        examsResponse.data &&
-        Array.isArray(examsResponse.data)
-      ) {
-        examsArray = examsResponse.data;
-        console.log(" Got paginated exams data:", examsArray.length);
-      } else if (Array.isArray(examsResponse)) {
-        examsArray = examsResponse;
-        console.log(" Got direct array exams data:", examsArray.length);
-      } else if (examsResponse && Array.isArray(examsResponse.exams)) {
-        examsArray = examsResponse.exams;
-        console.log(" Got exams array from exams field:", examsArray.length);
-      } else if (examsResponse && Array.isArray(examsResponse.items)) {
-        examsArray = examsResponse.items;
-        console.log("Got exams array from items field:", examsArray.length);
-      }
-
-      if (examsArray.length === 0) {
-        console.log(" No exams found");
-        setAllExams([]);
-        setFilteredExams([]);
-        setGrades([]);
-        setMediums([]);
-        setSubjects([]);
-        return;
-      }
-
-      const gradeIds = [
-        ...new Set(examsArray.map((exam) => exam.gradeId).filter(Boolean)),
-      ];
-      const mediumIds = [
-        ...new Set(examsArray.map((exam) => exam.mediumId).filter(Boolean)),
-      ];
-      const subjectIds = [
-        ...new Set(examsArray.map((exam) => exam.subjectId).filter(Boolean)),
-      ];
-
-      console.log(" Extracted IDs:", {
-        gradeIds: gradeIds.length,
-        mediumIds: mediumIds.length,
-        subjectIds: subjectIds.length,
-      });
-
-      const fetchPromises = [];
-
-      fetchPromises.push(
-        (async () => {
-          try {
-            const response = await makeAuthenticatedRequest("/api/v1/grades");
-            if (
-              response &&
-              response.data &&
-              Array.isArray(response.data.grades)
-            ) {
-              return response.data.grades;
-            } else if (response && Array.isArray(response.grades)) {
-              return response.grades;
-            } else if (Array.isArray(response)) {
-              return response;
-            }
-            return [];
-          } catch (error) {
-            console.log(" Failed to fetch grades, trying alternative...");
-            try {
-              const response = await makeAuthenticatedRequest(
-                "/api/v1/grades?isActive=true"
-              );
-              return Array.isArray(response) ? response : [];
-            } catch (e) {
-              return [];
-            }
-          }
-        })()
-      );
-
-      fetchPromises.push(
-        (async () => {
-          try {
-            const response = await makeAuthenticatedRequest("/api/v1/mediums");
-            console.log(" Mediums response structure:", response);
-
-            if (
-              response &&
-              response.data &&
-              Array.isArray(response.data.mediums)
-            ) {
-              console.log(" Found mediums in data.mediums");
-              return response.data.mediums;
-            } else if (
-              response &&
-              response.data &&
-              Array.isArray(response.data)
-            ) {
-              console.log(" Found mediums in data array");
-              return response.data;
-            } else if (response && Array.isArray(response.mediums)) {
-              console.log(" Found mediums in response.mediums");
-              return response.mediums;
-            } else if (Array.isArray(response)) {
-              console.log(" Found direct array response");
-              return response;
-            }
-            return [];
-          } catch (error) {
-            console.log(
-              "First mediums endpoint failed, trying alternatives..."
-            );
-
-            const endpoints = [
-              "/api/v1/mediums?isActive=true",
-              "/api/v1/mediums?status=active",
-              "/api/v1/mediums?limit=100",
-            ];
-
-            for (const endpoint of endpoints) {
-              try {
-                console.log(` Trying endpoint: ${endpoint}`);
-                const response = await makeAuthenticatedRequest(endpoint);
-
-                if (response) {
-                  if (response.data && Array.isArray(response.data.mediums)) {
-                    return response.data.mediums;
-                  } else if (response.data && Array.isArray(response.data)) {
-                    return response.data;
-                  } else if (Array.isArray(response.mediums)) {
-                    return response.mediums;
-                  } else if (Array.isArray(response)) {
-                    return response;
-                  }
-                }
-              } catch (e) {
-                console.log(` Failed on ${endpoint}:`, e.message);
-                continue;
-              }
-            }
-
-            return [];
-          }
-        })()
-      );
-
-      fetchPromises.push(
-        (async () => {
-          try {
-            const response = await makeAuthenticatedRequest(
-              "/api/v1/subjects?isActive=true"
-            );
-            if (Array.isArray(response)) {
-              return response;
-            }
-            return [];
-          } catch (error) {
-            try {
-              const response =
-                await makeAuthenticatedRequest("/api/v1/subjects");
-              return Array.isArray(response) ? response : [];
-            } catch (e) {
-              return [];
-            }
-          }
-        })()
-      );
-
-      const [gradesArray, mediumsArray, subjectsArray] =
-        await Promise.all(fetchPromises);
-
-      console.log(" Fetched data:", {
-        exams: examsArray.length,
-        grades: gradesArray.length,
-        mediums: mediumsArray.length,
-        subjects: subjectsArray.length,
-      });
-
-      if (mediumsArray.length === 0) {
-        console.log(" No mediums from API, extracting from exams...");
-        const mediumMap = new Map();
-        examsArray.forEach((exam) => {
-          if (exam.mediumId && exam.medium) {
-            mediumMap.set(exam.mediumId, {
-              id: exam.mediumId,
-              name: exam.medium.name,
-            });
-          } else if (exam.mediumId) {
-            mediumMap.set(exam.mediumId, {
-              id: exam.mediumId,
-              name: `Medium ${exam.mediumId}`,
-            });
-          }
-        });
-        mediumsArray.push(...Array.from(mediumMap.values()));
-      }
-
-      setAllExams(examsArray);
-      setGrades(gradesArray);
-      setMediums(mediumsArray);
-      setSubjects(subjectsArray);
-
-      const formattedExams = examsArray.map((exam) => {
-        const grade = gradesArray.find((g: any) => g.id === exam.gradeId) || {
-          id: exam.gradeId,
-          name: exam.grade?.name || `Grade ${exam.gradeId}`,
-        };
-        const medium = mediumsArray.find(
-          (m: any) => m.id === exam.mediumId
-        ) || {
-          id: exam.mediumId,
-          name: exam.medium?.name || `Medium ${exam.mediumId}`,
-        };
-        const subject = subjectsArray.find(
-          (s: any) => s.id === exam.subjectId
-        ) || {
-          id: exam.subjectId,
-          name: exam.subject?.name || `Subject ${exam.subjectId}`,
-        };
-
-        const subjectName = subject.name || "General";
-        const examColors = getExamColor(subjectName);
-
-        return {
-          id: exam.id,
-          title: exam.title || "Untitled Exam",
-          description: exam.description,
-          grade: grade.name,
-          medium: medium.name,
-          subject: subjectName,
-          className: exam.class?.name || exam.className || "General",
-          time: exam.duration ? `${exam.duration} minutes` : "Not specified",
-          startTime: exam.startTime,
-          endTime: exam.endTime,
-          totalMarks: exam.totalMarks,
-          passingMarks: exam.passingMarks,
-          icon: getExamIcon(subjectName),
-          iconBg: examColors.iconBg,
-          bg: examColors.bg,
-          btnColor: examColors.btnColor,
-          waveColor: examColors.waveColor,
-          examData: {
-            id: exam.id,
-            title: exam.title,
-            duration: exam.duration,
-            startTime: exam.startTime,
-            endTime: exam.endTime,
-            gradeId: exam.gradeId,
-            mediumId: exam.mediumId,
-            subjectId: exam.subjectId,
-            classId: exam.classId,
-            totalMarks: exam.totalMarks,
-            passingMarks: exam.passingMarks,
-            instructions: exam.instructions,
-          },
-        };
-      });
-
-      setFilteredExams(formattedExams);
-      console.log(" Formatted exams for display:", formattedExams.length);
+      
+      // In real app, you would fetch from API
+      // For now, use mock data
+      setTimeout(() => {
+        setExercises(mockExercises);
+        setFilteredExercises(mockExercises);
+        setLoading(false);
+      }, 1000);
+      
     } catch (error) {
-      console.error(" Error loading data:", error);
-      setAllExams([]);
-      setFilteredExams([]);
-      setGrades([]);
-      setMediums([]);
-      setSubjects([]);
-    } finally {
+      console.error("Error loading exercises:", error);
+      // Fallback to mock data
+      setExercises(mockExercises);
+      setFilteredExercises(mockExercises);
       setLoading(false);
     }
   };
 
-  const getExamIcon = (subjectName: string): any => {
-    if (!subjectName) return "assignment";
+  const filterExercises = useCallback(() => {
+    let filtered = [...exercises];
 
-    const lowerSubject = subjectName.toLowerCase();
-
-    if (lowerSubject.includes("math")) return "calculate";
-    if (lowerSubject.includes("scien")) return "science";
-    if (lowerSubject.includes("english")) return "menu-book";
-    if (lowerSubject.includes("sinhala")) return "translate";
-    if (lowerSubject.includes("tamil")) return "translate";
-    if (lowerSubject.includes("history")) return "history";
-
-    return "assignment";
-  };
-
-  const getExamColor = (subjectName: string) => {
-    if (!subjectName) {
-      return {
-        iconBg: "#43A047",
-        bg: "#E8F5E9",
-        btnColor: "#43A047",
-        waveColor: "#2E7D3233",
-      };
-    }
-
-    const lowerSubject = subjectName.toLowerCase();
-
-    if (lowerSubject.includes("math")) {
-      return {
-        iconBg: "#1E88E5",
-        bg: "#E3F2FD",
-        btnColor: "#1E88E5",
-        waveColor: "#1E88E533",
-      };
-    }
-    if (lowerSubject.includes("scien")) {
-      return {
-        iconBg: "#D81B60",
-        bg: "#FCE4EC",
-        btnColor: "#D81B60",
-        waveColor: "#D81B6033",
-      };
-    }
-    if (lowerSubject.includes("english")) {
-      return {
-        iconBg: "#FB8C00",
-        bg: "#FFF3E0",
-        btnColor: "#FB8C00",
-        waveColor: "#FB8C0033",
-      };
-    }
-    if (lowerSubject.includes("sinhala") || lowerSubject.includes("tamil")) {
-      return {
-        iconBg: "#00897B",
-        bg: "#E0F2F1",
-        btnColor: "#00897B",
-        waveColor: "#00897B33",
-      };
-    }
-    if (lowerSubject.includes("history")) {
-      return {
-        iconBg: "#6A1B9A",
-        bg: "#F3E5F5",
-        btnColor: "#6A1B9A",
-        waveColor: "#6A1B9A33",
-      };
-    }
-
-    return {
-      iconBg: "#43A047",
-      bg: "#E8F5E9",
-      btnColor: "#43A047",
-      waveColor: "#43A04733",
-    };
-  };
-
-  const filterExams = useCallback(() => {
-    console.log(" Filtering exams with criteria:", {
-      gradeId: selectedGradeId,
-      mediumId: selectedMediumId,
-      subjectId: selectedSubjectId,
-      totalExams: allExams.length,
-    });
-
-    if (allExams.length === 0) {
-      setFilteredExams([]);
-      return;
-    }
-
-    let filtered = [...allExams];
-
-    if (selectedGradeId) {
+    if (selectedBodyPart && selectedBodyPart !== "all") {
       filtered = filtered.filter(
-        (exam) => String(exam.gradeId) === String(selectedGradeId)
+        (exercise) => exercise.bodyPart === selectedBodyPart
       );
     }
 
-    if (selectedMediumId) {
+    if (selectedDifficulty && selectedDifficulty !== "all") {
       filtered = filtered.filter(
-        (exam) => String(exam.mediumId) === String(selectedMediumId)
+        (exercise) => exercise.difficulty === selectedDifficulty
       );
     }
 
-    if (selectedSubjectId) {
-      filtered = filtered.filter(
-        (exam) => String(exam.subjectId) === String(selectedSubjectId)
-      );
-    }
-
-    const formattedExams = filtered.map((exam) => {
-      const grade = grades.find((g: any) => g.id === exam.gradeId) || {
-        id: exam.gradeId,
-        name: exam.grade?.name || `Grade ${exam.gradeId}`,
-      };
-      const medium = mediums.find((m: any) => m.id === exam.mediumId) || {
-        id: exam.mediumId,
-        name: exam.medium?.name || `Medium ${exam.mediumId}`,
-      };
-      const subject = subjects.find((s: any) => s.id === exam.subjectId) || {
-        id: exam.subjectId,
-        name: exam.subject?.name || `Subject ${exam.subjectId}`,
-      };
-
-      const subjectName = subject.name || "General";
-      const examColors = getExamColor(subjectName);
+    const formattedExercises = filtered.map((exercise) => {
+      const colors = getExerciseColor(exercise.color);
 
       return {
-        id: exam.id,
-        title: exam.title || "Untitled Exam",
-        grade: grade.name,
-        medium: medium.name,
-        subject: subjectName,
-        className: exam.class?.name || "General",
-        time: exam.duration ? `${exam.duration} minutes` : "Not specified",
-        startTime: exam.startTime,
-        endTime: exam.endTime,
-        totalMarks: exam.totalMarks,
-        passingMarks: exam.passingMarks,
-        icon: getExamIcon(subjectName),
-        iconBg: examColors.iconBg,
-        bg: examColors.bg,
-        btnColor: examColors.btnColor,
-        waveColor: examColors.waveColor,
-        examData: {
-          id: exam.id,
-          title: exam.title,
-          duration: exam.duration,
-          startTime: exam.startTime,
-          endTime: exam.endTime,
-          gradeId: exam.gradeId,
-          mediumId: exam.mediumId,
-          subjectId: exam.subjectId,
-          classId: exam.classId,
-          totalMarks: exam.totalMarks,
-          passingMarks: exam.passingMarks,
-        },
+        ...exercise,
+        iconBg: colors.iconBg,
+        bg: colors.bg,
+        btnColor: colors.btnColor,
+        waveColor: colors.waveColor,
+        textColor: colors.textColor,
       };
     });
 
-    console.log(" Filtered exams count:", formattedExams.length);
-    setFilteredExams(formattedExams);
-  }, [
-    allExams,
-    selectedGradeId,
-    selectedMediumId,
-    selectedSubjectId,
-    grades,
-    mediums,
-    subjects,
-  ]);
+    setFilteredExercises(formattedExercises);
+  }, [exercises, selectedBodyPart, selectedDifficulty]);
 
-  const handleGradeSelect = (gradeItem: any) => {
-    console.log(` Grade selected:`, gradeItem);
-    setGrade(gradeItem.name);
-    setSelectedGradeId(gradeItem.id);
-    setShowGradeDropdown(false);
+  const handleBodyPartSelect = (part: any) => {
+    setBodyPart(part.name);
+    setSelectedBodyPart(part.id === "all" ? null : part.id);
+    setShowBodyPartDropdown(false);
   };
 
-  const handleMediumSelect = (mediumItem: any) => {
-    console.log(` Medium selected:`, mediumItem);
-    setMedium(mediumItem.name);
-    setSelectedMediumId(mediumItem.id);
-    setShowMediumDropdown(false);
+  const handleDifficultySelect = (level: any) => {
+    setDifficulty(level.name);
+    setSelectedDifficulty(level.id === "all" ? null : level.id);
+    setShowDifficultyDropdown(false);
   };
 
-  const handleSubjectSelect = (subjectItem: any) => {
-    console.log(` Subject selected:`, subjectItem);
-    setSubject(subjectItem.name);
-    setSelectedSubjectId(subjectItem.id);
-    setShowSubjectDropdown(false);
-  };
-
-  const handleGradeDropdownToggle = () => {
-    setShowGradeDropdown(!showGradeDropdown);
-    if (!showGradeDropdown) {
-      setZIndexGrade(100);
-      setZIndexMedium(1);
-      setZIndexSubject(1);
-      setShowMediumDropdown(false);
-      setShowSubjectDropdown(false);
+  const handleBodyPartDropdownToggle = () => {
+    setShowBodyPartDropdown(!showBodyPartDropdown);
+    if (!showBodyPartDropdown) {
+      setZIndexBodyPart(100);
+      setZIndexDifficulty(1);
+      setShowDifficultyDropdown(false);
     }
   };
 
-  const handleMediumDropdownToggle = () => {
-    setShowMediumDropdown(!showMediumDropdown);
-    if (!showMediumDropdown) {
-      setZIndexMedium(100);
-      setZIndexGrade(1);
-      setZIndexSubject(1);
-      setShowGradeDropdown(false);
-      setShowSubjectDropdown(false);
+  const handleDifficultyDropdownToggle = () => {
+    setShowDifficultyDropdown(!showDifficultyDropdown);
+    if (!showDifficultyDropdown) {
+      setZIndexDifficulty(100);
+      setZIndexBodyPart(1);
+      setShowBodyPartDropdown(false);
     }
   };
-
-  const handleSubjectDropdownToggle = () => {
-    setShowSubjectDropdown(!showSubjectDropdown);
-    if (!showSubjectDropdown) {
-      setZIndexSubject(100);
-      setZIndexGrade(1);
-      setZIndexMedium(1);
-      setShowGradeDropdown(false);
-      setShowMediumDropdown(false);
-    }
-  };
-
-  const handleStartExam = async (exam) => {
-    try {
-      console.log("🚀 Starting exam:", exam.examData.id);
-
-      // Get token directly
-      const { accessToken } = useAuthStore.getState();
-      const token = accessToken;
-
-      console.log("🔍 Token for exam start:", {
-        hasToken: !!token,
-        tokenLength: token?.length,
-      });
-
-      if (!token) {
-        Alert.alert(
-          "Authentication Required",
-          "Please login again to continue.",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Login",
-              onPress: () => router.push("/(auth)/sign-in"),
-            },
-          ]
-        );
-        return;
-      }
-
-      Alert.alert(
-        "Start Exam",
-        `Are you ready to start ${exam.title} exam?\n\nDuration: ${exam.time}\nGrade: ${exam.grade}\nMedium: ${exam.medium}`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Start Exam",
-            onPress: async () => {
-              try {
-                // Navigate with token
-                router.push({
-                  pathname: "/exam_start",
-                  params: {
-                    examId: exam.examData.id,
-                    examTitle: exam.title,
-                    duration: exam.examData.duration?.toString() || "60",
-                    grade: exam.grade,
-                    medium: exam.medium,
-                    subject: exam.subject,
-                    token: token, // Pass token
-                    gradeId: exam.examData.gradeId?.toString() || "",
-                    mediumId: exam.examData.mediumId?.toString() || "",
-                    subjectId: exam.examData.subjectId?.toString() || "",
-                    startTime: exam.examData.startTime || "",
-                    endTime: exam.examData.endTime || "",
-                    totalMarks: exam.examData.totalMarks?.toString() || "",
-                    passingMarks: exam.examData.passingMarks?.toString() || "",
-                  },
-                });
-              } catch (error) {
-                console.error(" Error navigating:", error);
-                Alert.alert("Error", "Failed to start exam. Please try again.");
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      console.error(" Error checking exam status:", error);
-      Alert.alert("Error", "Unable to check exam status. Please try again.");
-    }
-  };
-
-  // Add new function to handle view results/rank
 
   const resetFilters = () => {
-    console.log(" Resetting all filters");
-    setGrade("Grade");
-    setMedium("Medium");
-    setSubject("Subject");
-    setSelectedGradeId(null);
-    setSelectedMediumId(null);
-    setSelectedSubjectId(null);
-    setShowGradeDropdown(false);
-    setShowMediumDropdown(false);
-    setShowSubjectDropdown(false);
+    setBodyPart("All Body Parts");
+    setDifficulty("All Levels");
+    setSelectedBodyPart(null);
+    setSelectedDifficulty(null);
+    setShowBodyPartDropdown(false);
+    setShowDifficultyDropdown(false);
+  };
+
+  const handleStartExercise = (exercise: any) => {
+    Alert.alert(
+      "Start Exercise",
+      `Ready to start ${exercise.title}?\n\nDuration: ${exercise.duration}\nSets: ${exercise.sets}\n\n${exercise.description}`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Start",
+          onPress: () => {
+            router.push({
+              pathname: "/exercise-detail",
+              params: {
+                exerciseId: exercise.id.toString(),
+                title: exercise.title,
+                description: exercise.description,
+                duration: exercise.duration,
+                sets: exercise.sets,
+                benefits: exercise.benefits,
+                bodyPart: exercise.bodyPart,
+                difficulty: exercise.difficulty,
+              },
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  const handleViewProgress = (exercise: any) => {
+    router.push({
+      pathname: "/exercise-progress",
+      params: {
+        exerciseId: exercise.id.toString(),
+        title: exercise.title,
+      },
+    });
   };
 
   useEffect(() => {
     if (isSignedIn && currentUser) {
-      console.log(" Loading data for user:", currentUser.email);
-      loadAllData().catch((error) => {
-        console.log(" Main load failed:", error);
-      });
+      loadExercises();
     }
   }, [isSignedIn, currentUser]);
 
   useEffect(() => {
-    if (allExams.length > 0) {
-      filterExams();
+    if (exercises.length > 0) {
+      filterExercises();
     }
-  }, [
-    selectedGradeId,
-    selectedMediumId,
-    selectedSubjectId,
-    allExams,
-    filterExams,
-  ]);
+  }, [selectedBodyPart, selectedDifficulty, exercises, filterExercises]);
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0057FF" />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>Loading Exercises...</Text>
       </View>
     );
   }
@@ -724,7 +351,7 @@ export default function Exams() {
   if (!isSignedIn || !currentUser) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Please sign in to view exams</Text>
+        <Text style={styles.errorText}>Please sign in to view exercises</Text>
       </View>
     );
   }
@@ -733,60 +360,56 @@ export default function Exams() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.appTitle}>Learn App</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.welcomeText}>Welcome Back,</Text>
+            <Text style={styles.userName}>
+              {currentUser?.firstName || "Patient"}
+            </Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.progressButton}
+            onPress={() => router.push("/progress-overview")}
+          >
+            <MaterialIcons name="trending-up" size={20} color="#0057FF" />
+            <Text style={styles.progressButtonText}>Progress</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.appTitle}>Rehabilitation Exercises</Text>
 
         {/* Filter Box */}
-        <View>
+        <View style={styles.filterContainer}>
           <View style={styles.row}>
             <TouchableOpacity
-              style={[styles.dropdown, { zIndex: zIndexGrade }]}
-              onPress={handleGradeDropdownToggle}
+              style={[styles.dropdown, { zIndex: zIndexBodyPart }]}
+              onPress={handleBodyPartDropdownToggle}
             >
-              <Text style={styles.dropdownText}>{grade}</Text>
+              <MaterialIcons name="accessibility" size={20} color="#777" />
+              <Text style={styles.dropdownText}>{bodyPart}</Text>
               <MaterialIcons
-                name="keyboard-arrow-down"
+                name={showBodyPartDropdown ? "keyboard-arrow-up" : "keyboard-arrow-down"}
                 size={20}
                 color="#777"
               />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.dropdown, { zIndex: zIndexMedium }]}
-              onPress={handleMediumDropdownToggle}
+              style={[styles.dropdown, { zIndex: zIndexDifficulty }]}
+              onPress={handleDifficultyDropdownToggle}
             >
-              <Text style={styles.dropdownText}>{medium}</Text>
+              <MaterialIcons name="signal-cellular-alt" size={20} color="#777" />
+              <Text style={styles.dropdownText}>{difficulty}</Text>
               <MaterialIcons
-                name="keyboard-arrow-down"
+                name={showDifficultyDropdown ? "keyboard-arrow-up" : "keyboard-arrow-down"}
                 size={20}
                 color="#777"
               />
             </TouchableOpacity>
           </View>
 
-          <View
-            style={[
-              styles.row,
-              { position: "relative", zIndex: zIndexSubject },
-            ]}
-          >
-            <TouchableOpacity
-              style={[styles.dropdown, { flex: 1 }]}
-              onPress={handleSubjectDropdownToggle}
-            >
-              <Text style={styles.dropdownText}>{subject}</Text>
-              <MaterialIcons
-                name="keyboard-arrow-down"
-                size={20}
-                color="#777"
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.filterBtn} onPress={resetFilters}>
-              <Image source={icons.filter} style={styles.filterIcon} />
-            </TouchableOpacity>
-          </View>
-
-          {showGradeDropdown && (
+          {showBodyPartDropdown && (
             <View
               style={[
                 styles.dropdownMenu,
@@ -794,40 +417,25 @@ export default function Exams() {
               ]}
             >
               <ScrollView style={styles.dropdownScroll}>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setGrade("Grade");
-                    setSelectedGradeId(null);
-                    setShowGradeDropdown(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>All Grades</Text>
-                </TouchableOpacity>
-                {grades.length > 0 ? (
-                  grades.map((gradeItem: any) => (
-                    <TouchableOpacity
-                      key={gradeItem.id}
-                      style={styles.dropdownItem}
-                      onPress={() => handleGradeSelect(gradeItem)}
-                    >
-                      <Text style={styles.dropdownItemText}>
-                        {gradeItem.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                ) : (
-                  <View style={styles.dropdownItem}>
-                    <Text style={[styles.dropdownItemText, { color: "#999" }]}>
-                      No grades available
-                    </Text>
-                  </View>
-                )}
+                {bodyParts.map((part) => (
+                  <TouchableOpacity
+                    key={part.id}
+                    style={styles.dropdownItem}
+                    onPress={() => handleBodyPartSelect(part)}
+                  >
+                    <MaterialIcons 
+                      name={part.id === "all" ? "apps" : "accessibility"} 
+                      size={18} 
+                      color="#0057FF" 
+                    />
+                    <Text style={styles.dropdownItemText}>{part.name}</Text>
+                  </TouchableOpacity>
+                ))}
               </ScrollView>
             </View>
           )}
 
-          {showMediumDropdown && (
+          {showDifficultyDropdown && (
             <View
               style={[
                 styles.dropdownMenu,
@@ -835,121 +443,95 @@ export default function Exams() {
               ]}
             >
               <ScrollView style={styles.dropdownScroll}>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setMedium("Medium");
-                    setSelectedMediumId(null);
-                    setShowMediumDropdown(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>All Mediums</Text>
-                </TouchableOpacity>
-                {mediums.length > 0 ? (
-                  mediums.map((mediumItem: any) => (
-                    <TouchableOpacity
-                      key={mediumItem.id}
-                      style={styles.dropdownItem}
-                      onPress={() => handleMediumSelect(mediumItem)}
-                    >
-                      <Text style={styles.dropdownItemText}>
-                        {mediumItem.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                ) : (
-                  <View style={styles.dropdownItem}>
-                    <Text style={[styles.dropdownItemText, { color: "#999" }]}>
-                      No mediums available
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
-            </View>
-          )}
-
-          {showSubjectDropdown && (
-            <View
-              style={[
-                styles.dropdownMenu,
-                { left: 0, width: "78%", zIndex: 101 },
-              ]}
-            >
-              <ScrollView style={styles.dropdownScroll}>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setSubject("Subject");
-                    setSelectedSubjectId(null);
-                    setShowSubjectDropdown(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>All Subjects</Text>
-                </TouchableOpacity>
-                {subjects.length > 0 ? (
-                  subjects.map((subjectItem: any) => (
-                    <TouchableOpacity
-                      key={subjectItem.id}
-                      style={styles.dropdownItem}
-                      onPress={() => handleSubjectSelect(subjectItem)}
-                    >
-                      <Text style={styles.dropdownItemText}>
-                        {subjectItem.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                ) : (
-                  <View style={styles.dropdownItem}>
-                    <Text style={[styles.dropdownItemText, { color: "#999" }]}>
-                      No subjects available
-                    </Text>
-                  </View>
-                )}
+                {difficultyLevels.map((level) => (
+                  <TouchableOpacity
+                    key={level.id}
+                    style={styles.dropdownItem}
+                    onPress={() => handleDifficultySelect(level)}
+                  >
+                    <MaterialIcons 
+                      name={
+                        level.id === "all" ? "star" : 
+                        level.id === "beginner" ? "star-outline" :
+                        level.id === "intermediate" ? "star-half" :
+                        "star"
+                      } 
+                      size={18} 
+                      color="#0057FF" 
+                    />
+                    <Text style={styles.dropdownItemText}>{level.name}</Text>
+                  </TouchableOpacity>
+                ))}
               </ScrollView>
             </View>
           )}
         </View>
-      </View>
 
-      {/* Available Exams */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Available Exams</Text>
-        <Text style={styles.subTitle}>Choose your test</Text>
-        {selectedGradeId || selectedMediumId || selectedSubjectId ? (
-          <Text style={styles.filterInfo}>
-            Filtered by: {selectedGradeId ? grade + " " : ""}
-            {selectedMediumId ? medium + " " : ""}
-            {selectedSubjectId ? subject : ""}
-            {filteredExams.length > 0 && ` (${filteredExams.length} exams)`}
-          </Text>
-        ) : (
-          <Text style={styles.filterInfo}>
-            Showing all exams ({filteredExams.length} available)
-          </Text>
+        {/* Reset Filters Button */}
+        {(selectedBodyPart || selectedDifficulty) && (
+          <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
+            <MaterialIcons name="refresh" size={16} color="#0057FF" />
+            <Text style={styles.resetButtonText}>Reset Filters</Text>
+          </TouchableOpacity>
         )}
       </View>
 
-      {filteredExams.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <MaterialIcons name="assignment" size={60} color="#999" />
-          <Text style={styles.emptyText}>
-            {selectedGradeId || selectedMediumId || selectedSubjectId
-              ? "No exams found for your selected filters"
-              : "No exams available at the moment"}
+      {/* Exercise Statistics */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <MaterialIcons name="fitness" size={24} color="#4B9BFF" />
+          <Text style={styles.statNumber}>{filteredExercises.length}</Text>
+          <Text style={styles.statLabel}>Exercises</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <MaterialIcons name="timer" size={24} color="#6BCF7F" />
+          <Text style={styles.statNumber}>
+            {filteredExercises.reduce((sum, ex) => {
+              const mins = parseInt(ex.duration.split('-')[0]) || 5;
+              return sum + mins;
+            }, 0)}
           </Text>
-          {(selectedGradeId || selectedMediumId || selectedSubjectId) && (
-            <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
-              <Text style={styles.resetButtonText}>Reset Filters</Text>
-            </TouchableOpacity>
-          )}
+          <Text style={styles.statLabel}>Total Minutes</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <MaterialIcons name="check-circle" size={24} color="#FF6B6B" />
+          <Text style={styles.statNumber}>
+            {filteredExercises.filter(ex => ex.difficulty === 'beginner').length}
+          </Text>
+          <Text style={styles.statLabel}>Beginner</Text>
+        </View>
+      </View>
+
+      {/* Exercises List */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Available Exercises</Text>
+        <Text style={styles.subTitle}>
+          {selectedBodyPart || selectedDifficulty 
+            ? `Filtered (${filteredExercises.length} exercises)` 
+            : `All exercises (${filteredExercises.length} total)`}
+        </Text>
+      </View>
+
+      {filteredExercises.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <MaterialIcons name="fitness" size={60} color="#999" />
+          <Text style={styles.emptyText}>
+            No exercises found for your selected filters
+          </Text>
+          <TouchableOpacity style={styles.resetButtonLarge} onPress={resetFilters}>
+            <Text style={styles.resetButtonTextLarge}>Reset Filters</Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView style={styles.scrollView}>
-          {filteredExams.map((item, index) => (
-            <ExamCard
-              key={item.id || index}
-              data={item}
-              onStart={handleStartExam}
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          {filteredExercises.map((exercise) => (
+            <ExerciseCard
+              key={exercise.id}
+              data={exercise}
+              onStart={handleStartExercise}
+              onViewProgress={handleViewProgress}
             />
           ))}
         </ScrollView>
@@ -958,39 +540,27 @@ export default function Exams() {
   );
 }
 
-function ExamCard({
+function ExerciseCard({
   data,
   onStart,
+  onViewProgress,
 }: {
   data: any;
   onStart: (data: any) => void;
+  onViewProgress: (data: any) => void;
 }) {
-  // Function to check if exam is active (before end time)
-  const isExamActive = () => {
-    if (!data.examData?.endTime) return true; // If no end time, assume active
-
-    const now = new Date();
-    const endTime = new Date(data.examData.endTime);
-
-    return now < endTime;
+  const getDifficultyIcon = (difficulty: string) => {
+    switch (difficulty) {
+      case 'beginner': return 'star-outline';
+      case 'intermediate': return 'star-half';
+      case 'advanced': return 'star';
+      default: return 'star-outline';
+    }
   };
-
-  // Function to check if exam has started (after start time)
-  const hasExamStarted = () => {
-    if (!data.examData?.startTime) return true; // If no start time, assume started
-
-    const now = new Date();
-    const startTime = new Date(data.examData.startTime);
-
-    return now >= startTime;
-  };
-
-  // Determine button state
-  const canStartExam = isExamActive() && hasExamStarted();
-  const examEnded = !isExamActive();
 
   return (
     <View style={[styles.card, { backgroundColor: data.bg }]}>
+      {/* Wave Background */}
       <View style={styles.simpleWaveContainer}>
         <Svg
           height="100%"
@@ -1011,112 +581,98 @@ function ExamCard({
         </Svg>
       </View>
 
-      <View style={styles.cardTop}>
+      {/* Exercise Header */}
+      <View style={styles.cardHeader}>
         <View style={[styles.iconBox, { backgroundColor: data.iconBg }]}>
-          <MaterialIcons name={data.icon} size={24} color="#FFF" />
+          <MaterialIcons name={getExerciseIcon(data.icon)} size={24} color="#FFF" />
         </View>
-
-        <View style={styles.cardDetails}>
-          <Text style={styles.cardTitle}>{data.subject}</Text>
-
-          <View style={styles.detailRow}>
-            <Image source={icons.calender} style={styles.inputIcon} />
-            <Text style={styles.detailText}>{data.grade}</Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Image source={icons.clock} style={styles.inputIcon} />
-            <Text style={styles.detailText}>{data.time}</Text>
+        
+        <View style={styles.cardTitleContainer}>
+          <Text style={[styles.cardTitle, { color: data.textColor }]}>
+            {data.title}
+          </Text>
+          
+          <View style={styles.cardTags}>
+            <View style={[styles.tag, { backgroundColor: data.textColor + '20' }]}>
+              <MaterialIcons 
+                name={getDifficultyIcon(data.difficulty)} 
+                size={14} 
+                color={data.textColor} 
+              />
+              <Text style={[styles.tagText, { color: data.textColor }]}>
+                {data.difficulty.charAt(0).toUpperCase() + data.difficulty.slice(1)}
+              </Text>
+            </View>
+            
+            <View style={[styles.tag, { backgroundColor: data.textColor + '20' }]}>
+              <MaterialIcons name="accessibility" size={14} color={data.textColor} />
+              <Text style={[styles.tagText, { color: data.textColor }]}>
+                {data.bodyPart.charAt(0).toUpperCase() + data.bodyPart.slice(1)}
+              </Text>
+            </View>
           </View>
         </View>
-
-        <Text
-          style={[
-            styles.unitExam,
-            {
-              color: data.btnColor,
-              backgroundColor: data.btnColor + "20",
-              margin: 4,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              borderRadius: 8,
-              fontSize: 12,
-              fontWeight: "600",
-            },
-          ]}
-        >
-          Unit Exam
-        </Text>
       </View>
 
-      {/* Conditional button rendering */}
-      {canStartExam ? (
+      {/* Exercise Description */}
+      <Text style={styles.cardDescription}>{data.description}</Text>
+
+      {/* Exercise Details */}
+      <View style={styles.detailsContainer}>
+        <View style={styles.detailItem}>
+          <MaterialIcons name="timer" size={16} color="#666" />
+          <Text style={styles.detailText}>{data.duration}</Text>
+        </View>
+        
+        <View style={styles.detailItem}>
+          <MaterialIcons name="repeat" size={16} color="#666" />
+          <Text style={styles.detailText}>{data.sets}</Text>
+        </View>
+      </View>
+
+      {/* Exercise Benefits */}
+      <View style={styles.benefitsContainer}>
+        <MaterialIcons name="check-circle" size={16} color="#6BCF7F" />
+        <Text style={styles.benefitsText}>{data.benefits}</Text>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionButtons}>
         <TouchableOpacity
-          style={[styles.startBtn, { backgroundColor: data.btnColor }]}
+          style={[styles.viewProgressButton, { borderColor: data.btnColor }]}
+          onPress={() => onViewProgress(data)}
+        >
+          <MaterialIcons name="trending-up" size={16} color={data.btnColor} />
+          <Text style={[styles.viewProgressText, { color: data.btnColor }]}>
+            Progress
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.startButton, { backgroundColor: data.btnColor }]}
           onPress={() => onStart(data)}
         >
-          <Text style={styles.startText}>Start</Text>
+          <MaterialIcons name="play-arrow" size={16} color="#FFF" />
+          <Text style={styles.startText}>Start Exercise</Text>
         </TouchableOpacity>
-      ) : examEnded ? (
-        <View style={styles.rankViewContainer}>
-          <TouchableOpacity
-            style={[styles.rankBtn, { backgroundColor: data.btnColor + "40" }]}
-            onPress={() =>
-              router.replace({
-                pathname: "/(root)/(screens)/ExamRanking",
-                params: {
-                  examId: data.examData.id,
-                },
-              })
-            }
-          >
-            <MaterialIcons name="leaderboard" size={16} color={data.btnColor} />
-            <Text style={[styles.rankText, { color: data.btnColor }]}>
-              Rank
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.viewBtn, { backgroundColor: data.btnColor }]}
-            onPress={() =>
-              router.replace({
-                pathname: "/ExamFinished",
-                params: {
-                  examId: data.examData.id,
-                  examTitle: data.title,
-                  duration: data.examData.duration?.toString() || "60",
-                  grade: data.grade,
-                  medium: data.medium,
-                  subject: data.subject,
-                  attemptsAllowed: data.examData.attemptsAllowed,
-                  token: data.token, // Pass token
-                  gradeId: data.examData.gradeId?.toString() || "",
-                  mediumId: data.examData.mediumId?.toString() || "",
-                  subjectId: data.examData.subjectId?.toString() || "",
-                  startTime: data.examData.startTime || "",
-                  endTime: data.examData.endTime || "",
-                  totalMarks: data.examData.totalMarks?.toString() || "",
-                  passingMarks: data.examData.passingMarks?.toString() || "",
-                  enableRanking: data.examData.enableRanking?.toString(), // Add this
-                  showResults: data.examData.showResults?.toString(), // Add this
-                },
-              })
-            }
-          >
-            <MaterialIcons name="visibility" size={16} color="#FFF" />
-            <Text style={styles.viewText}>View</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.disabledBtnContainer}>
-          <Text style={[styles.disabledText, { color: data.btnColor }]}>
-            Not Started
-          </Text>
-        </View>
-      )}
+      </View>
     </View>
   );
 }
+
+const getExerciseIcon = (iconName: string) => {
+  const iconMap: { [key: string]: any } = {
+    hand: "hand",
+    fitness: "fitness",
+    accessibility: "accessibility",
+    "body-outline": "body",
+    "grip-horizontal": "hand-right",
+    "rotate-right": "refresh-circle",
+    "hand-peace": "hand-left",
+    "weight-lifter": "barbell",
+  };
+  return iconMap[iconName] || "fitness";
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -1147,11 +703,47 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 25,
     position: "relative",
   },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  welcomeText: {
+    color: "rgba(255, 255, 255, 0.9)",
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+  },
+  userName: {
+    color: "#FFF",
+    fontSize: 20,
+    fontWeight: "bold",
+    fontFamily: "Poppins-Bold",
+  },
+  progressButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 5,
+  },
+  progressButtonText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
+  },
   appTitle: {
     color: "#FFF",
-    fontSize: 26,
-    fontWeight: "700",
-    marginBottom: 10,
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 15,
+    fontFamily: "Poppins-Bold",
+  },
+  filterContainer: {
+    position: "relative",
   },
   row: {
     flexDirection: "row",
@@ -1168,10 +760,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     flex: 1,
+    gap: 8,
   },
   dropdownText: {
     color: "#666",
     fontSize: 14,
+    flex: 1,
+    fontFamily: "Poppins-Regular",
   },
   dropdownMenu: {
     position: "absolute",
@@ -1181,10 +776,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E6E6E6",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 5,
@@ -1194,48 +786,98 @@ const styles = StyleSheet.create({
     maxHeight: 200,
   },
   dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
+    gap: 8,
   },
   dropdownItemText: {
     fontSize: 14,
     color: "#333",
+    fontFamily: "Poppins-Regular",
   },
-  filterBtn: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 10,
+  resetButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
     gap: 5,
+    marginTop: 5,
   },
-  filterIcon: {
-    width: 20,
-    height: 15,
+  resetButtonText: {
+    color: "#0057FF",
+    fontSize: 12,
+    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
+  },
+  resetButtonLarge: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: "#0057FF",
+    borderRadius: 10,
+    marginTop: 20,
+  },
+  resetButtonTextLarge: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+    fontFamily: "Poppins-SemiBold",
+  },
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  statCard: {
+    backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    flex: 1,
+    marginHorizontal: 5,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1e293b",
+    marginTop: 5,
+    fontFamily: "Poppins-Bold",
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#64748b",
+    marginTop: 2,
+    fontFamily: "Poppins-Regular",
   },
   sectionHeader: {
     paddingHorizontal: 20,
-    paddingTop: 20,
     paddingBottom: 10,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: "700",
-    color: "#333",
+    fontWeight: "bold",
+    color: "#1e293b",
+    fontFamily: "Poppins-Bold",
   },
   subTitle: {
     color: "#888",
     marginTop: 2,
-  },
-  filterInfo: {
     fontSize: 12,
-    color: "#0057FF",
-    marginTop: 5,
-    fontStyle: "italic",
+    fontFamily: "Poppins-Regular",
   },
   emptyContainer: {
     flex: 1,
@@ -1248,24 +890,15 @@ const styles = StyleSheet.create({
     color: "#6c757d",
     textAlign: "center",
     marginTop: 15,
-    marginBottom: 20,
-  },
-  resetButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: "#0057FF",
-    borderRadius: 8,
-  },
-  resetButtonText: {
-    color: "#fff",
-    fontWeight: "600",
+    fontFamily: "Poppins-Regular",
   },
   scrollView: {
     paddingHorizontal: 15,
+    paddingTop: 10,
   },
   card: {
-    padding: 10,
-    marginVertical: 10,
+    padding: 15,
+    marginVertical: 8,
     borderRadius: 18,
     elevation: 4,
     overflow: "hidden",
@@ -1286,12 +919,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 80,
   },
-  cardTop: {
+  cardHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
     position: "relative",
     zIndex: 2,
+    marginBottom: 10,
   },
   iconBox: {
     padding: 12,
@@ -1299,100 +932,109 @@ const styles = StyleSheet.create({
     position: "relative",
     zIndex: 2,
   },
-  cardDetails: {
+  cardTitleContainer: {
+    flex: 1,
+    marginLeft: 12,
     position: "relative",
     zIndex: 2,
-    flex: 1,
-    marginLeft: 24,
   },
   cardTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginTop: 0,
-    color: "#333",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 6,
+    fontFamily: "Poppins-Bold",
   },
-  detailRow: {
+  cardTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  tag: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  tagText: {
+    fontSize: 10,
+    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardDescription: {
+    fontSize: 13,
+    color: "#666",
+    marginBottom: 10,
+    lineHeight: 18,
+    position: "relative",
+    zIndex: 2,
+    fontFamily: "Poppins-Regular",
+  },
+  detailsContainer: {
+    flexDirection: "row",
+    gap: 15,
+    marginBottom: 10,
+    position: "relative",
+    zIndex: 2,
+  },
+  detailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
   detailText: {
+    fontSize: 12,
     color: "#666",
-    marginTop: 4,
+    fontFamily: "Poppins-Regular",
   },
-  inputIcon: {
-    width: 15,
-    height: 15,
-    marginTop: 3,
-  },
-  unitExam: {
-    fontWeight: "600",
-    fontSize: 14,
-    marginTop: -2,
+  benefitsContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginBottom: 15,
     position: "relative",
     zIndex: 2,
   },
-  startBtn: {
-    marginTop: 6,
+  benefitsText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#6BCF7F",
+    fontStyle: "italic",
+    fontFamily: "Poppins-Regular",
+  },
+  actionButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    position: "relative",
+    zIndex: 2,
+  },
+  viewProgressButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    paddingHorizontal: 20,
     borderRadius: 20,
-    alignSelf: "flex-end",
-    position: "relative",
-    zIndex: 2,
+    borderWidth: 1,
+    gap: 5,
+  },
+  viewProgressText: {
+    fontWeight: "600",
+    fontSize: 13,
+    fontFamily: "Poppins-SemiBold",
+  },
+  startButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 5,
   },
   startText: {
     color: "#FFF",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  // New styles for rank/view buttons
-  rankViewContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 10,
-    position: "relative",
-    zIndex: 2,
-    gap: 4,
-  },
-  rankBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    gap: 5,
-  },
-  rankText: {
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  viewBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    gap: 5,
-  },
-  viewText: {
-    color: "#FFF",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  disabledBtnContainer: {
-    marginTop: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    alignSelf: "flex-end",
-    position: "relative",
-    zIndex: 2,
-    backgroundColor: "#f0f0f0",
-  },
-  disabledText: {
-    fontWeight: "600",
-    fontSize: 14,
+    fontWeight: "bold",
+    fontSize: 13,
+    fontFamily: "Poppins-Bold",
   },
 });

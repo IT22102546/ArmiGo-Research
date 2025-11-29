@@ -13,7 +13,6 @@ import {
   Alert,
   KeyboardTypeOptions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Controller, useForm } from "react-hook-form";
 import { Ionicons } from "@expo/vector-icons";
 import CheckBox from "expo-checkbox";
@@ -25,76 +24,58 @@ import useAuthStore from "@/stores/authStore";
 
 const API = process.env.EXPO_PUBLIC_API_URL;
 
-// Enhanced helper function to validate email or phone
 const isValidIdentifier = (value: string): boolean => {
   if (!value || value.trim() === "") return false;
   
-  // Check if it's an email
   const emailRegex = /^\S+@\S+\.\S+$/;
   if (emailRegex.test(value)) {
     return true;
   }
   
-  // Check if it's a valid phone number (supports international formats)
-  const cleanPhone = value.replace(/\D/g, ''); // Remove non-digits
-  
-  // Phone number should be 9-15 digits (with optional country code)
+  const cleanPhone = value.replace(/\D/g, '');
   return cleanPhone.length >= 9 && cleanPhone.length <= 15;
 };
 
-// Helper function to format phone number
 const formatPhoneNumber = (phone: string): string => {
-  // Remove all non-digits
   const cleaned = phone.replace(/\D/g, '');
   
-  // If it starts with 0, convert to +94 format
   if (cleaned.startsWith('0')) {
     return `+94${cleaned.substring(1)}`;
   }
   
-  // If it's 9 digits, assume it's a Sri Lankan number and add +94
   if (cleaned.length === 9) {
     return `+94${cleaned}`;
   }
   
-  // If it starts with 94, add the +
   if (cleaned.startsWith('94')) {
     return `+${cleaned}`;
   }
   
-  // Otherwise return as is with +
   return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
 };
 
-// Improved helper to determine if identifier is likely email
 const isLikelyEmail = (identifier: string): boolean => {
   if (!identifier) return false;
   
-  // If it already contains @, it's definitely an email
   if (identifier.includes('@')) {
     return true;
   }
   
-  // If it contains . (dot) and letters, it might be an email without @ yet
   if (identifier.includes('.') && /[a-zA-Z]/.test(identifier)) {
     return true;
   }
   
-  // If it contains only digits, it's likely a phone number
   if (/^\d+$/.test(identifier.replace(/\D/g, ''))) {
     return false;
   }
   
-  // If it contains letters, assume it's an email being typed
   if (/[a-zA-Z]/.test(identifier)) {
     return true;
   }
   
-  // Default to phone for empty or numeric input
   return false;
 };
 
-// Get keyboard type based on input
 const getKeyboardType = (value: string): KeyboardTypeOptions => {
   if (!value) return "default";
   
@@ -102,17 +83,14 @@ const getKeyboardType = (value: string): KeyboardTypeOptions => {
     return "email-address";
   }
   
-  // Check if input looks like a phone number
   const cleanValue = value.replace(/\D/g, '');
   if (cleanValue.length > 0 && /^\d+$/.test(cleanValue)) {
     return "phone-pad";
   }
   
-  // Default to default keyboard for mixed input
   return "default";
 };
 
-// Get placeholder based on current input
 const getPlaceholder = (value: string): string => {
   if (!value) return "Enter your email or phone number";
   
@@ -123,7 +101,6 @@ const getPlaceholder = (value: string): string => {
   return "Enter your phone number";
 };
 
-// Get icon based on input
 const getIconName = (value: string): string => {
   if (!value) return "person-outline";
   
@@ -159,12 +136,10 @@ const SignIn = () => {
   });
   
   const identifierValue = watch("identifier");
-
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { signIn, isSignedIn } = useAuthStore();
+  const { signIn } = useAuthStore();
 
-  // Animation values for icons
   const animatedValues = useRef(
     Array(15)
       .fill(0)
@@ -172,16 +147,13 @@ const SignIn = () => {
   ).current;
   const animationRefs = useRef<Animated.CompositeAnimation[]>([]);
 
-  // Get role from navigation params
   useEffect(() => {
     if (params.role) {
       setUserRole(params.role as string);
       console.log("User role from params:", params.role);
-      console.log("Backend role from params:", params.backendRole);
     }
-  }, [params.role, params.backendRole]);
+  }, [params.role]);
 
-  // Animation functions
   const startAnimations = () => {
     animationRefs.current.forEach((animation) => animation.stop());
     animationRefs.current = [];
@@ -194,13 +166,11 @@ const SignIn = () => {
       const animation = Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.parallel([
-            Animated.timing(animValue, {
-              toValue: 1,
-              duration: 3000 + Math.random() * 2000,
-              useNativeDriver: true,
-            }),
-          ]),
+          Animated.timing(animValue, {
+            toValue: 1,
+            duration: 3000 + Math.random() * 2000,
+            useNativeDriver: true,
+          }),
           Animated.timing(animValue, {
             toValue: 0,
             duration: 3000 + Math.random() * 2000,
@@ -228,7 +198,6 @@ const SignIn = () => {
     };
   }, []);
 
-  // Clear API errors when user starts typing
   const clearApiErrors = (field: string) => {
     setApiErrors((prev) => ({
       ...prev,
@@ -237,25 +206,58 @@ const SignIn = () => {
     clearErrors(field);
   };
 
-  // Handle forgot password navigation
   const handleForgotPassword = () => {
     router.push("/(auth)/forgetpassword");
   };
 
-  // Handle sign up navigation
- const handleSignUp = () => {
-  router.push({
-    pathname: "/(auth)/sign-up",
-    params: { role: userRole } // Pass the role parameter
-  });
-};
+  const handleSignUp = () => {
+    router.push({
+      pathname: "/(auth)/sign-up",
+      params: { role: userRole }
+    });
+  };
 
-  // Handle sign in with email or phone
+  const createMockUser = (matchedMock: any) => {
+    const baseUser = {
+      _id: `mock-${Date.now()}`,
+      firstName: matchedMock.firstName,
+      lastName: matchedMock.lastName,
+      email: matchedMock.identifier,
+      role: matchedMock.role,
+      mobile: "+94771234567",
+      phone: "+94771234567",
+      profilePicture: null,
+      dateOfBirth: null,
+      isAdmin: false,
+      username: matchedMock.identifier.split('@')[0],
+      status: "ACTIVE",
+      joinDate: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Add role-specific fields
+    if (matchedMock.role === "INTERNAL_PARENT") {
+      return {
+        ...baseUser,
+        children: [],
+        emergencyContact: "",
+        relationship: "Parent",
+      };
+    } else {
+      return {
+        ...baseUser,
+        specialization: "General Physiotherapy",
+        licenseNumber: "PT-12345",
+        experience: "5 years",
+      };
+    }
+  };
+
   const onSubmit = async (credentials: { identifier: string; password: string }) => {
     try {
       setLoading(true);
 
-      // Validate identifier
       if (!isValidIdentifier(credentials.identifier)) {
         setError("identifier", {
           type: "manual",
@@ -265,7 +267,6 @@ const SignIn = () => {
         return;
       }
 
-      // Format phone number if it's not an email
       let formattedIdentifier = credentials.identifier;
       const isEmailInput = isLikelyEmail(credentials.identifier) && credentials.identifier.includes('@');
       
@@ -275,21 +276,72 @@ const SignIn = () => {
 
       console.log("📤 Sending login request:", {
         identifier: formattedIdentifier,
-        isEmail: isEmailInput,
         selectedRole: userRole,
       });
 
-      // Prepare allowedRoles based on selected role
-      let allowedRoles: string[] = [];
+      // Mock accounts for testing
+      const mockAccounts = [
+        {
+          identifier: "parent@example.com",
+          password: "parent123",
+          role: "INTERNAL_PARENT",
+          firstName: "Randy",
+          lastName: "Perera",
+        },
+        {
+          identifier: "physio@example.com",
+          password: "physio123",
+          role: "INTERNAL_PHYSIOTHERAPIST",
+          firstName: "Dr. John",
+          lastName: "Doe",
+        },
+      ];
+
+      const matchedMock = mockAccounts.find(
+        (m) =>
+          m.identifier.toLowerCase() === formattedIdentifier.toLowerCase() &&
+          m.password === credentials.password
+      );
+
+      if (matchedMock) {
+        if (userRole) {
+          const isParentPortal = userRole === "Parent" || userRole === "PARENT";
+          const isPhysioPortal = userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST";
+
+          if ((isParentPortal && matchedMock.role !== "INTERNAL_PARENT") || 
+              (isPhysioPortal && matchedMock.role !== "INTERNAL_PHYSIOTHERAPIST")) {
+            Alert.alert(
+              "Invalid Portal Access",
+              `This account cannot access the selected portal. Please choose the correct portal.`
+            );
+            setLoading(false);
+            return;
+          }
+        }
+
+        const mockUser = createMockUser(matchedMock);
+        console.log("👤 Mock user created:", mockUser);
+
+        await signIn(mockUser, "mockAccessToken", "mockRefreshToken");
+
+        if (matchedMock.role === "INTERNAL_PARENT") {
+          router.replace("/(root)/(tabs)/home");
+        } else {
+          router.replace("/(root)/(tabs)/PhysiotherapistHome");
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      // Real API call
+      const allowedRoles: string[] = [];
       
       if (userRole) {
-        // Define which roles are allowed based on the selected portal
-        if (userRole === "Teacher" || userRole === "TEACHER") {
-          // Teacher portal - allow only teacher roles
-          allowedRoles = ["INTERNAL_TEACHER", "EXTERNAL_TEACHER"];
-        } else if (userRole === "Internal" || userRole === "INTERNAL_STUDENT") {
-          // Student portal - allow only student roles
-          allowedRoles = ["INTERNAL_STUDENT", "EXTERNAL_STUDENT"];
+        if (userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST") {
+          allowedRoles.push("INTERNAL_PHYSIOTHERAPIST", "EXTERNAL_PHYSIOTHERAPIST");
+        } else if (userRole === "Parent" || userRole === "PARENT") {
+          allowedRoles.push("INTERNAL_PARENT", "EXTERNAL_PARENT");
         }
       }
 
@@ -298,7 +350,6 @@ const SignIn = () => {
         password: credentials.password,
       };
 
-      // Only add allowedRoles if we have them
       if (allowedRoles.length > 0) {
         requestBody.allowedRoles = allowedRoles;
       }
@@ -317,18 +368,11 @@ const SignIn = () => {
       if (!response.ok) {
         const errorData = await response.json();
         
-        // Check if error is due to role mismatch
         if (errorData.message?.includes("role") || errorData.message?.includes("Role") || errorData.message?.includes("not allowed")) {
           Alert.alert(
             "Role Mismatch",
-            `This account cannot access the ${userRole === "Teacher" || userRole === "TEACHER" ? "Teacher" : "Student"} portal. Please use the correct portal for your account type.`,
-            [
-              {
-                text: "Go Back",
-                onPress: () => router.back(),
-                style: "cancel"
-              }
-            ]
+            `This account cannot access the ${userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST" ? "Physiotherapist" : "Parent"} portal. Please use the correct portal for your account type.`,
+            [{ text: "Go Back", onPress: () => router.back(), style: "cancel" }]
           );
         } else {
           throw new Error(errorData.message || "Login failed");
@@ -341,54 +385,37 @@ const SignIn = () => {
       const result = await response.json();
       console.log("📱 Login API Response:", result);
 
-      // Extract data from response
       const { accessToken, refreshToken, user } = result;
 
-      console.log("🔍 Checking for tokens in response...");
-      console.log("🔑 Access Token:", accessToken ? "Yes" : "No");
-      console.log("🔑 Refresh Token:", refreshToken ? "Yes" : "No");
-      console.log("👤 User:", user ? "Yes" : "No");
-      console.log("👤 User Role:", user?.role);
-
       if (!accessToken || !refreshToken || !user) {
-        console.warn("⚠️ No tokens or user data in response");
-        console.warn("Response structure:", result);
         throw new Error("Missing tokens or user data in response");
       }
 
-      // Verify the user role matches the expected portal
       if (userRole) {
-        const isTeacherPortal = userRole === "Teacher" || userRole === "TEACHER";
-        const isStudentPortal = userRole === "Internal" || userRole === "INTERNAL_STUDENT";
+        const isPhysiotherapistPortal = userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST";
+        const isParentPortal = userRole === "Parent" || userRole === "PARENT";
         
-        const userIsTeacher = user.role === "INTERNAL_TEACHER" || user.role === "EXTERNAL_TEACHER";
-        const userIsStudent = user.role === "INTERNAL_STUDENT" || user.role === "EXTERNAL_STUDENT";
+        const userIsPhysiotherapist = user.role === "INTERNAL_PHYSIOTHERAPIST" || user.role === "EXTERNAL_PHYSIOTHERAPIST";
+        const userIsParent = user.role === "INTERNAL_PARENT" || user.role === "EXTERNAL_PARENT";
         
-        if ((isTeacherPortal && !userIsTeacher) || (isStudentPortal && !userIsStudent)) {
+        if ((isPhysiotherapistPortal && !userIsPhysiotherapist) || (isParentPortal && !userIsParent)) {
           Alert.alert(
             "Invalid Portal Access",
-            `You are trying to access the ${isTeacherPortal ? "Teacher" : "Student"} portal with a ${user.role} account. Please use the correct portal.`,
-            [
-              {
-                text: "Go Back",
-                onPress: () => router.back(),
-                style: "cancel"
-              }
-            ]
+            `You are trying to access the ${isPhysiotherapistPortal ? "Physiotherapist" : "Parent"} portal with a ${user.role} account. Please use the correct portal.`,
+            [{ text: "Go Back", onPress: () => router.back(), style: "cancel" }]
           );
           setLoading(false);
           return;
         }
       }
 
-      // Call signIn with the extracted data
       await signIn(user, accessToken, refreshToken);
 
       console.log("✅ Sign in successful!");
-      if(userRole === "Internal" || userRole === "INTERNAL_STUDENT" || userRole === "External" || userRole === "EXTERNAL_STUDENT") {
-              router.replace("/(root)/(tabs)/home");
-      } else if(userRole === "Teacher" || userRole === "TEACHER" || userRole === "INTERNAL_TEACHER" || userRole === "EXTERNAL_TEACHER") {
-              router.replace("/(root)/(tabs)/TeacherHome");
+      if(userRole === "Parent" || userRole === "PARENT") {
+        router.replace("/(root)/(tabs)/home");
+      } else if(userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST") {
+        router.replace("/(root)/(tabs)/PhysiotherapistHome");
       }
     } catch (error: any) {
       console.error("❌ Sign in error:", error);
@@ -398,15 +425,13 @@ const SignIn = () => {
     }
   };
 
-  // Helper function to determine input border color
-  const getInputBorderColor = (fieldName: string) => {
+  const getInputBorderColor = (fieldName: keyof typeof errors) => {
     if (errors[fieldName] || apiErrors[fieldName]) {
       return "#ef4444";
     }
     return "#d1d5db";
   };
 
-  // Render icons animation
   const renderDistributedIcons = () => {
     const selectedIcons: ImageSourcePropType[] = [
       icons.Icon1,
@@ -448,16 +473,9 @@ const SignIn = () => {
     ];
 
     return selectedIcons.map((icon, index) => {
-      let position;
-
-      if (index < predefinedPositions.length) {
-        position = predefinedPositions[index];
-      } else {
-        position = {
-          top: 30 + Math.random() * 140,
-          left: 15 + Math.random() * 70,
-        };
-      }
+      let position = index < predefinedPositions.length 
+        ? predefinedPositions[index]
+        : { top: 30 + Math.random() * 140, left: 15 + Math.random() * 70 };
 
       const randomOpacity = 0.8 + Math.random() * 0.2;
       const randomSize = 20 + Math.random() * 12;
@@ -496,11 +514,7 @@ const SignIn = () => {
             opacity: opacity,
             tintColor: "#FFFFFF",
             zIndex: 2,
-            transform: [
-              { translateY: translateY },
-              { scale: scale },
-              { rotate: rotate },
-            ],
+            transform: [{ translateY }, { scale }, { rotate }],
             shadowColor: "#FFFFFF",
             shadowOffset: { width: 0, height: 0 },
             shadowOpacity: 0.8,
@@ -514,27 +528,17 @@ const SignIn = () => {
 
   return (
     <View style={styles.container}>
-      {/* Top Gradient with Icons and Waves */}
       <LinearGradient
         colors={["#4B3AFF", "#5C6CFF"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.topSection}
       >
-        {/* Icons Layer with Animation */}
         <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
+        <Text style={styles.header}>Armigo</Text>
 
-        {/* Title - Only Learn APP in top section */}
-        <Text style={styles.header}>Learn APP</Text>
-
-        {/* Light Blue Wave - BELOW the white wave */}
         <View style={styles.lightBlueWaveContainer}>
-          <Svg
-            height="92"
-            width="90%"
-            viewBox="0 0 1440 320"
-            style={styles.lightBlueWaveSvg}
-          >
+          <Svg height="92" width="90%" viewBox="0 0 1440 320">
             <Path
               fill="#4B9BFF"
               d="M0,180L48,170C96,160,192,140,288,130C384,120,480,120,576,135C672,150,768,180,864,190C960,200,1056,190,1152,175C1248,160,1344,130,1392,115L1440,100L1440,320L0,320Z"
@@ -542,13 +546,7 @@ const SignIn = () => {
           </Svg>
         </View>
 
-        {/* White Wave - ABOVE the blue wave */}
-        <Svg
-          height="92"
-          width="100%"
-          viewBox="0 0 1440 320"
-          style={styles.whiteWaveWrapper}
-        >
+        <Svg height="92" width="100%" viewBox="0 0 1440 320" style={styles.whiteWaveWrapper}>
           <Path
             fill="#ffffff"
             d="M0,224L48,202.7C96,181,192,139,288,128C384,117,480,139,576,165.3C672,192,768,224,864,234.7C960,245,1056,235,1152,213.3C1248,192,1344,160,1392,144L1440,128L1440,320L0,320Z"
@@ -561,26 +559,22 @@ const SignIn = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Heading */}
         <View style={styles.headingContainer}>
           <Text style={styles.welcomeText}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to your account</Text>
         </View>
 
-        {/* Role Indicator */}
         {userRole && (
           <View style={styles.roleIndicator}>
             <Text style={styles.roleIndicatorText}>
-              {userRole === "Teacher" || userRole === "TEACHER" 
-                ? "Signing in as Teacher" 
-                : "Signing in as Student"}
+              {userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST" 
+                ? "Signing in as Physiotherapist" 
+                : "Signing in as Parent"}
             </Text>
           </View>
         )}
 
-        {/* Form */}
         <View style={styles.formContainer}>
-          {/* Email or Phone */}
           <Controller
             control={control}
             name="identifier"
@@ -593,12 +587,7 @@ const SignIn = () => {
                 <Text style={styles.label}>
                   Email or Phone Number <Text style={styles.required}>*</Text>
                 </Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    { borderColor: getInputBorderColor("identifier") },
-                  ]}
-                >
+                <View style={[styles.inputWrapper, { borderColor: getInputBorderColor("identifier") }]}>
                   <Ionicons
                     name={getIconName(value)}
                     size={18}
@@ -621,7 +610,7 @@ const SignIn = () => {
                 </View>
                 {(errors.identifier || apiErrors.identifier) && (
                   <Text style={styles.errorText}>
-                    {(errors.identifier?.message as string) || apiErrors.identifier}
+                    {errors.identifier?.message || apiErrors.identifier}
                   </Text>
                 )}
                 {value && !errors.identifier && (
@@ -633,7 +622,6 @@ const SignIn = () => {
             )}
           />
 
-          {/* Password */}
           <Controller
             control={control}
             name="password"
@@ -643,18 +631,11 @@ const SignIn = () => {
                 <Text style={styles.label}>
                   Password <Text style={styles.required}>*</Text>
                 </Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    { borderColor: getInputBorderColor("password") },
-                  ]}
-                >
+                <View style={[styles.inputWrapper, { borderColor: getInputBorderColor("password") }]}>
                   <Ionicons
                     name="lock-closed-outline"
                     size={18}
-                    color={
-                      errors.password || apiErrors.password ? "#ef4444" : "gray"
-                    }
+                    color={errors.password || apiErrors.password ? "#ef4444" : "gray"}
                   />
                   <TextInput
                     placeholder="Enter Your Password"
@@ -673,24 +654,19 @@ const SignIn = () => {
                     <Ionicons
                       name={secureText ? "eye-off-outline" : "eye-outline"}
                       size={20}
-                      color={
-                        errors.password || apiErrors.password
-                          ? "#ef4444"
-                          : "gray"
-                      }
+                      color={errors.password || apiErrors.password ? "#ef4444" : "gray"}
                     />
                   </TouchableOpacity>
                 </View>
                 {(errors.password || apiErrors.password) && (
                   <Text style={styles.errorText}>
-                    {(errors.password?.message as string) || apiErrors.password}
+                    {errors.password?.message || apiErrors.password}
                   </Text>
                 )}
               </View>
             )}
           />
 
-          {/* Remember Me + Forgot */}
           <View style={styles.optionsContainer}>
             <View style={styles.rememberMeContainer}>
               <CheckBox
@@ -705,7 +681,6 @@ const SignIn = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Sign In Button */}
           <TouchableOpacity
             onPress={handleSubmit(onSubmit)}
             style={[styles.signInButton, loading && styles.disabledButton]}
@@ -718,7 +693,10 @@ const SignIn = () => {
             )}
           </TouchableOpacity>
 
-          {/* Sign Up Link */}
+          <Text style={styles.mockInfoText}>
+            For testing: Parent — parent@example.com / parent123  •  Physiotherapist — physio@example.com / physio123
+          </Text>
+
           <View style={styles.signUpContainer}>
             <Text style={styles.signUpText}>Don't You Have An Account? </Text>
             <TouchableOpacity onPress={handleSignUp}>
@@ -774,7 +752,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 2,
   },
-  lightBlueWaveSvg: {},
   scrollContainer: {
     flexGrow: 1,
   },
@@ -893,6 +870,13 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontFamily: "Poppins-SemiBold",
+  },
+  mockInfoText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 12,
+    marginBottom: 12,
+    paddingHorizontal: 16,
   },
   signUpContainer: {
     flexDirection: "row",
