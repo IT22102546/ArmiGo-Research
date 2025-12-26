@@ -1,0 +1,829 @@
+#include <Wire.h>
+#include <math.h>
+
+// MPU9250 variables
+const int MPU9250_ADDRESS = 0x68;
+bool mpuAvailable = false;
+
+// Movement pattern detection
+struct MovementPattern {
+  float accelRangeX = 0, accelRangeY = 0, accelRangeZ = 0;
+  float gyroRangeX = 0, gyroRangeY = 0, gyroRangeZ = 0;
+  float maxAccelX = -1000, minAccelX = 1000;
+  float maxAccelY = -1000, minAccelY = 1000;
+  float maxAccelZ = -1000, minAccelZ = 1000;
+  float maxGyroX = -1000, minGyroX = 1000;
+  float maxGyroY = -1000, minGyroY = 1000;
+  float maxGyroZ = -1000, minGyroZ = 1000;
+};
+
+// System state variables - WRIST SPECIFIC MOVEMENTS
+enum MovementType {
+  STEADY,
+  FLEXION,          // Wrist flexion (palm toward forearm)
+  EXTENSION,        // Wrist extension (back of hand toward forearm)
+  RADIAL_DEVIATION, // Wrist radial deviation (thumb side)
+  ULNAR_DEVIATION   // Wrist ulnar deviation (pinky side)
+};
+
+MovementType currentMovement = STEADY;
+bool isRecording = false;
+bool shouldSaveData = false;
+unsigned long recordingStartTime = 0;
+bool movementSelected = false;
+
+// Data structures
+struct WristData {
+  float accelX, accelY, accelZ;
+  float gyroX, gyroY, gyroZ;
+  float angleX, angleY, angleZ; // Calculated angles
+  unsigned long timestamp;
+  float flexionAngle;        // Flexion/Extension angle
+  float deviationAngle;      // Radial/Ulnar deviation angle
+};
+
+struct PatientInfo {
+  String gender;
+  int age;
+  String hand; // "LEFT" or "RIGHT"
+  String status;
+  MovementType movement;
+};
+
+// Use a fixed-size array instead of Vector
+const int MAX_DATA_POINTS = 1000;
+WristData recordedData[MAX_DATA_POINTS];
+int dataIndex = 0;
+
+PatientInfo patientInfo;
+
+// Movement pattern tracking
+MovementPattern movementPattern;
+
+// Angle calculation variables
+float integratedAngleX = 0, integratedAngleY = 0, integratedAngleZ = 0;
+unsigned long lastIntegrationTime = 0;
+float estimatedFlexionAngle = 0;     // Flexion/Extension angle
+float estimatedDeviationAngle = 0;   // Radial/Ulnar deviation angle
+
+// Filter variables for noise reduction
+float filteredAccX = 0, filteredAccY = 0, filteredAccZ = 0;
+float filteredGyroX = 0, filteredGyroY = 0, filteredGyroZ = 0;
+const float ALPHA = 0.1; // Low-pass filter coefficient
+
+// Wrist-specific calibration offsets
+float wristNeutralFlexion = 0;   // Neutral flexion angle
+float wristNeutralDeviation = 0; // Neutral deviation angle
+
+void setup(void) {
+  Serial.begin(115200);
+  
+  // Initialize I2C for MPU9250
+  Wire.begin(21, 22);
+  Wire.setClock(400000);
+  
+  // Try to initialize MPU9250
+  if (!initMPU9250()) {
+    Serial.println("MPU9250 not detected. Check connections.");
+    mpuAvailable = false;
+  } else {
+    Serial.println("MPU9250 initialized successfully.");
+    delay(100);
+    mpuAvailable = true;
+    
+    // Calibrate MPU9250 for wrist movements
+    calibrateMPU9250();
+  }
+  
+  Serial.println("\n==========================================");
+  Serial.println("     WRIST MOVEMENT ANALYSIS SYSTEM");
+  Serial.println("           Clinical Accuracy");
+  Serial.println("==========================================");
+  Serial.println("EXCEL IMPORT READY!");
+  Serial.println("Connect using:");
+  Serial.println("1. Excel Data Streamer (Windows)");
+  Serial.println("2. PLX-DAQ software");
+  Serial.println("3. Serial terminal with CSV logging");
+  Serial.println("\nWRIST MOVEMENT TYPES:");
+  Serial.println("1. STEADY (Neutral Position)");
+  Serial.println("2. FLEXION (Palm toward forearm)");
+  Serial.println("3. EXTENSION (Back of hand toward forearm)");
+  Serial.println("4. RADIAL DEVIATION (Thumb side)");
+  Serial.println("5. ULNAR DEVIATION (Pinky side)");
+  Serial.println("\nSelect movement type (1-5):");
+}
+
+bool initMPU9250() {
+  // Wake up the MPU9250
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0x00); // Set to zero to wake up
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure gyroscope range (±250 dps - appropriate for wrist)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1B); // GYRO_CONFIG register
+  Wire.write(0x00); // ±250 dps
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure accelerometer range (±4g - appropriate for wrist)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1C); // ACCEL_CONFIG register
+  Wire.write(0x08); // ±4g
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure low pass filter (DLPF = 3, 44Hz bandwidth)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1A); // CONFIG register
+  Wire.write(0x03); // 44 Hz bandwidth
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  return true;
+}
+
+void calibrateMPU9250() {
+  Serial.println("\n=== MPU9250 WRIST CALIBRATION ===");
+  Serial.println("Place wrist in NEUTRAL position:");
+  Serial.println("1. Forearm resting on table");
+  Serial.println("2. Palm facing down");
+  Serial.println("3. Wrist straight (not bent)");
+  Serial.println("\nKeep completely still for 3 seconds...");
+  delay(3000);
+  
+  float sumAccX = 0, sumAccY = 0, sumAccZ = 0;
+  float sumGyroX = 0, sumGyroY = 0, sumGyroZ = 0;
+  int samples = 100;
+  
+  for(int i = 0; i < samples; i++) {
+    float ax, ay, az, gx, gy, gz;
+    readRawMPU9250(ax, ay, az, gx, gy, gz);
+    
+    sumAccX += ax;
+    sumAccY += ay;
+    sumAccZ += az;
+    sumGyroX += gx;
+    sumGyroY += gy;
+    sumGyroZ += gz;
+    
+    delay(10);
+  }
+  
+  // Calculate neutral angles from accelerometer
+  float neutralAccX = sumAccX / samples;
+  float neutralAccY = sumAccY / samples;
+  float neutralAccZ = sumAccZ / samples;
+  
+  // Calculate wrist neutral angles
+  wristNeutralFlexion = atan2(-neutralAccX, sqrt(neutralAccY*neutralAccY + neutralAccZ*neutralAccZ)) * 180.0 / PI;
+  wristNeutralDeviation = atan2(neutralAccY, neutralAccX) * 180.0 / PI;
+  
+  Serial.print("\nWrist Neutral Position Calibrated:");
+  Serial.print("\n  Flexion Angle: ");
+  Serial.print(wristNeutralFlexion, 1);
+  Serial.print("°");
+  Serial.print("\n  Deviation Angle: ");
+  Serial.print(wristNeutralDeviation, 1);
+  Serial.println("°");
+  
+  Serial.print("\nAccelerometer bias - X: "); Serial.print(sumAccX/samples, 4);
+  Serial.print(" Y: "); Serial.print(sumAccY/samples, 4);
+  Serial.print(" Z: "); Serial.print(sumAccZ/samples, 4);
+  Serial.println();
+  
+  Serial.print("Gyroscope bias - X: "); Serial.print(sumGyroX/samples, 4);
+  Serial.print(" Y: "); Serial.print(sumGyroY/samples, 4);
+  Serial.print(" Z: "); Serial.print(sumGyroZ/samples, 4);
+  Serial.println();
+  
+  Serial.println("✓ Wrist calibration complete!");
+}
+
+void readRawMPU9250(float &ax, float &ay, float &az, float &gx, float &gy, float &gz) {
+  if (!mpuAvailable) {
+    ax = ay = az = gx = gy = gz = 0;
+    return;
+  }
+  
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x3B);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU9250_ADDRESS, 14, true);
+  
+  int16_t accelX = Wire.read() << 8 | Wire.read();
+  int16_t accelY = Wire.read() << 8 | Wire.read();
+  int16_t accelZ = Wire.read() << 8 | Wire.read();
+  Wire.read(); Wire.read(); // Temperature
+  int16_t gyroX = Wire.read() << 8 | Wire.read();
+  int16_t gyroY = Wire.read() << 8 | Wire.read();
+  int16_t gyroZ = Wire.read() << 8 | Wire.read();
+  
+  // Convert to proper units (±4g range)
+  ax = accelX / 8192.0;  // ±4g range: 8192 LSB/g
+  ay = accelY / 8192.0;
+  az = accelZ / 8192.0;
+  
+  // Convert to proper units (±250 degrees/s range)
+  gx = gyroX / 131.0;    // ±250 degrees/s range: 131 LSB/dps
+  gy = gyroY / 131.0;
+  gz = gyroZ / 131.0;
+}
+
+void readAllSensors(WristData &data) {
+  float rawAccX, rawAccY, rawAccZ;
+  float rawGyroX, rawGyroY, rawGyroZ;
+  
+  readRawMPU9250(rawAccX, rawAccY, rawAccZ, rawGyroX, rawGyroY, rawGyroZ);
+  
+  // Apply low-pass filter
+  filteredAccX = ALPHA * rawAccX + (1 - ALPHA) * filteredAccX;
+  filteredAccY = ALPHA * rawAccY + (1 - ALPHA) * filteredAccY;
+  filteredAccZ = ALPHA * rawAccZ + (1 - ALPHA) * filteredAccZ;
+  filteredGyroX = ALPHA * rawGyroX + (1 - ALPHA) * filteredGyroX;
+  filteredGyroY = ALPHA * rawGyroY + (1 - ALPHA) * filteredGyroY;
+  filteredGyroZ = ALPHA * rawGyroZ + (1 - ALPHA) * filteredGyroZ;
+  
+  // Store filtered data
+  data.accelX = filteredAccX;
+  data.accelY = filteredAccY;
+  data.accelZ = filteredAccZ;
+  data.gyroX = filteredGyroX;
+  data.gyroY = filteredGyroY;
+  data.gyroZ = filteredGyroZ;
+  
+  // Calculate angles from accelerometer (for static conditions)
+  data.angleX = atan2(filteredAccY, filteredAccZ) * 180.0 / PI;       // Roll
+  data.angleY = atan2(-filteredAccX, sqrt(filteredAccY*filteredAccY + filteredAccZ*filteredAccZ)) * 180.0 / PI; // Pitch
+  data.angleZ = atan2(filteredAccY, filteredAccX) * 180.0 / PI;       // Yaw
+  
+  // Calculate wrist-specific angles relative to neutral position
+  // Flexion/Extension: Based on pitch (angleY)
+  data.flexionAngle = data.angleY - wristNeutralFlexion;
+  
+  // Radial/Ulnar Deviation: Based on roll (angleX) with adjustment
+  // When palm is down in neutral, radial deviation is positive X rotation
+  // Ulnar deviation is negative X rotation
+  data.deviationAngle = data.angleX - wristNeutralDeviation;
+  
+  // Apply sign correction based on hand (left/right)
+  if (patientInfo.hand == "LEFT") {
+    // For left hand, reverse the sign for deviation angles
+    data.deviationAngle = -data.deviationAngle;
+  }
+  
+  // Update min/max values for pattern analysis
+  movementPattern.minAccelX = min(movementPattern.minAccelX, data.accelX);
+  movementPattern.maxAccelX = max(movementPattern.maxAccelX, data.accelX);
+  movementPattern.minAccelY = min(movementPattern.minAccelY, data.accelY);
+  movementPattern.maxAccelY = max(movementPattern.maxAccelY, data.accelY);
+  movementPattern.minAccelZ = min(movementPattern.minAccelZ, data.accelZ);
+  movementPattern.maxAccelZ = max(movementPattern.maxAccelZ, data.accelZ);
+  
+  movementPattern.minGyroX = min(movementPattern.minGyroX, data.gyroX);
+  movementPattern.maxGyroX = max(movementPattern.maxGyroX, data.gyroX);
+  movementPattern.minGyroY = min(movementPattern.minGyroY, data.gyroY);
+  movementPattern.maxGyroY = max(movementPattern.maxGyroY, data.gyroY);
+  movementPattern.minGyroZ = min(movementPattern.minGyroZ, data.gyroZ);
+  movementPattern.maxGyroZ = max(movementPattern.maxGyroZ, data.gyroZ);
+  
+  data.timestamp = millis() - recordingStartTime;
+}
+
+String analyzeMovementPattern() {
+  if (!mpuAvailable) return "No IMU data";
+  
+  // Calculate ranges
+  movementPattern.accelRangeX = abs(movementPattern.maxAccelX - movementPattern.minAccelX);
+  movementPattern.accelRangeY = abs(movementPattern.maxAccelY - movementPattern.minAccelY);
+  movementPattern.accelRangeZ = abs(movementPattern.maxAccelZ - movementPattern.minAccelZ);
+  movementPattern.gyroRangeX = abs(movementPattern.maxGyroX - movementPattern.minGyroX);
+  movementPattern.gyroRangeY = abs(movementPattern.maxGyroY - movementPattern.minGyroY);
+  movementPattern.gyroRangeZ = abs(movementPattern.maxGyroZ - movementPattern.minGyroZ);
+  
+  // Pattern detection for wrist movements
+  if (movementPattern.gyroRangeY > 40.0) { // Significant Y-axis gyro movement
+    if (movementPattern.maxGyroY > 0) {
+      return "WRIST FLEXION movement detected";
+    } else {
+      return "WRIST EXTENSION movement detected";
+    }
+  } else if (movementPattern.gyroRangeX > 30.0) { // X-axis gyro movement
+    if (movementPattern.maxGyroX > 0) {
+      return patientInfo.hand == "RIGHT" ? "RADIAL DEVIATION detected" : "ULNAR DEVIATION detected";
+    } else {
+      return patientInfo.hand == "RIGHT" ? "ULNAR DEVIATION detected" : "RADIAL DEVIATION detected";
+    }
+  }
+  
+  return "Minimal wrist movement";
+}
+
+void startRecording() {
+  isRecording = true;
+  recordingStartTime = millis();
+  dataIndex = 0;
+  
+  // Reset movement pattern tracking
+  movementPattern = MovementPattern();
+  
+  // Reset angle integration
+  integratedAngleX = integratedAngleY = integratedAngleZ = 0;
+  estimatedFlexionAngle = estimatedDeviationAngle = 0;
+  lastIntegrationTime = millis();
+  
+  Serial.println("\n=== RECORDING STARTED ===");
+  Serial.println("Press 's' to STOP recording");
+  
+  // Display specific instructions based on movement type
+  switch(currentMovement) {
+    case FLEXION:
+      Serial.println("Movement: WRIST FLEXION (palm toward forearm)");
+      Serial.println("Perform smooth wrist bending toward palm side");
+      Serial.println("Typical range: 0° to 80°");
+      break;
+    case EXTENSION:
+      Serial.println("Movement: WRIST EXTENSION (back of hand toward forearm)");
+      Serial.println("Perform smooth wrist bending toward back of hand");
+      Serial.println("Typical range: 0° to 70°");
+      break;
+    case RADIAL_DEVIATION:
+      Serial.println("Movement: RADIAL DEVIATION (thumb side movement)");
+      Serial.println("Move wrist toward thumb side");
+      Serial.println("Typical range: 0° to 20°");
+      break;
+    case ULNAR_DEVIATION:
+      Serial.println("Movement: ULNAR DEVIATION (pinky side movement)");
+      Serial.println("Move wrist toward pinky side");
+      Serial.println("Typical range: 0° to 30°");
+      break;
+    default:
+      Serial.println("Live tracking of wrist angles");
+  }
+}
+
+void stopRecording() {
+  isRecording = false;
+  movementSelected = false;
+  
+  Serial.println("\n=== RECORDING STOPPED ===");
+  Serial.print("Duration: ");
+  Serial.print((millis() - recordingStartTime) / 1000.0, 1);
+  Serial.println(" seconds");
+  Serial.print("Data points collected: ");
+  Serial.println(dataIndex);
+  
+  Serial.println("\nOptions:");
+  Serial.println("  'y' - Send data to Excel");
+  Serial.println("  'n' - Discard data");
+  
+  shouldSaveData = true;
+}
+
+String readSerialLine() {
+  String input = "";
+  unsigned long startTime = millis();
+  
+  while (millis() - startTime < 30000) {
+    if (Serial.available() > 0) {
+      char c = Serial.read();
+      
+      if (c == '\n' || c == '\r') {
+        while (Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        return input;
+      } else {
+        input += c;
+      }
+    }
+    delay(10);
+  }
+  return input;
+}
+
+void getPatientInfo() {
+  Serial.println("\n=== PATIENT INFORMATION ===");
+  
+  while(Serial.available() > 0) Serial.read();
+  
+  Serial.print("Gender (M/F): ");
+  patientInfo.gender = readSerialLine();
+  patientInfo.gender.trim();
+  Serial.println(patientInfo.gender);
+  
+  Serial.print("Age: ");
+  String ageStr = readSerialLine();
+  patientInfo.age = ageStr.toInt();
+  Serial.println(patientInfo.age);
+  
+  Serial.print("Hand (LEFT/RIGHT): ");
+  patientInfo.hand = readSerialLine();
+  patientInfo.hand.trim();
+  Serial.println(patientInfo.hand);
+  
+  Serial.print("Status (Healthy/Patient): ");
+  patientInfo.status = readSerialLine();
+  patientInfo.status.trim();
+  Serial.println(patientInfo.status);
+  
+  patientInfo.movement = currentMovement;
+  
+  Serial.println("\nPatient information saved!");
+}
+
+void sendToExcelPLXDAQ() {
+  Serial.println("CLEARDATA"); // Clear Excel sheet in PLX-DAQ
+  Serial.println("LABEL,Timestamp,Gender,Age,Hand,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,FlexionAngle,DeviationAngle");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case FLEXION: movementStr = "FLEXION"; break;
+    case EXTENSION: movementStr = "EXTENSION"; break;
+    case RADIAL_DEVIATION: movementStr = "RADIAL_DEVIATION"; break;
+    case ULNAR_DEVIATION: movementStr = "ULNAR_DEVIATION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    WristData data = recordedData[i];
+    
+    Serial.print("DATA,");
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.hand); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.flexionAngle, 1); Serial.print(",");
+    Serial.println(data.deviationAngle, 1);
+    
+    delay(5);
+  }
+  
+  Serial.println("SAVEWORKBOOKAS,Wrist_Data");
+  Serial.println("\n✓ Data sent to Excel via PLX-DAQ!");
+}
+
+void sendToExcelDataStreamer() {
+  // Header for Excel Data Streamer
+  Serial.println("Timestamp,Gender,Age,Hand,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,FlexionAngle,DeviationAngle");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case FLEXION: movementStr = "FLEXION"; break;
+    case EXTENSION: movementStr = "EXTENSION"; break;
+    case RADIAL_DEVIATION: movementStr = "RADIAL_DEVIATION"; break;
+    case ULNAR_DEVIATION: movementStr = "ULNAR_DEVIATION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    WristData data = recordedData[i];
+    
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.hand); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.flexionAngle, 1); Serial.print(",");
+    Serial.println(data.deviationAngle, 1);
+    
+    delay(5);
+  }
+  
+  Serial.println("\n✓ Data sent to Excel Data Streamer!");
+}
+
+void sendToCSV() {
+  Serial.println("\n=== CSV DATA START ===");
+  Serial.println("Timestamp,Gender,Age,Hand,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,FlexionAngle,DeviationAngle");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case FLEXION: movementStr = "FLEXION"; break;
+    case EXTENSION: movementStr = "EXTENSION"; break;
+    case RADIAL_DEVIATION: movementStr = "RADIAL_DEVIATION"; break;
+    case ULNAR_DEVIATION: movementStr = "ULNAR_DEVIATION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    WristData data = recordedData[i];
+    
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.hand); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.flexionAngle, 1); Serial.print(",");
+    Serial.println(data.deviationAngle, 1);
+  }
+  
+  Serial.println("=== CSV DATA END ===");
+  Serial.println("\n✓ CSV data ready. Save from Serial Terminal.");
+}
+
+void printAngleSummary() {
+  Serial.println("\n=== WRIST MOVEMENT ANALYSIS SUMMARY ===");
+  
+  // Calculate min/max angles from recorded data
+  float minAngleX = 180, maxAngleX = -180;
+  float minAngleY = 180, maxAngleY = -180;
+  float minAngleZ = 180, maxAngleZ = -180;
+  float minFlexionAngle = 180, maxFlexionAngle = -180;
+  float minDeviationAngle = 180, maxDeviationAngle = -180;
+  
+  for (int i = 0; i < dataIndex; i++) {
+    WristData data = recordedData[i];
+    
+    minAngleX = min(minAngleX, data.angleX);
+    maxAngleX = max(maxAngleX, data.angleX);
+    minAngleY = min(minAngleY, data.angleY);
+    maxAngleY = max(maxAngleY, data.angleY);
+    minAngleZ = min(minAngleZ, data.angleZ);
+    maxAngleZ = max(maxAngleZ, data.angleZ);
+    minFlexionAngle = min(minFlexionAngle, data.flexionAngle);
+    maxFlexionAngle = max(maxFlexionAngle, data.flexionAngle);
+    minDeviationAngle = min(minDeviationAngle, data.deviationAngle);
+    maxDeviationAngle = max(maxDeviationAngle, data.deviationAngle);
+  }
+  
+  Serial.println("\nANGLE RANGES:");
+  Serial.print("X-axis (Roll):        "); Serial.print(minAngleX, 1); Serial.print("° to "); Serial.print(maxAngleX, 1); 
+  Serial.print("°  Range: "); Serial.print(maxAngleX - minAngleX, 1); Serial.println("°");
+  
+  Serial.print("Y-axis (Pitch):       "); Serial.print(minAngleY, 1); Serial.print("° to "); Serial.print(maxAngleY, 1);
+  Serial.print("°  Range: "); Serial.print(maxAngleY - minAngleY, 1); Serial.println("°");
+  
+  Serial.print("Z-axis (Yaw):         "); Serial.print(minAngleZ, 1); Serial.print("° to "); Serial.print(maxAngleZ, 1);
+  Serial.print("°  Range: "); Serial.print(maxAngleZ - minAngleZ, 1); Serial.println("°");
+  
+  // Display wrist-specific angles based on movement type
+  if (currentMovement == FLEXION || currentMovement == EXTENSION) {
+    Serial.print("\nWRIST FLEXION/EXTENSION: ");
+    Serial.print(minFlexionAngle, 1); Serial.print("° to "); Serial.print(maxFlexionAngle, 1);
+    Serial.print("°  Range: "); Serial.print(maxFlexionAngle - minFlexionAngle, 1); Serial.println("°");
+    
+    // Provide clinical interpretation
+    if (currentMovement == FLEXION) {
+      Serial.print("  Clinical Range: 0° to 80°");
+      if (maxFlexionAngle > 80) Serial.println("  ✓ Exceeds normal range");
+      else if (maxFlexionAngle > 60) Serial.println("  ✓ Good range of motion");
+      else Serial.println("  ⚠ Limited range of motion");
+    } else {
+      Serial.print("  Clinical Range: 0° to 70°");
+      if (maxFlexionAngle > 70) Serial.println("  ✓ Exceeds normal range");
+      else if (maxFlexionAngle > 50) Serial.println("  ✓ Good range of motion");
+      else Serial.println("  ⚠ Limited range of motion");
+    }
+  }
+  
+  if (currentMovement == RADIAL_DEVIATION || currentMovement == ULNAR_DEVIATION) {
+    Serial.print("\nWRIST DEVIATION: ");
+    Serial.print(minDeviationAngle, 1); Serial.print("° to "); Serial.print(maxDeviationAngle, 1);
+    Serial.print("°  Range: "); Serial.print(maxDeviationAngle - minDeviationAngle, 1); Serial.println("°");
+    
+    // Provide clinical interpretation
+    if (currentMovement == RADIAL_DEVIATION) {
+      Serial.print("  Clinical Range: 0° to 20°");
+      if (maxDeviationAngle > 20) Serial.println("  ✓ Exceeds normal range");
+      else if (maxDeviationAngle > 15) Serial.println("  ✓ Good range of motion");
+      else Serial.println("  ⚠ Limited range of motion");
+    } else {
+      Serial.print("  Clinical Range: 0° to 30°");
+      if (maxDeviationAngle > 30) Serial.println("  ✓ Exceeds normal range");
+      else if (maxDeviationAngle > 20) Serial.println("  ✓ Good range of motion");
+      else Serial.println("  ⚠ Limited range of motion");
+    }
+  }
+  
+  // IMU Movement Pattern Analysis
+  if (mpuAvailable) {
+    movementPattern.accelRangeX = abs(movementPattern.maxAccelX - movementPattern.minAccelX);
+    movementPattern.accelRangeY = abs(movementPattern.maxAccelY - movementPattern.minAccelY);
+    movementPattern.accelRangeZ = abs(movementPattern.maxAccelZ - movementPattern.minAccelZ);
+    movementPattern.gyroRangeX = abs(movementPattern.maxGyroX - movementPattern.minGyroX);
+    movementPattern.gyroRangeY = abs(movementPattern.maxGyroY - movementPattern.minGyroY);
+    movementPattern.gyroRangeZ = abs(movementPattern.maxGyroZ - movementPattern.minGyroZ);
+    
+    Serial.println("\n=== IMU MOVEMENT PATTERN ===");
+    Serial.println("Accelerometer Ranges (g):");
+    Serial.print("  X-axis: "); Serial.print(movementPattern.accelRangeX, 3);
+    Serial.print("  Y-axis: "); Serial.print(movementPattern.accelRangeY, 3);
+    Serial.print("  Z-axis: "); Serial.print(movementPattern.accelRangeZ, 3);
+    
+    Serial.println("\nGyroscope Ranges (°/s):");
+    Serial.print("  X-axis: "); Serial.print(movementPattern.gyroRangeX, 1);
+    Serial.print("  Y-axis: "); Serial.print(movementPattern.gyroRangeY, 1);
+    Serial.print("  Z-axis: "); Serial.print(movementPattern.gyroRangeZ, 1);
+    
+    Serial.println("\n\n=== MOVEMENT INTERPRETATION ===");
+    Serial.println(analyzeMovementPattern());
+  }
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char command = Serial.read();
+    
+    if (command == '\n' || command == '\r') {
+      if (movementSelected && !isRecording && !shouldSaveData) {
+        startRecording();
+      }
+      return;
+    }
+    
+    if (shouldSaveData) {
+      if (command == 'y' || command == 'Y') {
+        while(Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        
+        getPatientInfo();
+        
+        Serial.println("\n=== SELECT EXPORT METHOD ===");
+        Serial.println("1. PLX-DAQ (Recommended for Excel)");
+        Serial.println("2. Excel Data Streamer");
+        Serial.println("3. CSV for Serial Terminal");
+        Serial.println("4. View summary only");
+        Serial.print("Choose (1-4): ");
+        
+        // Wait for method selection
+        while(Serial.available() == 0);
+        char method = Serial.read();
+        
+        switch(method) {
+          case '1':
+            sendToExcelPLXDAQ();
+            break;
+          case '2':
+            sendToExcelDataStreamer();
+            break;
+          case '3':
+            sendToCSV();
+            break;
+          case '4':
+            printAngleSummary();
+            break;
+        }
+        
+        printAngleSummary();
+        shouldSaveData = false;
+        movementSelected = false;
+        Serial.println("\nSelect new movement type (1-5):");
+        
+      } else if (command == 'n' || command == 'N') {
+        while(Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        
+        shouldSaveData = false;
+        movementSelected = false;
+        Serial.println("Data discarded.");
+        Serial.println("\nSelect new movement type (1-5):");
+      }
+      return;
+    }
+    
+    if (!isRecording) {
+      switch(command) {
+        case '1': 
+          currentMovement = STEADY; 
+          movementSelected = true;
+          Serial.print("\nSelected: STEADY (Wrist Neutral Position)");
+          Serial.println("\nPress 'ENTER' to start recording in neutral position");
+          break;
+        case '2': 
+          currentMovement = FLEXION; 
+          movementSelected = true;
+          Serial.print("\nSelected: WRIST FLEXION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Bend wrist, palm toward forearm");
+          break;
+        case '3': 
+          currentMovement = EXTENSION; 
+          movementSelected = true;
+          Serial.print("\nSelected: WRIST EXTENSION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Bend wrist, back of hand toward forearm");
+          break;
+        case '4': 
+          currentMovement = RADIAL_DEVIATION; 
+          movementSelected = true;
+          Serial.print("\nSelected: RADIAL DEVIATION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Move wrist toward thumb side");
+          break;
+        case '5': 
+          currentMovement = ULNAR_DEVIATION; 
+          movementSelected = true;
+          Serial.print("\nSelected: ULNAR DEVIATION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Move wrist toward pinky side");
+          break;
+        case 'c': 
+        case 'C':
+          Serial.println("\n=== RECALIBRATING MPU9250 ===");
+          calibrateMPU9250();
+          Serial.println("\nSelect movement type (1-5):");
+          break;
+      }
+      
+      if (Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+        Serial.read();
+      }
+    } else {
+      if (command == 's' || command == 'S') {
+        stopRecording();
+      }
+    }
+  }
+  
+  if (isRecording) {
+    if (dataIndex < MAX_DATA_POINTS) {
+      readAllSensors(recordedData[dataIndex]);
+      dataIndex++;
+      
+      // Live display
+      static unsigned long lastDisplay = 0;
+      if (millis() - lastDisplay > 300) {
+        WristData data = recordedData[dataIndex-1];
+        
+        Serial.print("⏱ ");
+        Serial.print(data.timestamp / 1000.0, 1);
+        Serial.print("s | ");
+        
+        // Display based on movement type
+        switch(currentMovement) {
+          case FLEXION:
+          case EXTENSION:
+            Serial.print("Flexion: ");
+            Serial.print(data.flexionAngle, 1);
+            Serial.print("° | Accel Y: ");
+            Serial.print(data.accelY, 2);
+            Serial.print("g | Gyro Y: ");
+            Serial.print(data.gyroY, 1);
+            Serial.println("°/s");
+            break;
+          case RADIAL_DEVIATION:
+          case ULNAR_DEVIATION:
+            Serial.print("Deviation: ");
+            Serial.print(data.deviationAngle, 1);
+            Serial.print("° | Accel X: ");
+            Serial.print(data.accelX, 2);
+            Serial.print("g | Gyro X: ");
+            Serial.print(data.gyroX, 1);
+            Serial.println("°/s");
+            break;
+          default:
+            Serial.print("Angles: ");
+            Serial.print("X:");
+            Serial.print(data.angleX, 1);
+            Serial.print("° Y:");
+            Serial.print(data.angleY, 1);
+            Serial.print("° Z:");
+            Serial.print(data.angleZ, 1);
+            Serial.println("°");
+        }
+        lastDisplay = millis();
+      }
+    } else {
+      Serial.println("Data buffer full! Stopping recording.");
+      stopRecording();
+    }
+  }
+  
+  delay(10);
+}
