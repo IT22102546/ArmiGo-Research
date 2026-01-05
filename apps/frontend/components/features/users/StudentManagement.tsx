@@ -46,6 +46,14 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -63,8 +71,6 @@ import {
   Loader2,
   Download,
   RefreshCw,
-  GraduationCap,
-  BookOpen,
   Users,
   CheckCircle2,
   Clock,
@@ -84,33 +90,114 @@ import {
   UserX,
   Key,
   Lock,
+  Heart,
+  Activity,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { createLogger } from "@/lib/utils/logger";
-import { handleApiError } from "@/lib/error-handling";
-import { usersApi } from "@/lib/api/endpoints/users";
-import { gradesApi } from "@/lib/api/endpoints/grades";
-import { mediumsApi } from "@/lib/api/endpoints/mediums";
-import { ApiClient } from "@/lib/api/api-client";
-import type { User } from "@/lib/api/types/auth.types";
-import type { Grade, Medium, StudentProfile } from "@/lib/types";
 import { useTranslations } from "next-intl";
 
-const logger = createLogger("StudentManagement");
+// Dummy patient data
+const dummyPatients = [
+  {
+    id: "pat-001",
+    firstName: "Ranasinghe",
+    lastName: "Silva",
+    email: "ranasinghe.silva@hospital.lk",
+    phone: "+94 701234567",
+    patientId: "PAT-2024-001",
+    status: "ACTIVE",
+    bloodType: "O+",
+    dateOfBirth: "1985-03-15",
+    gender: "Male",
+    ward: "General Ward",
+    admissionDate: "2024-01-10",
+    doctorAssigned: "Dr. Fernando",
+    emergencyContact: "Kandy Silva",
+    emergencyPhone: "+94 701234568",
+    medicalHistory: "Hypertension, Diabetes",
+    emailVerified: true,
+    phoneVerified: true,
+    twoFactorEnabled: true,
+    createdAt: "2024-01-10",
+  },
+  {
+    id: "pat-002",
+    firstName: "Perera",
+    lastName: "Kumari",
+    email: "perera.kumari@hospital.lk",
+    phone: "+94 702234567",
+    patientId: "PAT-2024-002",
+    status: "ACTIVE",
+    bloodType: "A+",
+    dateOfBirth: "1990-07-22",
+    gender: "Female",
+    ward: "ICU",
+    admissionDate: "2024-02-15",
+    doctorAssigned: "Dr. Perera",
+    emergencyContact: "Suneth Kumari",
+    emergencyPhone: "+94 702234568",
+    medicalHistory: "Asthma",
+    emailVerified: true,
+    phoneVerified: false,
+    twoFactorEnabled: false,
+    createdAt: "2024-02-15",
+  },
+  {
+    id: "pat-003",
+    firstName: "Jayasinghe",
+    lastName: "Mendis",
+    email: "jayasinghe.mendis@hospital.lk",
+    phone: "+94 703234567",
+    patientId: "PAT-2024-003",
+    status: "PENDING",
+    bloodType: "B-",
+    dateOfBirth: "1988-11-08",
+    gender: "Male",
+    ward: "Surgical Ward",
+    admissionDate: "2024-03-05",
+    doctorAssigned: "Dr. Silva",
+    emergencyContact: "Nimal Mendis",
+    emergencyPhone: "+94 703234568",
+    medicalHistory: "None",
+    emailVerified: false,
+    phoneVerified: true,
+    twoFactorEnabled: false,
+    createdAt: "2024-03-05",
+  },
+];
+
+// Dummy stats
+const dummyStats = {
+  totalUsers: 156,
+  activeUsers: 128,
+  pendingUsers: 18,
+  suspendedUsers: 10,
+  newUsersToday: 5,
+  newUsersThisWeek: 23,
+  verifiedUsers: 142,
+  unverifiedUsers: 14,
+};
 
 // Extended User type with profile information
-interface UserWithProfile {
+interface Patient {
   id: string;
   email?: string;
   phone?: string;
   firstName: string;
   lastName: string;
-  role: User["role"];
   status?: string;
-  isActive?: boolean;
-  avatar?: string;
-  studentProfile?: StudentProfile;
+  patientId?: string;
+  bloodType?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  ward?: string;
+  admissionDate?: string;
+  doctorAssigned?: string;
+  emergencyContact?: string;
+  emergencyPhone?: string;
+  medicalHistory?: string;
   createdAt?: string;
   updatedAt?: string;
   lastLogin?: string;
@@ -120,7 +207,7 @@ interface UserWithProfile {
   twoFactorEnabled?: boolean;
 }
 
-interface StudentStats {
+interface PatientStats {
   totalUsers: number;
   activeUsers: number;
   pendingUsers: number;
@@ -131,223 +218,148 @@ interface StudentStats {
   unverifiedUsers: number;
 }
 
-const StudentManagement: React.FC = () => {
+const PatientManagement: React.FC = () => {
   const t = useTranslations("users");
-  const [activeTab, setActiveTab] = useState<string>("INTERNAL_STUDENT");
-  const [students, setStudents] = useState<UserWithProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingStats, setLoadingStats] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("INPATIENT");
+  const [patients, setPatients] = useState<Patient[]>(dummyPatients);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterGrade, setFilterGrade] = useState<string>("all");
-  const [filterMedium, setFilterMedium] = useState<string>("all");
+  const [filterWard, setFilterWard] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
+  const [patientToDelete, setPatientToDelete] = useState<string | null>(null);
   const [quickViewOpen, setQuickViewOpen] = useState(false);
-  const [quickViewStudent, setQuickViewStudent] =
-    useState<UserWithProfile | null>(null);
+  const [quickViewPatient, setQuickViewPatient] = useState<Patient | null>(
+    null
+  );
   const [loadingQuickView, setLoadingQuickView] = useState(false);
-  const [stats, setStats] = useState<StudentStats>({
-    totalUsers: 0,
-    activeUsers: 0,
-    pendingUsers: 0,
-    suspendedUsers: 0,
-    newUsersToday: 0,
-    newUsersThisWeek: 0,
-    verifiedUsers: 0,
-    unverifiedUsers: 0,
+  const [addPatientOpen, setAddPatientOpen] = useState(false);
+  const [newPatientForm, setNewPatientForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    dateOfBirth: "",
+    gender: "Male",
+    bloodType: "O+",
+    ward: "General Ward",
+    doctorAssigned: "Dr. Fernando",
+    emergencyContact: "",
+    emergencyPhone: "",
+    medicalHistory: "",
   });
-
-  // Reference data
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [mediums, setMediums] = useState<Medium[]>([]);
+  const [stats, setStats] = useState<PatientStats>(dummyStats);
 
   // Load reference data on mount
   useEffect(() => {
-    loadReferenceData();
+    setStats(dummyStats);
   }, []);
 
-  // Load students when tab changes
-  useEffect(() => {
-    loadStudents();
-    fetchStats();
-  }, [activeTab]);
-
-  const fetchStats = async () => {
-    setLoadingStats(true);
-    try {
-      const response = (await ApiClient.get(
-        `/users/stats?role=${activeTab}`
-      )) as StudentStats;
-      setStats(
-        response || {
-          totalUsers: 0,
-          activeUsers: 0,
-          pendingUsers: 0,
-          suspendedUsers: 0,
-          newUsersToday: 0,
-          newUsersThisWeek: 0,
-          verifiedUsers: 0,
-          unverifiedUsers: 0,
-        }
-      );
-    } catch (error) {
-      console.debug("Stats endpoint not available");
-    } finally {
-      setLoadingStats(false);
+  const handleAddPatient = () => {
+    if (!newPatientForm.firstName || !newPatientForm.lastName) {
+      toast.error("Please fill in first and last name");
+      return;
     }
+
+    const newPatient: Patient = {
+      id: `pat-${Date.now()}`,
+      firstName: newPatientForm.firstName,
+      lastName: newPatientForm.lastName,
+      email: newPatientForm.email,
+      phone: newPatientForm.phone,
+      patientId: `PAT-2024-${String(patients.length + 1).padStart(3, "0")}`,
+      status: "ACTIVE",
+      bloodType: newPatientForm.bloodType,
+      dateOfBirth: newPatientForm.dateOfBirth,
+      gender: newPatientForm.gender,
+      ward: newPatientForm.ward,
+      admissionDate: new Date().toISOString().split("T")[0],
+      doctorAssigned: newPatientForm.doctorAssigned,
+      emergencyContact: newPatientForm.emergencyContact,
+      emergencyPhone: newPatientForm.emergencyPhone,
+      medicalHistory: newPatientForm.medicalHistory,
+      emailVerified: false,
+      phoneVerified: false,
+      twoFactorEnabled: false,
+      createdAt: new Date().toISOString().split("T")[0],
+    };
+
+    setPatients([newPatient, ...patients]);
+    toast.success("Patient added successfully");
+    setAddPatientOpen(false);
+    setNewPatientForm({
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      dateOfBirth: "",
+      gender: "Male",
+      bloodType: "O+",
+      ward: "General Ward",
+      doctorAssigned: "Dr. Fernando",
+      emergencyContact: "",
+      emergencyPhone: "",
+      medicalHistory: "",
+    });
   };
 
-  const loadReferenceData = async () => {
-    try {
-      const [gradesRes, mediumsRes] = await Promise.all([
-        gradesApi.getAll({ includeInactive: false }),
-        mediumsApi.getAll({ includeInactive: false }),
-      ]);
-      setGrades(gradesRes.grades || []);
-      setMediums(mediumsRes.mediums || []);
-    } catch (error) {
-      logger.error("Error loading reference data:", error);
-      handleApiError(
-        error,
-        "StudentManagement.loadReferenceData",
-        "Failed to load reference data"
-      );
-    }
-  };
+  // Filter patients based on search and filters
+  const filteredPatients = patients.filter((patient) => {
+    if (activeTab === "INPATIENT" && patient.ward === "General Ward")
+      return false;
+    if (activeTab === "OUTPATIENT" && patient.ward !== "General Ward")
+      return false;
 
-  const loadStudents = async () => {
-    setLoading(true);
-    try {
-      const response = await usersApi.getAll({ role: activeTab });
-      console.log("[StudentManagement] Students API Response:", response);
-      console.log("[StudentManagement] Response structure:", {
-        hasUsers: !!response?.users,
-        usersLength: response?.users?.length || 0,
-        hasData: !!response?.data,
-        dataLength: response?.data?.length || 0,
-      });
-      const studentsData = response?.users || [];
-      console.log("[StudentManagement] Students Data:", studentsData);
-      console.log("[StudentManagement] First student sample:", studentsData[0]);
-      setStudents(studentsData as UserWithProfile[]);
-    } catch (error) {
-      logger.error("Error loading students:", error);
-      handleApiError(
-        error,
-        "StudentManagement.loadStudents",
-        "Failed to load students"
-      );
-      setStudents([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Filter students based on search and filters
-  const filteredStudents = students.filter((student) => {
     const matchesSearch =
       searchTerm === "" ||
-      `${student.firstName} ${student.lastName}`
+      `${patient.firstName} ${patient.lastName}`
         .toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
-      student.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.studentProfile?.studentId
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase());
+      patient.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.patientId?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesGrade =
-      filterGrade === "all" || student.studentProfile?.gradeId === filterGrade;
-
-    const matchesMedium =
-      filterMedium === "all" ||
-      student.studentProfile?.mediumId === filterMedium;
+    const matchesWard = filterWard === "all" || patient.ward === filterWard;
 
     const matchesStatus =
-      filterStatus === "all" || student.status === filterStatus;
+      filterStatus === "all" || patient.status === filterStatus;
 
-    return matchesSearch && matchesGrade && matchesMedium && matchesStatus;
+    return matchesSearch && matchesWard && matchesStatus;
   });
 
-  // Debug filtering
-  React.useEffect(() => {
-    console.log("[StudentManagement] Filtering debug:", {
-      totalStudents: students.length,
-      filteredStudents: filteredStudents.length,
-      filterStatus,
-      filterGrade,
-      filterMedium,
-      searchTerm,
-      sampleStatus: students[0]?.status,
-    });
-  }, [
-    students.length,
-    filteredStudents.length,
-    filterStatus,
-    filterGrade,
-    filterMedium,
-    searchTerm,
-  ]);
-
   const handleDelete = async () => {
-    if (!studentToDelete) return;
+    if (!patientToDelete) return;
 
-    try {
-      await usersApi.delete(studentToDelete);
-      toast.success(t("studentManagement.deleteSuccess"));
-      loadStudents();
-      fetchStats();
-      setDeleteDialogOpen(false);
-      setStudentToDelete(null);
-    } catch (error) {
-      logger.error("Error deleting student:", error);
-      handleApiError(
-        error,
-        "StudentManagement.handleDelete",
-        "Failed to delete student"
-      );
-    }
+    setPatients(patients.filter((p) => p.id !== patientToDelete));
+    toast.success("Patient deleted successfully");
+    setDeleteDialogOpen(false);
+    setPatientToDelete(null);
   };
 
-  const fetchQuickViewData = async (student: UserWithProfile) => {
+  const fetchQuickViewData = async (patient: Patient) => {
     setLoadingQuickView(true);
-    setQuickViewStudent(student);
+    setQuickViewPatient(patient);
     setQuickViewOpen(true);
-    try {
-      // Fetch additional data if needed
-      const enrichedStudent = { ...student };
-      setQuickViewStudent(enrichedStudent);
-    } catch (error) {
-      console.debug("Quick view data not fully available");
-    } finally {
-      setLoadingQuickView(false);
-    }
+    setLoadingQuickView(false);
   };
 
-  const openDeleteDialog = (studentId: string) => {
-    setStudentToDelete(studentId);
+  const openDeleteDialog = (patientId: string) => {
+    setPatientToDelete(patientId);
     setDeleteDialogOpen(true);
   };
 
   const handleExport = () => {
-    usersApi.exportUsers({
-      role: activeTab,
-      status: filterStatus === "all" ? undefined : filterStatus,
-      search: searchTerm || undefined,
-    });
-    toast.success(t("studentManagement.exportStarted"));
+    toast.success("Export started");
   };
 
   const handleRefresh = () => {
-    loadStudents();
-    fetchStats();
+    toast.success("Data refreshed");
   };
 
   // Verification badges component
-  const getVerificationBadges = (user: UserWithProfile) => {
+  const getVerificationBadges = (patient: Patient) => {
     const badges: React.ReactNode[] = [];
 
-    if (user.emailVerified) {
+    if (patient.emailVerified) {
       badges.push(
         <TooltipProvider key="email">
           <Tooltip>
@@ -365,7 +377,7 @@ const StudentManagement: React.FC = () => {
       );
     }
 
-    if (user.phoneVerified) {
+    if (patient.phoneVerified) {
       badges.push(
         <TooltipProvider key="phone">
           <Tooltip>
@@ -383,7 +395,7 @@ const StudentManagement: React.FC = () => {
       );
     }
 
-    if (user.twoFactorEnabled) {
+    if (patient.twoFactorEnabled) {
       badges.push(
         <TooltipProvider key="2fa">
           <Tooltip>
@@ -414,11 +426,11 @@ const StudentManagement: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <GraduationCap className="h-6 w-6 text-primary" />
-            {t("studentManagement.title")}
+            <Heart className="h-6 w-6 text-primary" />
+            Patient Management
           </h1>
           <p className="text-sm text-muted-foreground">
-            {t("studentManagement.subtitle")}
+            Manage patient records and admissions
           </p>
         </div>
         <div className="flex gap-2">
@@ -434,11 +446,11 @@ const StudentManagement: React.FC = () => {
           </TooltipProvider>
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-1.5" />
-            {t("studentManagement.export")}
+            Export
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={() => setAddPatientOpen(true)}>
             <UserPlus className="h-4 w-4 mr-1.5" />
-            {t("studentManagement.addStudent")}
+            Add Patient
           </Button>
         </div>
       </div>
@@ -449,12 +461,8 @@ const StudentManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.total")}
-                </p>
-                <p className="text-xl font-bold">
-                  {loadingStats ? "-" : stats.totalUsers}
-                </p>
+                <p className="text-xs text-muted-foreground">Total Patients</p>
+                <p className="text-xl font-bold">{stats.totalUsers}</p>
               </div>
               <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                 <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -467,11 +475,9 @@ const StudentManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.active")}
-                </p>
+                <p className="text-xs text-muted-foreground">Active</p>
                 <p className="text-xl font-bold text-green-600">
-                  {loadingStats ? "-" : stats.activeUsers}
+                  {stats.activeUsers}
                 </p>
               </div>
               <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -485,11 +491,9 @@ const StudentManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.pending")}
-                </p>
+                <p className="text-xs text-muted-foreground">Pending</p>
                 <p className="text-xl font-bold text-yellow-600">
-                  {loadingStats ? "-" : stats.pendingUsers}
+                  {stats.pendingUsers}
                 </p>
               </div>
               <div className="h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
@@ -503,11 +507,9 @@ const StudentManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.suspended")}
-                </p>
+                <p className="text-xs text-muted-foreground">Discharged</p>
                 <p className="text-xl font-bold text-red-600">
-                  {loadingStats ? "-" : stats.suspendedUsers}
+                  {stats.suspendedUsers}
                 </p>
               </div>
               <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
@@ -521,12 +523,8 @@ const StudentManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.newToday")}
-                </p>
-                <p className="text-xl font-bold">
-                  {loadingStats ? "-" : stats.newUsersToday}
-                </p>
+                <p className="text-xs text-muted-foreground">New Today</p>
+                <p className="text-xl font-bold">{stats.newUsersToday}</p>
               </div>
               <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                 <TrendingUp className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
@@ -539,12 +537,8 @@ const StudentManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.thisWeek")}
-                </p>
-                <p className="text-xl font-bold">
-                  {loadingStats ? "-" : stats.newUsersThisWeek}
-                </p>
+                <p className="text-xs text-muted-foreground">This Week</p>
+                <p className="text-xl font-bold">{stats.newUsersThisWeek}</p>
               </div>
               <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
                 <Calendar className="h-4 w-4 text-purple-600 dark:text-purple-400" />
@@ -557,11 +551,9 @@ const StudentManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.verified")}
-                </p>
+                <p className="text-xs text-muted-foreground">Verified</p>
                 <p className="text-xl font-bold text-green-600">
-                  {loadingStats ? "-" : stats.verifiedUsers}
+                  {stats.verifiedUsers}
                 </p>
               </div>
               <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -575,11 +567,9 @@ const StudentManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  {t("stats.unverified")}
-                </p>
+                <p className="text-xs text-muted-foreground">Unverified</p>
                 <p className="text-xl font-bold text-orange-600">
-                  {loadingStats ? "-" : stats.unverifiedUsers}
+                  {stats.unverifiedUsers}
                 </p>
               </div>
               <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
@@ -590,22 +580,16 @@ const StudentManagement: React.FC = () => {
         </Card>
       </div>
 
-      {/* Tabs for Internal/External Students */}
+      {/* Tabs for Inpatient/Outpatient */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger
-            value="INTERNAL_STUDENT"
-            className="flex items-center gap-2"
-          >
-            <GraduationCap className="h-4 w-4" />
-            {t("tabs.internalStudents")}
+          <TabsTrigger value="INPATIENT" className="flex items-center gap-2">
+            <Heart className="h-4 w-4" />
+            Inpatients
           </TabsTrigger>
-          <TabsTrigger
-            value="EXTERNAL_STUDENT"
-            className="flex items-center gap-2"
-          >
-            <BookOpen className="h-4 w-4" />
-            {t("tabs.externalStudents")}
+          <TabsTrigger value="OUTPATIENT" className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Outpatients
           </TabsTrigger>
         </TabsList>
 
@@ -618,153 +602,106 @@ const StudentManagement: React.FC = () => {
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder={t("studentManagement.searchPlaceholder")}
+                    placeholder="Search by name, email, or patient ID..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-8 h-9"
                   />
                 </div>
 
-                <Select value={filterGrade} onValueChange={setFilterGrade}>
+                <Select value={filterWard} onValueChange={setFilterWard}>
                   <SelectTrigger className="w-[130px] h-9">
-                    <SelectValue placeholder={t("table.grade")} />
+                    <SelectValue placeholder="Ward" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">
-                      {t("studentManagement.allGrades")}
-                    </SelectItem>
-                    {grades
-                      .filter((grade) => grade.id)
-                      .map((grade) => (
-                        <SelectItem key={grade.id} value={grade.id}>
-                          {grade.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={filterMedium} onValueChange={setFilterMedium}>
-                  <SelectTrigger className="w-[130px] h-9">
-                    <SelectValue placeholder={t("table.medium")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("table.allMediums")}</SelectItem>
-                    {mediums
-                      .filter((medium) => medium.id)
-                      .map((medium) => (
-                        <SelectItem key={medium.id} value={medium.id}>
-                          {medium.name}
-                        </SelectItem>
-                      ))}
+                    <SelectItem value="all">All Wards</SelectItem>
+                    <SelectItem value="General Ward">General Ward</SelectItem>
+                    <SelectItem value="ICU">ICU</SelectItem>
+                    <SelectItem value="Surgical Ward">Surgical Ward</SelectItem>
                   </SelectContent>
                 </Select>
 
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger className="w-[120px] h-9">
-                    <SelectValue placeholder={t("table.status")} />
+                    <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">{t("table.allStatus")}</SelectItem>
-                    <SelectItem value="ACTIVE">{t("table.active")}</SelectItem>
-                    <SelectItem value="INACTIVE">
-                      {t("table.inactive")}
-                    </SelectItem>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
                   </SelectContent>
                 </Select>
 
                 {/* Results count */}
                 <div className="text-xs text-muted-foreground ml-auto">
-                  {t("studentManagement.showingStudents", {
-                    filtered: filteredStudents.length,
-                    total: students.length,
-                  })}
+                  Showing {filteredPatients.length} of {patients.length}
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Students Table */}
+          {/* Patients Table */}
           <Card>
             <CardContent className="pt-6">
               {loading ? (
                 <div className="flex justify-center items-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : filteredStudents.length === 0 ? (
+              ) : filteredPatients.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {t("studentManagement.noStudentsFound")}
+                  No patients found
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>
-                          {t("studentManagement.studentId")}
-                        </TableHead>
-                        <TableHead>{t("table.name")}</TableHead>
-                        <TableHead>{t("table.email")}</TableHead>
-                        <TableHead>{t("table.phone")}</TableHead>
-                        <TableHead>{t("table.grade")}</TableHead>
-                        <TableHead>{t("table.medium")}</TableHead>
-                        <TableHead>{t("table.batch")}</TableHead>
-                        <TableHead>{t("table.verified")}</TableHead>
-                        <TableHead>{t("table.status")}</TableHead>
-                        <TableHead className="text-right">
-                          {t("table.actions")}
-                        </TableHead>
+                        <TableHead>Patient ID</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Ward</TableHead>
+                        <TableHead>Doctor Assigned</TableHead>
+                        <TableHead>Blood Type</TableHead>
+                        <TableHead>Verified</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredStudents.map((student) => (
-                        <TableRow key={student.id}>
+                      {filteredPatients.map((patient) => (
+                        <TableRow key={patient.id}>
                           <TableCell className="font-mono text-sm">
-                            {student.studentProfile?.studentId || "-"}
+                            {patient.patientId || "-"}
                           </TableCell>
                           <TableCell className="font-medium">
-                            {student.firstName} {student.lastName}
+                            {patient.firstName} {patient.lastName}
                           </TableCell>
                           <TableCell className="text-sm">
-                            {student.email}
+                            {patient.email}
                           </TableCell>
-                          <TableCell>{student.phone || "-"}</TableCell>
+                          <TableCell>{patient.phone || "-"}</TableCell>
+                          <TableCell>{patient.ward || "-"}</TableCell>
+                          <TableCell>{patient.doctorAssigned || "-"}</TableCell>
                           <TableCell>
-                            {grades.find(
-                              (g) => g.id === student.studentProfile?.gradeId
-                            )?.name || "-"}
-                          </TableCell>
-                          <TableCell>
-                            {mediums.find(
-                              (m) => m.id === student.studentProfile?.mediumId
-                            )?.name || "-"}
+                            <Badge variant="outline">
+                              {patient.bloodType || "-"}
+                            </Badge>
                           </TableCell>
                           <TableCell>
-                            {(() => {
-                              const batch = student.studentProfile?.batch;
-                              if (!batch) return "-";
-                              if (typeof batch === "object")
-                                return batch.name || "-";
-                              return batch;
-                            })()}
-                          </TableCell>
-                          <TableCell>
-                            {getVerificationBadges(student)}
+                            {getVerificationBadges(patient)}
                           </TableCell>
                           <TableCell>
                             <Badge
                               variant={
-                                student.status === "ACTIVE"
+                                patient.status === "ACTIVE"
                                   ? "success"
-                                  : "destructive"
+                                  : "secondary"
                               }
                             >
-                              {student.status === "ACTIVE"
-                                ? t("table.active")
-                                : student.status === "PENDING"
-                                  ? t("table.pending")
-                                  : student.status === "SUSPENDED"
-                                    ? t("table.suspended")
-                                    : t("table.inactive")}
+                              {patient.status === "ACTIVE"
+                                ? "Active"
+                                : "Pending"}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
@@ -776,15 +713,13 @@ const StudentManagement: React.FC = () => {
                                       variant="ghost"
                                       size="icon"
                                       onClick={() =>
-                                        fetchQuickViewData(student)
+                                        fetchQuickViewData(patient)
                                       }
                                     >
                                       <Eye className="h-4 w-4" />
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>
-                                    {t("table.quickView")}
-                                  </TooltipContent>
+                                  <TooltipContent>Quick View</TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
                               <DropdownMenu>
@@ -797,71 +732,62 @@ const StudentManagement: React.FC = () => {
                                   align="end"
                                   className="w-48"
                                 >
-                                  <DropdownMenuLabel>
-                                    {t("table.actions")}
-                                  </DropdownMenuLabel>
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => {
-                                      window.location.href = `/admin/students/${student.id}`;
+                                      console.log("View profile:", patient.id);
                                     }}
                                   >
                                     <ExternalLink className="h-4 w-4 mr-2" />
-                                    {t("table.viewProfile")}
+                                    View Profile
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => {
-                                      // Handle edit student
-                                      console.log("Edit student:", student.id);
+                                      console.log("Edit patient:", patient.id);
                                     }}
                                   >
                                     <Edit className="h-4 w-4 mr-2" />
-                                    {t("table.edit")}
+                                    Edit
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => {
-                                      const status =
-                                        student.status === "ACTIVE"
-                                          ? "INACTIVE"
+                                      const newStatus =
+                                        patient.status === "ACTIVE"
+                                          ? "PENDING"
                                           : "ACTIVE";
-                                      usersApi
-                                        .updateStatus(student.id, status)
-                                        .then(() => {
-                                          toast.success(
-                                            "Status updated successfully"
-                                          );
-                                          loadStudents();
-                                          fetchStats();
-                                        })
-                                        .catch((error) => {
-                                          handleApiError(
-                                            error,
-                                            "StudentManagement",
-                                            "Failed to update status"
-                                          );
-                                        });
+                                      setPatients(
+                                        patients.map((p) =>
+                                          p.id === patient.id
+                                            ? { ...p, status: newStatus }
+                                            : p
+                                        )
+                                      );
+                                      toast.success(
+                                        "Status updated successfully"
+                                      );
                                     }}
                                   >
-                                    {student.status === "ACTIVE" ? (
+                                    {patient.status === "ACTIVE" ? (
                                       <>
                                         <UserX className="h-4 w-4 mr-2" />
-                                        {t("table.deactivate")}
+                                        Mark Pending
                                       </>
                                     ) : (
                                       <>
                                         <UserCheck className="h-4 w-4 mr-2" />
-                                        {t("table.activate")}
+                                        Mark Active
                                       </>
                                     )}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
-                                    onClick={() => openDeleteDialog(student.id)}
+                                    onClick={() => openDeleteDialog(patient.id)}
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" />
-                                    {t("table.delete")}
+                                    Delete
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -882,20 +808,15 @@ const StudentManagement: React.FC = () => {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("studentManagement.deleteTitle")}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete Patient</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("studentManagement.deleteDescription")}
+              Are you sure you want to delete this patient? This action cannot
+              be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>
-              {t("studentManagement.cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              {t("studentManagement.delete")}
-            </AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -905,27 +826,26 @@ const StudentManagement: React.FC = () => {
         <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-3">
-              {quickViewStudent && (
+              {quickViewPatient && (
                 <>
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={quickViewStudent.avatar} />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-lg">
-                      {quickViewStudent.firstName?.[0]}
-                      {quickViewStudent.lastName?.[0]}
+                      {quickViewPatient.firstName?.[0]}
+                      {quickViewPatient.lastName?.[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div>
                     <p className="font-semibold">
-                      {quickViewStudent.firstName} {quickViewStudent.lastName}
+                      {quickViewPatient.firstName} {quickViewPatient.lastName}
                     </p>
                     <p className="text-sm text-muted-foreground font-normal">
-                      {quickViewStudent.email}
+                      {quickViewPatient.email}
                     </p>
                   </div>
                 </>
               )}
             </SheetTitle>
-            <SheetDescription>Student Quick View</SheetDescription>
+            <SheetDescription>Patient Quick View</SheetDescription>
           </SheetHeader>
 
           {loadingQuickView ? (
@@ -933,24 +853,20 @@ const StudentManagement: React.FC = () => {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            quickViewStudent && (
+            quickViewPatient && (
               <div className="mt-6 space-y-6">
                 {/* Status Badge */}
                 <div className="flex items-center justify-between">
                   <Badge
                     variant={
-                      quickViewStudent.status === "ACTIVE"
+                      quickViewPatient.status === "ACTIVE"
                         ? "success"
-                        : "destructive"
+                        : "secondary"
                     }
                   >
-                    {quickViewStudent.status === "ACTIVE"
-                      ? t("table.active")
-                      : quickViewStudent.status === "PENDING"
-                        ? t("table.pending")
-                        : quickViewStudent.status === "SUSPENDED"
-                          ? t("table.suspended")
-                          : t("table.inactive")}
+                    {quickViewPatient.status === "ACTIVE"
+                      ? "Active"
+                      : "Pending"}
                   </Badge>
                 </div>
 
@@ -966,27 +882,25 @@ const StudentManagement: React.FC = () => {
                     <div>
                       <p className="text-muted-foreground">Phone</p>
                       <p className="font-medium">
-                        {quickViewStudent.phone || "-"}
+                        {quickViewPatient.phone || "-"}
                       </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Email</p>
                       <p className="font-medium truncate">
-                        {quickViewStudent.email}
+                        {quickViewPatient.email}
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Registered</p>
+                      <p className="text-muted-foreground">Admission Date</p>
                       <p className="font-medium">
-                        {quickViewStudent.createdAt
-                          ? format(new Date(quickViewStudent.createdAt), "PP")
-                          : "-"}
+                        {quickViewPatient.admissionDate || "-"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Registration No.</p>
+                      <p className="text-muted-foreground">Patient ID</p>
                       <p className="font-medium font-mono text-xs">
-                        {quickViewStudent.studentProfile?.studentId || "-"}
+                        {quickViewPatient.patientId || "-"}
                       </p>
                     </div>
                   </div>
@@ -994,47 +908,87 @@ const StudentManagement: React.FC = () => {
 
                 <Separator />
 
-                {/* Academic Information */}
+                {/* Medical Information */}
                 <div className="space-y-3">
                   <h4 className="font-medium flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4" />
-                    Academic Information
+                    <Heart className="h-4 w-4" />
+                    Medical Information
                   </h4>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Grade</p>
+                      <p className="text-muted-foreground">Blood Type</p>
                       <p className="font-medium">
-                        {grades.find(
-                          (g) =>
-                            g.id === quickViewStudent.studentProfile?.gradeId
-                        )?.name || "-"}
+                        {quickViewPatient.bloodType || "-"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Medium</p>
+                      <p className="text-muted-foreground">Date of Birth</p>
                       <p className="font-medium">
-                        {mediums.find(
-                          (m) =>
-                            m.id === quickViewStudent.studentProfile?.mediumId
-                        )?.name || "-"}
+                        {quickViewPatient.dateOfBirth || "-"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Batch</p>
+                      <p className="text-muted-foreground">Ward</p>
                       <p className="font-medium">
-                        {(() => {
-                          const batch = quickViewStudent.studentProfile?.batch;
-                          if (!batch) return "-";
-                          if (typeof batch === "object")
-                            return batch.name || "-";
-                          return batch;
-                        })()}
+                        {quickViewPatient.ward || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Gender</p>
+                      <p className="font-medium">
+                        {quickViewPatient.gender || "-"}
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <Separator />
+
+                {/* Doctor & Emergency */}
+                <div className="space-y-3">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Healthcare Team
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <p className="text-muted-foreground">Doctor Assigned</p>
+                      <p className="font-medium">
+                        {quickViewPatient.doctorAssigned || "-"}
+                      </p>
+                    </div>
+                    <div className="flex justify-between">
+                      <p className="text-muted-foreground">Emergency Contact</p>
+                      <p className="font-medium">
+                        {quickViewPatient.emergencyContact || "-"}
+                      </p>
+                    </div>
+                    <div className="flex justify-between">
+                      <p className="text-muted-foreground">Emergency Phone</p>
+                      <p className="font-medium">
+                        {quickViewPatient.emergencyPhone || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Medical History */}
+                {quickViewPatient.medicalHistory && (
+                  <>
+                    <div className="space-y-3">
+                      <h4 className="font-medium flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Medical History
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        {quickViewPatient.medicalHistory}
+                      </p>
+                    </div>
+                    <Separator />
+                  </>
+                )}
 
                 {/* Verification Status */}
                 <div className="space-y-3">
@@ -1048,7 +1002,7 @@ const StudentManagement: React.FC = () => {
                         <Mail className="h-4 w-4" />
                         Email Verified
                       </span>
-                      {quickViewStudent.emailVerified ? (
+                      {quickViewPatient.emailVerified ? (
                         <CheckCircle2 className="h-5 w-5 text-green-600" />
                       ) : (
                         <XCircle className="h-5 w-5 text-red-600" />
@@ -1059,7 +1013,7 @@ const StudentManagement: React.FC = () => {
                         <Phone className="h-4 w-4" />
                         Phone Verified
                       </span>
-                      {quickViewStudent.phoneVerified ? (
+                      {quickViewPatient.phoneVerified ? (
                         <CheckCircle2 className="h-5 w-5 text-green-600" />
                       ) : (
                         <XCircle className="h-5 w-5 text-red-600" />
@@ -1070,7 +1024,7 @@ const StudentManagement: React.FC = () => {
                         <Shield className="h-4 w-4" />
                         2FA Enabled
                       </span>
-                      {quickViewStudent.twoFactorEnabled ? (
+                      {quickViewPatient.twoFactorEnabled ? (
                         <CheckCircle2 className="h-5 w-5 text-green-600" />
                       ) : (
                         <XCircle className="h-5 w-5 text-red-600" />
@@ -1083,8 +1037,253 @@ const StudentManagement: React.FC = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Add Patient Dialog */}
+      <Dialog open={addPatientOpen} onOpenChange={setAddPatientOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Add New Patient
+            </DialogTitle>
+            <DialogDescription>
+              Enter patient details to add them to the system
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* First Name */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">First Name *</label>
+              <Input
+                placeholder="John"
+                value={newPatientForm.firstName}
+                onChange={(e) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    firstName: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* Last Name */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Last Name *</label>
+              <Input
+                placeholder="Doe"
+                value={newPatientForm.lastName}
+                onChange={(e) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    lastName: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* Email */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Email</label>
+              <Input
+                type="email"
+                placeholder="john@example.com"
+                value={newPatientForm.email}
+                onChange={(e) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    email: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* Phone */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Phone</label>
+              <Input
+                placeholder="+94 70 123 4567"
+                value={newPatientForm.phone}
+                onChange={(e) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    phone: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* Date of Birth */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date of Birth</label>
+              <Input
+                type="date"
+                value={newPatientForm.dateOfBirth}
+                onChange={(e) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    dateOfBirth: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* Gender */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Gender</label>
+              <Select
+                value={newPatientForm.gender}
+                onValueChange={(value) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    gender: value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Male">Male</SelectItem>
+                  <SelectItem value="Female">Female</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Blood Type */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Blood Type</label>
+              <Select
+                value={newPatientForm.bloodType}
+                onValueChange={(value) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    bloodType: value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="O+">O+</SelectItem>
+                  <SelectItem value="A+">A+</SelectItem>
+                  <SelectItem value="B+">B+</SelectItem>
+                  <SelectItem value="AB+">AB+</SelectItem>
+                  <SelectItem value="O-">O-</SelectItem>
+                  <SelectItem value="A-">A-</SelectItem>
+                  <SelectItem value="B-">B-</SelectItem>
+                  <SelectItem value="AB-">AB-</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Ward */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Ward</label>
+              <Select
+                value={newPatientForm.ward}
+                onValueChange={(value) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    ward: value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="General Ward">General Ward</SelectItem>
+                  <SelectItem value="ICU">ICU</SelectItem>
+                  <SelectItem value="Surgical Ward">Surgical Ward</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Doctor Assigned */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Doctor Assigned</label>
+              <Select
+                value={newPatientForm.doctorAssigned}
+                onValueChange={(value) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    doctorAssigned: value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Dr. Fernando">Dr. Fernando</SelectItem>
+                  <SelectItem value="Dr. Perera">Dr. Perera</SelectItem>
+                  <SelectItem value="Dr. Silva">Dr. Silva</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Emergency Contact */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Emergency Contact</label>
+              <Input
+                placeholder="Family member name"
+                value={newPatientForm.emergencyContact}
+                onChange={(e) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    emergencyContact: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* Emergency Phone */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Emergency Phone</label>
+              <Input
+                placeholder="+94 70 987 6543"
+                value={newPatientForm.emergencyPhone}
+                onChange={(e) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    emergencyPhone: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* Medical History */}
+            <div className="space-y-2 col-span-2">
+              <label className="text-sm font-medium">Medical History</label>
+              <Input
+                placeholder="e.g., Hypertension, Diabetes"
+                value={newPatientForm.medicalHistory}
+                onChange={(e) =>
+                  setNewPatientForm({
+                    ...newPatientForm,
+                    medicalHistory: e.target.value,
+                  })
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddPatientOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddPatient}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Patient
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-export default StudentManagement;
+export default PatientManagement;

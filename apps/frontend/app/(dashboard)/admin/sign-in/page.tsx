@@ -191,12 +191,12 @@ export default function AdminSignIn() {
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              Need Teacher Access?{" "}
+              Need Doctor Access?{" "}
               <a
                 href="/sign-in"
                 className="text-primary font-medium hover:underline"
               >
-                Teacher Portal
+                Doctor Portal
               </a>
             </p>
           </form>
@@ -223,7 +223,7 @@ export default function AdminSignIn() {
         <div className="relative z-10 text-center px-12">
           <Shield className="h-24 w-24 text-white mx-auto mb-6" />
           <h2 className="text-4xl font-bold text-white mb-2">
-            LearnApp Platform
+            ArmiGo Platform
             <span className="block mt-2">Admin Control Center</span>
           </h2>
           <p className="text-white/90 text-lg mb-8">
