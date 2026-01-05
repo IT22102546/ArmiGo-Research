@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Disabled for now
+# Pre-push: Run type-check only (fast and catches type errors)
+# echo "🔍 Running type-check..."
+# pnpm run type-check || exit 1
+# echo "✅ Type-check passed!"
+exit 0

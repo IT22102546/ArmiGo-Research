@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+pnpm-lock.yaml
+.pnpm-store
+
+# Build outputs
+dist
+build
+.next
+out
+.turbo
+
+# Generated files
+**/.prisma
+*.tsbuildinfo
+apps/backend/prisma/migrations
+apps/frontend/lib/api/generated
+
+# Coverage
+coverage
+
+# Config files
+*.config.js
+*.config.ts
+commitlint.config.js
+
+# Scripts
+scripts/**/*.js
+validate-setup.js
+
+# Mobile app
+apps/mobile/**
+
+# IDE
+.vscode
+.idea
+
+# Misc
+*.min.js
