@@ -527,7 +527,7 @@ export function PaymentsListPage() {
   const endIndex = startIndex + itemsPerPage;
   const currentPayments = filteredPayments.slice(startIndex, endIndex);
 
-  // Stats calculation
+  // Calculate stats
   const stats = {
     total: payments.length,
     pending: payments.filter((p) => p.status === "PENDING").length,
@@ -537,73 +537,91 @@ export function PaymentsListPage() {
       .reduce((sum, p) => sum + p.amount, 0),
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Payment Management</h1>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <DollarSign className="h-8 w-8 text-primary" />
+            Payment Management
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Manage gaming device & accessory payments
+            Monitor and manage gaming device & accessory payments
           </p>
         </div>
-        <Button onClick={refreshPayments}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+        <Button onClick={refreshPayments} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">All payment records</p>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Payments
+                </p>
+                <p className="text-3xl font-bold">{stats.total}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <DollarSign className="h-6 w-6 text-primary" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
-            <AlertCircle className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground">Awaiting approval</p>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Pending Approval
+                </p>
+                <p className="text-3xl font-bold text-yellow-600">
+                  {stats.pending}
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-yellow-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.completed}</div>
-            <p className="text-xs text-muted-foreground">Successfully processed</p>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Completed
+                </p>
+                <p className="text-3xl font-bold text-green-600">
+                  {stats.completed}
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Completed payments</p>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Revenue
+                </p>
+                <p className="text-2xl font-bold text-blue-600">
+                  ${stats.totalRevenue.toFixed(2)}
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <Package className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -617,14 +635,14 @@ export function PaymentsListPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {/* Search */}
             <div>
               <Label>Search</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by customer, ID or device..."
+                  placeholder="Search by user, email, device..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9"
@@ -670,23 +688,67 @@ export function PaymentsListPage() {
               </Select>
             </div>
 
-            {/* Date Range */}
+            {/* Purchase Type */}
             <div>
-              <Label>Date Range</Label>
-              <Select value={dateFilter} onValueChange={setDateFilter}>
+              <Label>Purchase Type</Label>
+              <Select
+                value={referenceTypeFilter}
+                onValueChange={setReferenceTypeFilter}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="DEVICE_PURCHASE">Device Purchase</SelectItem>
+                  <SelectItem value="GAME_LICENSE">Game License</SelectItem>
+                  <SelectItem value="WARRANTY_EXTENSION">Warranty Extension</SelectItem>
+                  <SelectItem value="ACCESSORY_PURCHASE">Accessory Purchase</SelectItem>
+                  <SelectItem value="SUBSCRIPTION">Subscription</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Clear Filters */}
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setMethodFilter("all");
+                  setReferenceTypeFilter("all");
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+                className="w-full"
+              >
+                Clear Filters
+              </Button>
+            </div>
+          </div>
+
+          {/* Date Range */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>From Date</Label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>To Date</Label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
           </div>
         </CardContent>
+      </Card>
 
       {/* Payments Table */}
       <Card>
@@ -696,7 +758,9 @@ export function PaymentsListPage() {
             Payments ({filteredPayments.length})
           </CardTitle>
           <CardDescription>
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredPayments.length)} of {filteredPayments.length} payments
+            Showing {startIndex + 1} to{" "}
+            {Math.min(endIndex, filteredPayments.length)} of{" "}
+            {filteredPayments.length} payments
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -706,10 +770,10 @@ export function PaymentsListPage() {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Device/Product</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Device/Item</TableHead>
-                  <TableHead>Type</TableHead>
                   <TableHead>Method</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -718,9 +782,9 @@ export function PaymentsListPage() {
                 {currentPayments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8">
-                      <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p className="text-muted-foreground">
-                        No payments found
+                        No payments found matching your criteria
                       </p>
                     </TableCell>
                   </TableRow>
@@ -730,7 +794,14 @@ export function PaymentsListPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {safeFormatDate(payment.createdAt, "PP")}
+                          <div>
+                            <div className="font-medium">
+                              {safeFormatDate(payment.createdAt, "PP")}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {safeFormatDate(payment.createdAt, "p")}
+                            </div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -743,37 +814,52 @@ export function PaymentsListPage() {
                           <div className="text-sm text-muted-foreground">
                             {payment.user?.email}
                           </div>
+                          {payment.user?.phone && (
+                            <div className="text-xs text-muted-foreground">
+                              {payment.user.phone}
+                            </div>
+                          )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-semibold">
-                          {payment.currency} {payment.amount.toFixed(2)}
-                        </div>
-                        {payment.quantity && payment.quantity > 1 && (
-                          <div className="text-xs text-muted-foreground">
-                            Qty: {payment.quantity}
-                          </div>
-                        )}
                       </TableCell>
                       <TableCell>
                         {payment.deviceModel ? (
-                          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-                            <Gamepad2 className="h-3 w-3" />
-                            {payment.deviceModel}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Package className="h-4 w-4 text-primary" />
+                            <div>
+                              <div className="font-medium">
+                                {payment.deviceModel}
+                              </div>
+                              {payment.quantity && payment.quantity > 1 && (
+                                <div className="text-xs text-muted-foreground">
+                                  Qty: {payment.quantity}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ) : (
-                          "-"
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getReferenceIcon(payment.referenceType)}
-                          <span className="text-sm">
-                            {getReferenceTypeLabel(payment.referenceType)}
-                          </span>
+                        <div className="font-semibold text-lg">
+                          {payment.currency} {payment.amount.toFixed(2)}
                         </div>
                       </TableCell>
-                      <TableCell>{getMethodLabel(payment.method)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {getMethodLabel(payment.method)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {payment.referenceType && (
+                          <div className="flex items-center gap-2">
+                            {getReferenceIcon(payment.referenceType)}
+                            <span className="text-sm">
+                              {getReferenceTypeLabel(payment.referenceType)}
+                            </span>
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>{getStatusBadge(payment.status)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -798,8 +884,9 @@ export function PaymentsListPage() {
                                     setSelectedPayment(payment);
                                     setApproveDialogOpen(true);
                                   }}
+                                  className="text-green-600 hover:text-green-700"
                                 >
-                                  <CheckCircle className="h-4 w-4 mr-1 text-green-600" />
+                                  <CheckCircle className="h-4 w-4 mr-1" />
                                   Approve
                                 </Button>
                                 <Button
@@ -809,12 +896,19 @@ export function PaymentsListPage() {
                                     setSelectedPayment(payment);
                                     setRejectDialogOpen(true);
                                   }}
+                                  className="text-red-600 hover:text-red-700"
                                 >
-                                  <XCircle className="h-4 w-4 mr-1 text-red-600" />
+                                  <XCircle className="h-4 w-4 mr-1" />
                                   Reject
                                 </Button>
                               </>
                             )}
+                          {payment.status === "COMPLETED" && (
+                            <Badge variant="outline" className="bg-green-50">
+                              <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                              Verified
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -847,7 +941,7 @@ export function PaymentsListPage() {
                   }
                   disabled={currentPage === totalPages}
                 >
-                  {tc("next")}
+                  Next
                 </Button>
               </div>
             </div>
@@ -859,36 +953,47 @@ export function PaymentsListPage() {
       <Dialog open={viewSlipDialogOpen} onOpenChange={setViewSlipDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t("bankSlipPreview")}</DialogTitle>
+            <DialogTitle>Bank Slip Preview</DialogTitle>
             <DialogDescription>
-              {t("reviewBankSlipBeforeApproval")}
+              Review the uploaded bank slip before approval
             </DialogDescription>
           </DialogHeader>
           {selectedPayment?.bankSlipUrl ? (
             <div className="space-y-4">
               <img
                 src={selectedPayment.bankSlipUrl}
-                alt={t("bankSlip")}
+                alt="Bank Slip"
                 className="w-full rounded-lg border"
               />
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <Label>{t("amount")}</Label>
-                  <p className="font-semibold">
-                    {selectedPayment.currency}{" "}
-                    {selectedPayment.amount.toFixed(2)}
+                  <Label>Amount</Label>
+                  <p className="font-semibold text-lg">
+                    {selectedPayment.currency} {selectedPayment.amount.toFixed(2)}
                   </p>
                 </div>
                 <div>
-                  <Label>{t("referenceType")}</Label>
-                  <p>{selectedPayment.referenceType || "-"}</p>
+                  <Label>Purchase Type</Label>
+                  <p>{getReferenceTypeLabel(selectedPayment.referenceType)}</p>
+                </div>
+                <div>
+                  <Label>Customer</Label>
+                  <p>
+                    {selectedPayment.user
+                      ? `${selectedPayment.user.firstName} ${selectedPayment.user.lastName}`
+                      : "Unknown"}
+                  </p>
+                </div>
+                <div>
+                  <Label>Device Model</Label>
+                  <p>{selectedPayment.deviceModel || "-"}</p>
                 </div>
               </div>
             </div>
           ) : (
             <div className="text-center py-8">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-muted-foreground">{t("noBankSlipUploaded")}</p>
+              <p className="text-muted-foreground">No bank slip uploaded</p>
             </div>
           )}
           <DialogFooter>
@@ -896,7 +1001,7 @@ export function PaymentsListPage() {
               variant="outline"
               onClick={() => setViewSlipDialogOpen(false)}
             >
-              {tc("close")}
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -906,27 +1011,36 @@ export function PaymentsListPage() {
       <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("approvePayment")}</DialogTitle>
+            <DialogTitle>Approve Payment</DialogTitle>
             <DialogDescription>
-              {t("confirmApprovalBankSlip")}
+              Confirm approval of this bank slip payment
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="flex items-center gap-2 text-green-600">
               <CheckCircle className="h-5 w-5" />
-              <span className="font-medium">{t("willMarkAsCompleted")}</span>
+              <span className="font-medium">
+                Payment will be marked as completed
+              </span>
             </div>
             {selectedPayment && (
-              <div className="text-sm space-y-2">
+              <div className="text-sm space-y-2 bg-muted p-4 rounded-lg">
                 <p>
-                  <strong>{t("amount")}:</strong> {selectedPayment.currency}{" "}
+                  <strong>Customer:</strong>{" "}
+                  {selectedPayment.user
+                    ? `${selectedPayment.user.firstName} ${selectedPayment.user.lastName}`
+                    : "Unknown"}
+                </p>
+                <p>
+                  <strong>Amount:</strong> {selectedPayment.currency}{" "}
                   {selectedPayment.amount.toFixed(2)}
                 </p>
                 <p>
-                  <strong>{t("user")}:</strong>{" "}
-                  {selectedPayment.user
-                    ? `${selectedPayment.user.firstName} ${selectedPayment.user.lastName}`
-                    : t("unknown")}
+                  <strong>Device:</strong> {selectedPayment.deviceModel || "-"}
+                </p>
+                <p>
+                  <strong>Type:</strong>{" "}
+                  {getReferenceTypeLabel(selectedPayment.referenceType)}
                 </p>
               </div>
             )}
@@ -936,11 +1050,11 @@ export function PaymentsListPage() {
               variant="outline"
               onClick={() => setApproveDialogOpen(false)}
             >
-              {tc("cancel")}
+              Cancel
             </Button>
-            <Button onClick={handleApprove}>
+            <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700">
               <CheckCircle className="h-4 w-4 mr-2" />
-              {t("approvePayment")}
+              Approve Payment
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -950,20 +1064,22 @@ export function PaymentsListPage() {
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("rejectPayment")}</DialogTitle>
+            <DialogTitle>Reject Payment</DialogTitle>
             <DialogDescription>
-              {t("provideReasonForRejection")}
+              Provide a reason for rejecting this payment
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="flex items-center gap-2 text-red-600">
               <AlertCircle className="h-5 w-5" />
-              <span className="font-medium">{t("willMarkAsFailed")}</span>
+              <span className="font-medium">
+                Payment will be marked as failed
+              </span>
             </div>
             <div>
-              <Label>{t("rejectionReason")} *</Label>
+              <Label>Rejection Reason *</Label>
               <Textarea
-                placeholder={t("explainRejection")}
+                placeholder="Explain why this payment is being rejected..."
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 rows={4}
@@ -975,7 +1091,7 @@ export function PaymentsListPage() {
               variant="outline"
               onClick={() => setRejectDialogOpen(false)}
             >
-              {tc("cancel")}
+              Cancel
             </Button>
             <Button
               variant="destructive"
@@ -983,7 +1099,7 @@ export function PaymentsListPage() {
               disabled={!rejectReason.trim()}
             >
               <XCircle className="h-4 w-4 mr-2" />
-              {t("rejectPayment")}
+              Reject Payment
             </Button>
           </DialogFooter>
         </DialogContent>

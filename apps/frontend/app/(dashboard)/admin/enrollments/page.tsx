@@ -44,7 +44,7 @@ import {
   BedSingle,
   Stethoscope,
   Activity,
-  Home,
+  GroupIcon,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
@@ -306,7 +306,7 @@ export default function EnrollmentsPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Home className="h-8 w-8" />
+            <GroupIcon className="h-8 w-8" />
             Patient Admission Management
           </h1>
           <p className="text-muted-foreground">
@@ -647,7 +647,7 @@ export default function EnrollmentsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Home className="h-5 w-5" />
+              <GroupIcon className="h-5 w-5" />
               Create New Admission
             </DialogTitle>
             <DialogDescription>

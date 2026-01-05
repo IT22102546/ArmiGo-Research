@@ -108,11 +108,6 @@ export default function AdminSidebar({
         icon: CalendarClock,
         label: "Doctor Availability",
       },
-      {
-        href: "/admin/attendance",
-        icon: ClipboardList,
-        label: "Attendance",
-      },
     ],
     exams: [
       {
