@@ -6,13 +6,8 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   Users,
-  BookOpen,
   Activity,
-  DollarSign,
-  UserCheck,
-  Clock,
   Loader2,
-  MessageSquare,
   RefreshCw,
   Calendar,
   GraduationCap,
@@ -24,16 +19,13 @@ import {
   UserPlus,
   Megaphone,
   CalendarPlus,
-  FileCheck,
   CreditCard,
   UserX,
-  Timer,
   Trash2,
   AlertCircle,
   PlayCircle,
   AlertTriangle,
 } from "lucide-react";
-import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,6 +109,114 @@ interface DashboardData {
   };
 }
 
+// Dummy data for hospital dashboard (no API calls)
+const dummyData: DashboardData = {
+  stats: {
+    students: { total: 128, internal: 72, external: 56 },
+    teachers: { total: 34, internal: 24, external: 10 },
+    classes: { activeNow: 4, totalToday: 18 },
+    exams: { today: 6, next7Days: 14, pendingApprovals: 3 },
+    payments: {
+      pendingPayments: 9,
+      pendingSlipVerifications: 2,
+      totalPending: 11,
+    },
+    chat: { pendingMessages: 5, pendingApprovals: 2 },
+    transfers: { pendingRequests: 2 },
+  },
+  todayTimeline: {
+    classes: [
+      {
+        id: "sess-1",
+        time: "09:00",
+        grade: "Ward A",
+        subject: "Physiotherapy",
+        teacherName: "Dr. Silva",
+        status: "live",
+        studentsEnrolled: 8,
+      },
+      {
+        id: "sess-2",
+        time: "11:30",
+        grade: "Ward B",
+        subject: "Neuro Assessment",
+        teacherName: "Dr. Fernando",
+        status: "upcoming",
+        studentsEnrolled: 6,
+      },
+      {
+        id: "sess-3",
+        time: "14:00",
+        grade: "Ward C",
+        subject: "Occupational Therapy",
+        teacherName: "Dr. Perera",
+        status: "upcoming",
+        studentsEnrolled: 5,
+      },
+    ],
+    exams: [
+      {
+        id: "assess-1",
+        title: "Morning Vitals",
+        time: "08:30",
+        grade: "Ward A",
+        subject: "Vitals",
+        status: "live",
+        registeredStudents: 8,
+        activeStudents: 7,
+      },
+      {
+        id: "assess-2",
+        title: "Neurological Check",
+        time: "13:00",
+        grade: "Ward B",
+        subject: "Neuro",
+        status: "not-started",
+        registeredStudents: 6,
+      },
+      {
+        id: "assess-3",
+        title: "Mobility Evaluation",
+        time: "16:00",
+        grade: "Ward C",
+        subject: "Mobility",
+        status: "not-started",
+        registeredStudents: 5,
+      },
+    ],
+  },
+  alerts: {
+    expiringAccess: [
+      {
+        id: "pat-1",
+        studentName: "Patient Ranasinghe",
+        expiryDate: new Date(
+          Date.now() + 2 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+        daysRemaining: 2,
+      },
+    ],
+    scheduledDeletions: [
+      {
+        id: "rec-1",
+        recordingTitle: "Session Recording - 09:00",
+        scheduledDate: new Date(
+          Date.now() + 5 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+        daysRemaining: 5,
+      },
+    ],
+    systemWarnings: [
+      {
+        type: "storage",
+        message: "Storage nearing 80% capacity",
+        severity: "medium",
+        balance: 120,
+      },
+    ],
+  },
+};
+
 export default function ComprehensiveAdminDashboard() {
   const { user } = useAuthStore();
   const router = useRouter();
@@ -126,31 +226,16 @@ export default function ComprehensiveAdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    // Populate dashboard with dummy data immediately
+    setData(dummyData);
+    setLoading(false);
   }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      const response = await ApiClient.get<DashboardData>(
-        "/analytics/dashboard/enhanced"
-      );
-      setData(response);
-    } catch (error) {
-      console.error("Failed to fetch dashboard data:", error);
-      toast.error("Failed to load dashboard statistics");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchDashboardData();
+    setData(dummyData);
     setRefreshing(false);
-    toast.success("Dashboard refreshed");
+    toast.success("Dashboard refreshed (sample data)");
   };
 
   const handleQuickAction = (action: string) => {
@@ -226,12 +311,12 @@ export default function ComprehensiveAdminDashboard() {
       <div className="space-y-6">
         {/* Stats Cards - Main Widgets */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Total Students */}
+          {/* Total Patients */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Users className="h-4 w-4 text-blue-600" />
-                {t("stats.totalStudents")}
+                Total Patients
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -239,22 +324,18 @@ export default function ComprehensiveAdminDashboard() {
                 {data.stats?.students?.total || 0}
               </div>
               <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                <span>
-                  {t("stats.internal")}: {data.stats?.students?.internal || 0}
-                </span>
-                <span>
-                  {t("stats.external")}: {data.stats?.students?.external || 0}
-                </span>
+                <span>Inpatient: {data.stats?.students?.internal || 0}</span>
+                <span>Outpatient: {data.stats?.students?.external || 0}</span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Total Teachers */}
+          {/* Total Doctors */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <GraduationCap className="h-4 w-4 text-purple-600" />
-                {t("stats.totalTeachers")}
+                Total Doctors
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -262,22 +343,18 @@ export default function ComprehensiveAdminDashboard() {
                 {data.stats?.teachers?.total || 0}
               </div>
               <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                <span>
-                  {t("stats.internal")}: {data.stats?.teachers?.internal || 0}
-                </span>
-                <span>
-                  {t("stats.external")}: {data.stats?.teachers?.external || 0}
-                </span>
+                <span>Internal: {data.stats?.teachers?.internal || 0}</span>
+                <span>External: {data.stats?.teachers?.external || 0}</span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Active Classes Now */}
+          {/* Active Sessions Now */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Activity className="h-4 w-4 text-green-600 animate-pulse" />
-                {t("stats.activeClasses")}
+                Active Sessions
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -285,27 +362,7 @@ export default function ComprehensiveAdminDashboard() {
                 {data.stats?.classes?.activeNow || 0}
               </div>
               <div className="mt-2 text-xs text-muted-foreground">
-                {t("stats.todayTotal")}: {data.stats?.classes?.totalToday || 0}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Upcoming Exams */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <ClipboardCheck className="h-4 w-4 text-orange-600" />
-                {t("stats.upcomingExams")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {data.stats?.exams?.today || 0}
-              </div>
-              <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                <span>
-                  {t("stats.next7Days")}: {data.stats?.exams?.next7Days || 0}
-                </span>
+                Today Total: {data.stats?.classes?.totalToday || 0}
               </div>
             </CardContent>
           </Card>
@@ -328,61 +385,6 @@ export default function ComprehensiveAdminDashboard() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Pending Exam Approvals */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <FileCheck className="h-4 w-4 text-yellow-600" />
-                {t("stats.examApprovals")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">
-                {data.stats?.exams?.pendingApprovals || 0}
-              </div>
-              <div className="mt-2 text-xs text-muted-foreground">
-                {t("stats.awaitingReview")}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Pending Chat Messages */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-indigo-600" />
-                {t("stats.chatModeration")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {data.stats?.chat?.pendingMessages || 0}
-              </div>
-              <div className="mt-2 text-xs text-muted-foreground">
-                {t("stats.approvals")}:{" "}
-                {data.stats?.chat?.pendingApprovals || 0}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Pending Transfer Requests */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <RefreshCw className="h-4 w-4 text-teal-600" />
-                {t("stats.transferRequests")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-teal-600">
-                {data.stats?.transfers?.pendingRequests || 0}
-              </div>
-              <div className="mt-2 text-xs text-muted-foreground">
-                {t("stats.teacherTransfersPending")}
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Today's Timeline */}
@@ -390,16 +392,16 @@ export default function ComprehensiveAdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-blue-600" />
-              {t("timeline.title")}
+              Today's Schedule
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {/* Today's Classes */}
+              {/* Today's Sessions */}
               <div>
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
                   <Video className="h-4 w-4" />
-                  {t("timeline.classes")}
+                  Patient Sessions
                 </h3>
                 <div className="space-y-2">
                   {data.todayTimeline?.classes &&
@@ -423,11 +425,9 @@ export default function ComprehensiveAdminDashboard() {
                           </div>
                           <div className="h-8 w-px bg-gray-300" />
                           <div>
-                            <div className="font-medium">
-                              {t("timeline.grade")} {cls.grade} - {cls.subject}
-                            </div>
+                            <div className="font-medium">{cls.subject}</div>
                             <div className="text-sm text-muted-foreground">
-                              {t("timeline.teacher")}: {cls.teacherName}
+                              {"Doctor"}: {cls.teacherName}
                             </div>
                           </div>
                         </div>
@@ -457,7 +457,7 @@ export default function ComprehensiveAdminDashboard() {
                     ))
                   ) : (
                     <p className="text-sm text-muted-foreground py-4">
-                      {t("timeline.noClasses")}
+                      No sessions scheduled for today
                     </p>
                   )}
                 </div>
@@ -465,11 +465,11 @@ export default function ComprehensiveAdminDashboard() {
 
               <Separator />
 
-              {/* Today's Exams */}
+              {/* Today's Assessments */}
               <div>
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
                   <ClipboardCheck className="h-4 w-4" />
-                  {t("timeline.exams")}
+                  Patient Assessments
                 </h3>
                 <div className="space-y-2">
                   {data.todayTimeline?.exams &&
@@ -495,8 +495,7 @@ export default function ComprehensiveAdminDashboard() {
                           <div>
                             <div className="font-medium">{exam.title}</div>
                             <div className="text-sm text-muted-foreground">
-                              {t("timeline.grade")} {exam.grade} -{" "}
-                              {exam.subject}
+                              {exam.grade} - {exam.subject}
                             </div>
                           </div>
                         </div>
@@ -530,7 +529,7 @@ export default function ComprehensiveAdminDashboard() {
                     ))
                   ) : (
                     <p className="text-sm text-muted-foreground py-4">
-                      {t("timeline.noExams")}
+                      No assessments scheduled for today
                     </p>
                   )}
                 </div>
@@ -544,7 +543,7 @@ export default function ComprehensiveAdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-orange-800">
               <Bell className="h-5 w-5" />
-              {t("alerts.title")}
+              System Alerts
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -555,7 +554,7 @@ export default function ComprehensiveAdminDashboard() {
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
                       <UserX className="h-4 w-4 text-red-600" />
-                      {t("alerts.expiringAccess")}
+                      Patient Access Expiring Soon
                     </h3>
                     <div className="space-y-2">
                       {data.alerts.expiringAccess.map((student) => (
@@ -592,7 +591,7 @@ export default function ComprehensiveAdminDashboard() {
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
                       <Trash2 className="h-4 w-4 text-orange-600" />
-                      {t("alerts.scheduledDeletions")}
+                      Scheduled Record Deletions
                     </h3>
                     <div className="space-y-2">
                       {data.alerts.scheduledDeletions.map((recording) => (
@@ -629,7 +628,7 @@ export default function ComprehensiveAdminDashboard() {
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
                       <AlertCircle className="h-4 w-4 text-yellow-600" />
-                      {t("alerts.systemWarnings")}
+                      System Warnings
                     </h3>
                     <div className="space-y-2">
                       {data.alerts.systemWarnings.map((warning, idx) => (
@@ -687,7 +686,7 @@ export default function ComprehensiveAdminDashboard() {
                 !data.alerts?.systemWarnings?.length && (
                   <div className="text-center py-8 text-muted-foreground">
                     <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-600" />
-                    <p>{t("alerts.allNormal")}</p>
+                    <p>All systems normal</p>
                   </div>
                 )}
             </div>
@@ -699,7 +698,7 @@ export default function ComprehensiveAdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-green-600" />
-              {t("quickActions.title")}
+              Quick Actions
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -710,7 +709,7 @@ export default function ComprehensiveAdminDashboard() {
                 className="h-24 flex-col gap-2"
               >
                 <UserPlus className="h-6 w-6 text-blue-600" />
-                <span className="text-sm">{t("quickActions.newStudent")}</span>
+                <span className="text-sm">Add Patient</span>
               </Button>
 
               <Button
@@ -719,7 +718,7 @@ export default function ComprehensiveAdminDashboard() {
                 className="h-24 flex-col gap-2"
               >
                 <GraduationCap className="h-6 w-6 text-purple-600" />
-                <span className="text-sm">{t("quickActions.newTeacher")}</span>
+                <span className="text-sm">Add Doctor</span>
               </Button>
 
               <Button
@@ -728,9 +727,7 @@ export default function ComprehensiveAdminDashboard() {
                 className="h-24 flex-col gap-2"
               >
                 <CalendarPlus className="h-6 w-6 text-green-600" />
-                <span className="text-sm">
-                  {t("quickActions.timetableSlot")}
-                </span>
+                <span className="text-sm">Schedule Session</span>
               </Button>
 
               <Button
@@ -739,7 +736,7 @@ export default function ComprehensiveAdminDashboard() {
                 className="h-24 flex-col gap-2"
               >
                 <ClipboardCheck className="h-6 w-6 text-orange-600" />
-                <span className="text-sm">{t("quickActions.createExam")}</span>
+                <span className="text-sm">New Assessment</span>
               </Button>
 
               <Button
@@ -748,9 +745,7 @@ export default function ComprehensiveAdminDashboard() {
                 className="h-24 flex-col gap-2"
               >
                 <Megaphone className="h-6 w-6 text-red-600" />
-                <span className="text-sm">
-                  {t("quickActions.announcement")}
-                </span>
+                <span className="text-sm">Hospital Alert</span>
               </Button>
             </div>
           </CardContent>

@@ -1,14 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -41,963 +34,778 @@ import {
   Plus,
   Edit,
   Trash2,
-  Users,
-  Eye,
+  UserRound,
+  CalendarClock,
   Filter,
   Search,
   RefreshCw,
-  BookOpen,
+  Stethoscope,
 } from "lucide-react";
-import { classesApi } from "@/lib/api/endpoints/classes";
-import { gradesApi } from "@/lib/api/endpoints/grades";
-import { mediumsApi } from "@/lib/api/endpoints/mediums";
-import { subjectsApi } from "@/lib/api/endpoints/subjects";
-import { teacherAssignmentsApi } from "@/lib/api/endpoints/teacher-assignments";
-import { handleApiError } from "@/lib/error-handling";
 import { format } from "date-fns";
-import {
-  PageHeader,
-  LoadingSpinner,
-  EmptyState,
-  AutoStatusBadge,
-} from "@/components/shared";
+import { PageHeader, EmptyState } from "@/components/shared";
 
-// Helper to safely format dates
-const safeFormatDate = (value?: string | Date | null, fmt = "PP") => {
+type SessionStatus = "Scheduled" | "In Progress" | "Completed" | "Cancelled";
+
+interface Patient {
+  id: string;
+  name: string;
+  age: number;
+  condition: string;
+}
+
+interface Admission {
+  id: string;
+  patientId: string;
+  ward: string;
+  admissionDate: string;
+  guardian?: string;
+}
+
+interface Therapist {
+  id: string;
+  name: string;
+  specialization: string;
+}
+
+interface Clinic {
+  id: string;
+  name: string;
+}
+
+interface TherapyType {
+  id: string;
+  name: string;
+  focus: string;
+}
+
+interface Session {
+  id: string;
+  patientId: string;
+  admissionId: string;
+  therapistId: string;
+  therapyTypeId: string;
+  clinicId: string;
+  date: string;
+  durationMinutes: number;
+  status: SessionStatus;
+  notes?: string;
+}
+
+const patients: Patient[] = [
+  { id: "p-1", name: "Lahiru Perera", age: 7, condition: "Right hemiplegia" },
+  { id: "p-2", name: "Anaya Fernando", age: 6, condition: "Left hemiplegia" },
+  { id: "p-3", name: "Kavindu Silva", age: 8, condition: "Spastic diplegia" },
+];
+
+const admissions: Admission[] = [
+  {
+    id: "a-1",
+    patientId: "p-1",
+    ward: "Neuro Rehab",
+    admissionDate: "2024-06-10",
+    guardian: "Mother",
+  },
+  {
+    id: "a-2",
+    patientId: "p-2",
+    ward: "Pediatric Rehab",
+    admissionDate: "2024-07-02",
+    guardian: "Father",
+  },
+  {
+    id: "a-3",
+    patientId: "p-3",
+    ward: "Neuro Rehab",
+    admissionDate: "2024-06-20",
+    guardian: "Mother",
+  },
+];
+
+const therapists: Therapist[] = [
+  {
+    id: "t-1",
+    name: "Dr. Malithi Jayasinghe",
+    specialization: "Physiotherapy",
+  },
+  {
+    id: "t-2",
+    name: "Dr. Nuwan Samara",
+    specialization: "Occupational Therapy",
+  },
+  { id: "t-3", name: "Dr. Ishara Peris", specialization: "Speech Therapy" },
+];
+
+const clinics: Clinic[] = [
+  { id: "c-1", name: "Colombo Rehab Center" },
+  { id: "c-2", name: "Kandy Children Hospital" },
+];
+
+const therapyTypes: TherapyType[] = [
+  { id: "tt-1", name: "Physiotherapy", focus: "Motor control & gait" },
+  { id: "tt-2", name: "Occupational Therapy", focus: "ADL independence" },
+  { id: "tt-3", name: "Speech Therapy", focus: "Communication" },
+];
+
+const initialSessions: Session[] = [
+  {
+    id: "s-1",
+    patientId: "p-1",
+    admissionId: "a-1",
+    therapistId: "t-1",
+    therapyTypeId: "tt-1",
+    clinicId: "c-1",
+    date: new Date().toISOString(),
+    durationMinutes: 45,
+    status: "Scheduled",
+    notes: "Focus on right upper limb weight bearing",
+  },
+  {
+    id: "s-2",
+    patientId: "p-2",
+    admissionId: "a-2",
+    therapistId: "t-2",
+    therapyTypeId: "tt-2",
+    clinicId: "c-2",
+    date: new Date(Date.now() + 86400000).toISOString(),
+    durationMinutes: 60,
+    status: "Scheduled",
+    notes: "Fine motor skills, dressing practice",
+  },
+  {
+    id: "s-3",
+    patientId: "p-3",
+    admissionId: "a-3",
+    therapistId: "t-3",
+    therapyTypeId: "tt-3",
+    clinicId: "c-1",
+    date: new Date(Date.now() - 86400000).toISOString(),
+    durationMinutes: 40,
+    status: "Completed",
+    notes: "Articulation drills and breathing exercises",
+  },
+];
+
+const formatDate = (value?: string) => {
   if (!value) return "-";
-  let d: Date;
-  try {
-    d = typeof value === "string" ? new Date(value) : (value as Date);
-  } catch (e) {
-    return "-";
-  }
-  if (!d || Number.isNaN(d.getTime())) return "-";
-  try {
-    return format(d, fmt);
-  } catch (e) {
-    return "-";
-  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return format(parsed, "PP p");
 };
 
-interface ClassItem {
-  id: string;
-  name: string;
-  description?: string;
-  status: "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED";
-  startDate?: string | null;
-  endDate?: string | null;
-  isRecurring: boolean;
-  teacher?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-  };
-  grade?: {
-    id: string;
-    name: string;
-    level?: number;
-  };
-  subject?: {
-    id: string;
-    name: string;
-  };
-  medium?: {
-    id: string;
-    name: string;
-  };
-  maxStudents?: number;
-  enrollments?: any[];
-}
-
-interface Grade {
-  id: string;
-  name: string;
-  level?: number;
-}
-
-interface Medium {
-  id: string;
-  name: string;
-}
-
-interface Subject {
-  id: string;
-  name: string;
-}
-
-interface Teacher {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-}
-
-interface TeacherAssignment {
-  id: string;
-  teacherProfileId: string;
-  gradeId: string;
-  subjectId: string;
-  mediumId: string;
-  teacher?: Teacher;
-  grade?: Grade;
-  subject?: Subject;
-  medium?: Medium;
-}
-
 export function ClassesManagement() {
-  const router = useRouter();
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [filteredClasses, setFilteredClasses] = useState<ClassItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [sessions, setSessions] = useState<Session[]>(initialSessions);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<SessionStatus | "ALL">(
+    "ALL"
+  );
+  const [therapyFilter, setTherapyFilter] = useState<string>("ALL");
+  const [clinicFilter, setClinicFilter] = useState<string>("ALL");
+  const [patientFilter, setPatientFilter] = useState<string>("ALL");
 
-  // Filter states
-  const [selectedGrade, setSelectedGrade] = useState<string>("ALL");
-  const [selectedSubject, setSelectedSubject] = useState<string>("ALL");
-  const [selectedMedium, setSelectedMedium] = useState<string>("ALL");
-  const [selectedTeacher, setSelectedTeacher] = useState<string>("ALL");
-  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
-
-  // Options for filters
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [mediums, setMediums] = useState<Medium[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-
-  // Dialog states
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
+  const [editingSession, setEditingSession] = useState<Session | null>(null);
 
-  // Form state
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    startDate: "",
-    endDate: "",
-    status: "DRAFT",
-    isRecurring: false,
-    maxStudents: 30,
-    teacherAssignmentId: "",
-    gradeId: "",
-    subjectId: "",
-    mediumId: "",
-    teacherId: "",
+    patientId: "",
+    admissionId: "",
+    therapistId: "",
+    therapyTypeId: "",
+    clinicId: "",
+    date: "",
+    durationMinutes: 45,
+    status: "Scheduled" as SessionStatus,
+    notes: "",
   });
 
-  const [teacherAssignments, setTeacherAssignments] = useState<
-    TeacherAssignment[]
-  >([]);
-
-  useEffect(() => {
-    fetchClasses();
-    fetchFilterOptions();
-  }, [page]);
-
-  useEffect(() => {
-    applyFilters();
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((session) => {
+      const patient = patients.find((p) => p.id === session.patientId);
+      const admission = admissions.find((a) => a.id === session.admissionId);
+      const matchesSearch = search
+        ? (patient?.name || "").toLowerCase().includes(search.toLowerCase()) ||
+          (admission?.ward || "")
+            .toLowerCase()
+            .includes(search.toLowerCase()) ||
+          (session.notes || "").toLowerCase().includes(search.toLowerCase())
+        : true;
+      const matchesStatus =
+        statusFilter === "ALL" || session.status === statusFilter;
+      const matchesTherapy =
+        therapyFilter === "ALL" || session.therapyTypeId === therapyFilter;
+      const matchesClinic =
+        clinicFilter === "ALL" || session.clinicId === clinicFilter;
+      const matchesPatient =
+        patientFilter === "ALL" || session.patientId === patientFilter;
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesTherapy &&
+        matchesClinic &&
+        matchesPatient
+      );
+    });
   }, [
-    classes,
-    searchTerm,
-    selectedGrade,
-    selectedSubject,
-    selectedMedium,
-    selectedTeacher,
-    selectedStatus,
+    sessions,
+    search,
+    statusFilter,
+    therapyFilter,
+    clinicFilter,
+    patientFilter,
   ]);
 
-  const fetchClasses = async () => {
-    try {
-      setLoading(true);
-      const response = await classesApi.getAll({ page, limit: 20 });
-      const classesData = Array.isArray(response)
-        ? response
-        : response.data || response.classes || [];
-      setClasses(classesData);
-      if (response.totalPages) setTotalPages(response.totalPages);
-    } catch (error) {
-      handleApiError(error, "Failed to fetch classes");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchFilterOptions = async () => {
-    try {
-      const [gradesRes, subjectsRes, mediumsRes, teachersRes] =
-        await Promise.all([
-          gradesApi.getAll({ includeInactive: false }),
-          subjectsApi.findAll(false),
-          mediumsApi.getAll({ includeInactive: false }),
-          classesApi.getTeachersList(),
-        ]);
-
-      setGrades(gradesRes.grades || []);
-      setSubjects(Array.isArray(subjectsRes) ? subjectsRes : []);
-      setMediums(mediumsRes.mediums || []);
-      setTeachers(teachersRes || []);
-    } catch (error) {
-      console.error("Failed to fetch filter options:", error);
-    }
-  };
-
-  const fetchTeacherAssignments = async (
-    gradeId: string,
-    subjectId: string,
-    mediumId: string
-  ) => {
-    if (!gradeId || !subjectId || !mediumId) {
-      setTeacherAssignments([]);
-      return;
-    }
-
-    try {
-      const response = await teacherAssignmentsApi.getBySubjectGradeMedium({
-        gradeId,
-        subjectId,
-        mediumId,
-      });
-      setTeacherAssignments(response.assignments || []);
-    } catch (error) {
-      console.error("Failed to fetch teacher assignments:", error);
-      setTeacherAssignments([]);
-    }
-  };
-
-  const applyFilters = () => {
-    let filtered = [...classes];
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (cls) =>
-          cls.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          cls.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    if (formData.patientId) {
+      const firstAdmission = admissions.find(
+        (a) => a.patientId === formData.patientId
       );
+      if (firstAdmission) {
+        setFormData((prev) => ({ ...prev, admissionId: firstAdmission.id }));
+      }
     }
+  }, [formData.patientId]);
 
-    // Grade filter
-    if (selectedGrade !== "ALL") {
-      filtered = filtered.filter((cls) => cls.grade?.id === selectedGrade);
-    }
-
-    // Subject filter
-    if (selectedSubject !== "ALL") {
-      filtered = filtered.filter((cls) => cls.subject?.id === selectedSubject);
-    }
-
-    // Medium filter
-    if (selectedMedium !== "ALL") {
-      filtered = filtered.filter((cls) => cls.medium?.id === selectedMedium);
-    }
-
-    // Teacher filter
-    if (selectedTeacher !== "ALL") {
-      filtered = filtered.filter((cls) => cls.teacher?.id === selectedTeacher);
-    }
-
-    // Status filter
-    if (selectedStatus !== "ALL") {
-      filtered = filtered.filter((cls) => cls.status === selectedStatus);
-    }
-
-    setFilteredClasses(filtered);
-  };
-
-  const handleCreateClass = async () => {
-    try {
-      await classesApi.create(formData);
-      setCreateDialogOpen(false);
-      resetForm();
-      fetchClasses();
-    } catch (error) {
-      handleApiError(error, "Failed to create class");
-    }
-  };
-
-  const handleUpdateClass = async () => {
-    if (!selectedClass) return;
-    try {
-      await classesApi.update(selectedClass.id, formData);
-      setEditDialogOpen(false);
-      resetForm();
-      setSelectedClass(null);
-      fetchClasses();
-    } catch (error) {
-      handleApiError(error, "Failed to update class");
-    }
-  };
-
-  const handleDeleteClass = async () => {
-    if (!selectedClass) return;
-    try {
-      await classesApi.delete(selectedClass.id);
-      setDeleteDialogOpen(false);
-      setSelectedClass(null);
-      fetchClasses();
-    } catch (error) {
-      handleApiError(error, "Failed to delete class");
-    }
-  };
-
-  const handleStatusChange = async (classId: string, newStatus: string) => {
-    try {
-      await classesApi.update(classId, { status: newStatus });
-      fetchClasses();
-    } catch (error) {
-      handleApiError(error, "Failed to update class status");
-    }
+  const resetForm = () => {
+    setFormData({
+      patientId: "",
+      admissionId: "",
+      therapistId: "",
+      therapyTypeId: "",
+      clinicId: "",
+      date: "",
+      durationMinutes: 45,
+      status: "Scheduled",
+      notes: "",
+    });
+    setEditingSession(null);
   };
 
   const openCreateDialog = () => {
     resetForm();
-    setCreateDialogOpen(true);
+    setDialogOpen(true);
   };
 
-  const openEditDialog = (cls: ClassItem) => {
-    setSelectedClass(cls);
+  const openEditDialog = (session: Session) => {
+    setEditingSession(session);
     setFormData({
-      name: cls.name,
-      description: cls.description || "",
-      startDate: cls.startDate ? cls.startDate.split("T")[0] : "",
-      endDate: cls.endDate ? cls.endDate.split("T")[0] : "",
-      status: cls.status,
-      isRecurring: cls.isRecurring,
-      maxStudents: cls.maxStudents || 30,
-      teacherAssignmentId: "",
-      gradeId: cls.grade?.id || "",
-      subjectId: cls.subject?.id || "",
-      mediumId: cls.medium?.id || "",
-      teacherId: cls.teacher?.id || "",
+      patientId: session.patientId,
+      admissionId: session.admissionId,
+      therapistId: session.therapistId,
+      therapyTypeId: session.therapyTypeId,
+      clinicId: session.clinicId,
+      date: session.date.split("T")[0],
+      durationMinutes: session.durationMinutes,
+      status: session.status,
+      notes: session.notes || "",
     });
-    setEditDialogOpen(true);
+    setDialogOpen(true);
   };
 
-  const openDeleteDialog = (cls: ClassItem) => {
-    setSelectedClass(cls);
-    setDeleteDialogOpen(true);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      description: "",
-      startDate: "",
-      endDate: "",
-      status: "DRAFT",
-      isRecurring: false,
-      maxStudents: 30,
-      teacherAssignmentId: "",
-      gradeId: "",
-      subjectId: "",
-      mediumId: "",
-      teacherId: "",
-    });
-    setTeacherAssignments([]);
-  };
-
-  useEffect(() => {
-    if (formData.gradeId && formData.subjectId && formData.mediumId) {
-      fetchTeacherAssignments(
-        formData.gradeId,
-        formData.subjectId,
-        formData.mediumId
-      );
+  const handleSave = () => {
+    if (
+      !formData.patientId ||
+      !formData.admissionId ||
+      !formData.therapistId ||
+      !formData.therapyTypeId ||
+      !formData.clinicId ||
+      !formData.date
+    ) {
+      return;
     }
-  }, [formData.gradeId, formData.subjectId, formData.mediumId]);
+
+    if (editingSession) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === editingSession.id
+            ? { ...s, ...formData, date: new Date(formData.date).toISOString() }
+            : s
+        )
+      );
+    } else {
+      setSessions((prev) => [
+        ...prev,
+        {
+          id: `s-${Date.now()}`,
+          ...formData,
+          date: new Date(formData.date).toISOString(),
+        },
+      ]);
+    }
+
+    setDialogOpen(false);
+    resetForm();
+  };
+
+  const handleDelete = () => {
+    if (!editingSession) return;
+    setSessions((prev) => prev.filter((s) => s.id !== editingSession.id));
+    setDeleteDialogOpen(false);
+    resetForm();
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Class Management"
-        description="Manage classes, enrollments, and schedules"
-        icon={BookOpen}
+        title="Patient Session Management"
+        description="Create and track therapy sessions linked to admissions"
+        icon={Stethoscope}
         actions={
           <Button onClick={openCreateDialog}>
             <Plus className="mr-2 h-4 w-4" />
-            Create Class
+            Create Session
           </Button>
         }
       />
 
-      {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Filter className="mr-2 h-5 w-5" />
-            Filters
+            <Filter className="mr-2 h-5 w-5" /> Filters
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {/* Search */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="md:col-span-2">
-              <Label>Search</Label>
+              <Label>Search (patient, ward, notes)</Label>
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search classes..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Type to filter sessions"
                 />
               </div>
             </div>
 
-            {/* Grade Filter */}
-            <div>
-              <Label>Grade</Label>
-              <Select value={selectedGrade} onValueChange={setSelectedGrade}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Grades</SelectItem>
-                  {grades
-                    .filter((grade) => grade.id)
-                    .map((grade) => (
-                      <SelectItem key={grade.id} value={grade.id}>
-                        {grade.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Subject Filter */}
-            <div>
-              <Label>Subject</Label>
-              <Select
-                value={selectedSubject}
-                onValueChange={setSelectedSubject}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Subjects</SelectItem>
-                  {subjects
-                    .filter(
-                      (s) =>
-                        s && typeof s === "object" && "id" in s && "name" in s
-                    )
-                    .map((subject) => (
-                      <SelectItem key={subject.id} value={subject.id}>
-                        {String(subject.name)}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Medium Filter */}
-            <div>
-              <Label>Medium</Label>
-              <Select value={selectedMedium} onValueChange={setSelectedMedium}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Mediums</SelectItem>
-                  {mediums
-                    .filter((medium) => medium.id)
-                    .map((medium) => (
-                      <SelectItem key={medium.id} value={medium.id}>
-                        {medium.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Teacher Filter */}
-            <div>
-              <Label>Teacher</Label>
-              <Select
-                value={selectedTeacher}
-                onValueChange={setSelectedTeacher}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Teachers</SelectItem>
-                  {teachers
-                    .filter((teacher) => teacher.id)
-                    .map((teacher) => (
-                      <SelectItem key={teacher.id} value={teacher.id}>
-                        {teacher.firstName} {teacher.lastName}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Status Filter */}
             <div>
               <Label>Status</Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <Select
+                value={statusFilter}
+                onValueChange={(v) =>
+                  setStatusFilter(v as SessionStatus | "ALL")
+                }
+              >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">All Status</SelectItem>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  <SelectItem value="ALL">All</SelectItem>
+                  <SelectItem value="Scheduled">Scheduled</SelectItem>
+                  <SelectItem value="In Progress">In Progress</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="Cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Reset Button */}
+            <div>
+              <Label>Therapy Type</Label>
+              <Select value={therapyFilter} onValueChange={setTherapyFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All</SelectItem>
+                  {therapyTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Clinic</Label>
+              <Select value={clinicFilter} onValueChange={setClinicFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All</SelectItem>
+                  {clinics.map((clinic) => (
+                    <SelectItem key={clinic.id} value={clinic.id}>
+                      {clinic.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Patient</Label>
+              <Select value={patientFilter} onValueChange={setPatientFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All</SelectItem>
+                  {patients.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex items-end">
               <Button
                 variant="outline"
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedGrade("ALL");
-                  setSelectedSubject("ALL");
-                  setSelectedMedium("ALL");
-                  setSelectedTeacher("ALL");
-                  setSelectedStatus("ALL");
-                }}
                 className="w-full"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("ALL");
+                  setTherapyFilter("ALL");
+                  setClinicFilter("ALL");
+                  setPatientFilter("ALL");
+                }}
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Reset
+                <RefreshCw className="mr-2 h-4 w-4" /> Reset
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Classes Table */}
       <Card>
         <CardContent className="p-0">
-          {loading ? (
-            <LoadingSpinner text="Loading classes..." className="py-12" />
-          ) : filteredClasses.length === 0 ? (
+          {filteredSessions.length === 0 ? (
             <EmptyState
-              icon={BookOpen}
-              title="No classes found"
-              description="Create a new class or adjust your filters to see results."
+              icon={CalendarClock}
+              title="No sessions"
+              description="Create a session to get started or adjust filters."
             />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Medium</TableHead>
-                  <TableHead>Teacher</TableHead>
-                  <TableHead>Start Date</TableHead>
-                  <TableHead>End Date</TableHead>
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Admission</TableHead>
+                  <TableHead>Therapy</TableHead>
+                  <TableHead>Therapist</TableHead>
+                  <TableHead>Clinic</TableHead>
+                  <TableHead>Date & Time</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Recurring</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredClasses.map((cls) => (
-                  <TableRow key={cls.id}>
-                    <TableCell className="font-medium">
-                      <Button
-                        variant="ghost"
-                        onClick={() =>
-                          router.push(`/admin/class-detail/${cls.id}`)
-                        }
-                      >
-                        {cls.name}
-                      </Button>
-                    </TableCell>
-                    <TableCell>
-                      {cls.grade?.name ||
-                        (typeof cls.grade?.level === "number"
-                          ? cls.grade.level
-                          : "-")}
-                    </TableCell>
-                    <TableCell>
-                      {typeof cls.subject === "object" &&
-                      cls.subject !== null &&
-                      "name" in cls.subject
-                        ? cls.subject.name
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {typeof cls.medium === "object" &&
-                      cls.medium !== null &&
-                      "name" in cls.medium
-                        ? cls.medium.name
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {cls.teacher
-                        ? `${cls.teacher.firstName} ${cls.teacher.lastName}`
-                        : "-"}
-                    </TableCell>
-                    <TableCell>{safeFormatDate(cls.startDate)}</TableCell>
-                    <TableCell>{safeFormatDate(cls.endDate)}</TableCell>
-                    <TableCell>
-                      <Select
-                        value={cls.status}
-                        onValueChange={(value) =>
-                          handleStatusChange(cls.id, value)
-                        }
-                      >
-                        <SelectTrigger className="w-32">
-                          <AutoStatusBadge status={cls.status} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="DRAFT">Draft</SelectItem>
-                          <SelectItem value="ACTIVE">Active</SelectItem>
-                          <SelectItem value="COMPLETED">Completed</SelectItem>
-                          <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={cls.isRecurring ? "default" : "outline"}>
-                        {cls.isRecurring ? "Yes" : "No"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            router.push(
-                              `/admin/class-detail/${cls.id}/sessions`
-                            )
+                {filteredSessions.map((session) => {
+                  const patient = patients.find(
+                    (p) => p.id === session.patientId
+                  );
+                  const admission = admissions.find(
+                    (a) => a.id === session.admissionId
+                  );
+                  const therapist = therapists.find(
+                    (t) => t.id === session.therapistId
+                  );
+                  const therapy = therapyTypes.find(
+                    (t) => t.id === session.therapyTypeId
+                  );
+                  const clinic = clinics.find((c) => c.id === session.clinicId);
+
+                  return (
+                    <TableRow key={session.id}>
+                      <TableCell className="font-medium">
+                        {patient?.name || "-"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">
+                          {admission?.ward || "-"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Admit {formatDate(admission?.admissionDate)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">
+                          {therapy?.name || "-"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {therapy?.focus}
+                        </div>
+                      </TableCell>
+                      <TableCell>{therapist?.name || "-"}</TableCell>
+                      <TableCell>{clinic?.name || "-"}</TableCell>
+                      <TableCell>{formatDate(session.date)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            session.status === "Scheduled"
+                              ? "default"
+                              : "outline"
                           }
                         >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            router.push(
-                              `/admin/class-detail/${cls.id}/enrollments`
-                            )
-                          }
-                        >
-                          <Users className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(cls)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openDeleteDialog(cls)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          {session.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(session)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingSession(session);
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-          >
-            Previous
-          </Button>
-          <span className="flex items-center px-4">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-          >
-            Next
-          </Button>
-        </div>
-      )}
-
-      {/* Create/Edit Dialog */}
       <Dialog
-        open={createDialogOpen || editDialogOpen}
+        open={dialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setCreateDialogOpen(false);
-            setEditDialogOpen(false);
+            setDialogOpen(false);
             resetForm();
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {createDialogOpen ? "Create New Class" : "Edit Class"}
+              {editingSession ? "Edit Session" : "Create Session"}
             </DialogTitle>
             <DialogDescription>
-              {createDialogOpen
-                ? "Fill in the details to create a new class"
-                : "Update class information"}
+              Link a patient admission, assign therapist, and set therapy
+              details.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Class Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder="e.g., Advanced Mathematics"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="Class description..."
-                rows={3}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="startDate">Start Date *</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, startDate: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="endDate">End Date *</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={formData.endDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, endDate: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="grade">Grade *</Label>
-                <Select
-                  value={formData.gradeId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, gradeId: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select grade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {grades
-                      .filter((grade) => grade.id)
-                      .map((grade) => (
-                        <SelectItem key={grade.id} value={grade.id}>
-                          {grade.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="subject">Subject *</Label>
-                <Select
-                  value={formData.subjectId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, subjectId: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select subject" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subjects
-                      .filter(
-                        (s) =>
-                          s && typeof s === "object" && "id" in s && "name" in s
-                      )
-                      .map((subject) => (
-                        <SelectItem key={subject.id} value={subject.id}>
-                          {String(subject.name)}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="medium">Medium *</Label>
-                <Select
-                  value={formData.mediumId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, mediumId: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select medium" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mediums
-                      .filter((medium) => medium.id)
-                      .map((medium) => (
-                        <SelectItem key={medium.id} value={medium.id}>
-                          {medium.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="teacherAssignment">Teacher Assignment *</Label>
+              <Label>Patient *</Label>
               <Select
-                value={formData.teacherAssignmentId}
+                value={formData.patientId}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, teacherAssignmentId: value })
+                  setFormData((prev) => ({ ...prev, patientId: value }))
                 }
-                disabled={teacherAssignments.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select patient" />
+                </SelectTrigger>
+                <SelectContent>
+                  {patients.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} (Age {p.age})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formData.patientId && (
+                <p className="text-xs text-muted-foreground">
+                  Condition:{" "}
+                  {patients.find((p) => p.id === formData.patientId)?.condition}
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Admission *</Label>
+              <Select
+                value={formData.admissionId}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, admissionId: value }))
+                }
+                disabled={!formData.patientId}
               >
                 <SelectTrigger>
                   <SelectValue
                     placeholder={
-                      teacherAssignments.length === 0
-                        ? "Select grade, subject, and medium first"
-                        : "Select teacher assignment"
+                      formData.patientId
+                        ? "Select admission"
+                        : "Select patient first"
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {teacherAssignments
-                    .filter((assignment) => assignment.id)
-                    .map((assignment) => (
-                      <SelectItem key={assignment.id} value={assignment.id}>
-                        {assignment.teacher
-                          ? `${assignment.teacher.firstName} ${assignment.teacher.lastName}`
-                          : "Unknown Teacher"}
+                  {admissions
+                    .filter((a) => a.patientId === formData.patientId)
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.ward} (Admit {formatDate(a.admissionDate)})
                       </SelectItem>
                     ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="maxStudents">Max Students</Label>
-                <Input
-                  id="maxStudents"
-                  type="number"
-                  value={formData.maxStudents}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      maxStudents: parseInt(e.target.value) || 30,
-                    })
+                <Label>Therapy Type *</Label>
+                <Select
+                  value={formData.therapyTypeId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, therapyTypeId: value }))
                   }
-                  min={1}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select therapy" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {therapyTypes.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Therapist *</Label>
+                <Select
+                  value={formData.therapistId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, therapistId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select therapist" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {therapists.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name} ({t.specialization})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Clinic *</Label>
+                <Select
+                  value={formData.clinicId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, clinicId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select clinic" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clinics.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Session Date *</Label>
+                <Input
+                  type="datetime-local"
+                  value={formData.date}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, date: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Duration (minutes)</Label>
+                <Input
+                  type="number"
+                  min={15}
+                  step={5}
+                  value={formData.durationMinutes}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      durationMinutes: parseInt(e.target.value) || 45,
+                    }))
+                  }
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="status">Status</Label>
+                <Label>Status</Label>
                 <Select
                   value={formData.status}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, status: value })
+                    setFormData((prev) => ({
+                      ...prev,
+                      status: value as SessionStatus,
+                    }))
                   }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="DRAFT">Draft</SelectItem>
-                    <SelectItem value="ACTIVE">Active</SelectItem>
-                    <SelectItem value="COMPLETED">Completed</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                    <SelectItem value="Scheduled">Scheduled</SelectItem>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                    <SelectItem value="Cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="isRecurring"
-                checked={formData.isRecurring}
+            <div className="grid gap-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={formData.notes}
                 onChange={(e) =>
-                  setFormData({ ...formData, isRecurring: e.target.checked })
+                  setFormData((prev) => ({ ...prev, notes: e.target.value }))
                 }
-                className="h-4 w-4"
-                aria-label="Recurring class checkbox"
+                placeholder="Session focus, precautions, equipment"
+                rows={3}
               />
-              <Label htmlFor="isRecurring" className="cursor-pointer">
-                Recurring Class
-              </Label>
             </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
-                setCreateDialogOpen(false);
-                setEditDialogOpen(false);
+                setDialogOpen(false);
                 resetForm();
               }}
             >
               Cancel
             </Button>
-            <Button
-              onClick={createDialogOpen ? handleCreateClass : handleUpdateClass}
-            >
-              {createDialogOpen ? "Create" : "Update"}
+            <Button onClick={handleSave}>
+              {editingSession ? "Update" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Class</DialogTitle>
+            <DialogTitle>Delete Session</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{selectedClass?.name}"? This
-              action will set the status to CANCELLED.
+              This will permanently remove the session for{" "}
+              {editingSession &&
+                patients.find((p) => p.id === editingSession.patientId)?.name}
+              .
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1007,7 +815,7 @@ export function ClassesManagement() {
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteClass}>
+            <Button variant="destructive" onClick={handleDelete}>
               Delete
             </Button>
           </DialogFooter>

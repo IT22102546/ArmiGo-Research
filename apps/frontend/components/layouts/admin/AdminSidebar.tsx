@@ -55,18 +55,18 @@ export default function AdminSidebar({
     users: [
       {
         href: "/admin/students",
-        icon: GraduationCap,
-        label: t("nav.studentManagement"),
+        icon: Users,
+        label: "Patient Management",
       },
       {
         href: "/admin/teachers",
         icon: Users,
-        label: t("nav.teacherManagement"),
+        label: "Doctor Management",
       },
       {
         href: "/admin/enrollments",
         icon: UserPlus,
-        label: t("nav.enrollmentTracking"),
+        label: "Admission Tracking",
       },
     ],
     geography: [
@@ -91,27 +91,22 @@ export default function AdminSidebar({
       },
     ],
     classes: [
-      { href: "/admin/classes", icon: School, label: t("nav.classes") },
-      { href: "/admin/timetable", icon: Clock, label: t("nav.timetable") },
+      { href: "/admin/classes", icon: Video, label: "Sessions" },
+      { href: "/admin/timetable", icon: Clock, label: "Session Schedule" },
       {
         href: "/admin/class-rescheduling",
         icon: RefreshCw,
-        label: t("nav.classRescheduling"),
+        label: "Session Rescheduling",
       },
       {
         href: "/admin/teacher-assignments",
         icon: Calendar,
-        label: t("nav.teacherAssignments"),
+        label: "Doctor Assignments",
       },
       {
         href: "/admin/teachers/availability",
         icon: CalendarClock,
-        label: t("nav.teacherLeaves"),
-      },
-      {
-        href: "/admin/attendance",
-        icon: ClipboardList,
-        label: t("nav.attendance"),
+        label: "Doctor Availability",
       },
     ],
     exams: [
@@ -234,20 +229,14 @@ export default function AdminSidebar({
           ))}
         </NavSection>
 
-        <NavSection title={t("sidebar.usersEnrollments")}>
+        <NavSection title="Patients & Doctors">
           {navigationConfig.users.map((item) => (
             <NavLink key={item.href} {...item} />
           ))}
         </NavSection>
 
-        <NavSection title={t("sidebar.classesScheduling")}>
+        <NavSection title="Sessions & Scheduling">
           {navigationConfig.classes.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-        </NavSection>
-
-        <NavSection title={t("sidebar.examsAssessments")}>
-          {navigationConfig.exams.map((item) => (
             <NavLink key={item.href} {...item} />
           ))}
         </NavSection>
@@ -266,12 +255,6 @@ export default function AdminSidebar({
 
         <NavSection title={t("sidebar.geographyLocations")}>
           {navigationConfig.geography.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-        </NavSection>
-
-        <NavSection title={t("sidebar.academicStructure")}>
-          {navigationConfig.academics.map((item) => (
             <NavLink key={item.href} {...item} />
           ))}
         </NavSection>
