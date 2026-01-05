@@ -1,0 +1,764 @@
+#include <Wire.h>
+#include <math.h>
+
+// MPU9250 variables
+const int MPU9250_ADDRESS = 0x68;
+bool mpuAvailable = false;
+
+// Movement pattern detection
+struct MovementPattern {
+  float accelRangeX = 0, accelRangeY = 0, accelRangeZ = 0;
+  float gyroRangeX = 0, gyroRangeY = 0, gyroRangeZ = 0;
+  float maxAccelX = -1000, minAccelX = 1000;
+  float maxAccelY = -1000, minAccelY = 1000;
+  float maxAccelZ = -1000, minAccelZ = 1000;
+  float maxGyroX = -1000, minGyroX = 1000;
+  float maxGyroY = -1000, minGyroY = 1000;
+  float maxGyroZ = -1000, minGyroZ = 1000;
+};
+
+// System state variables
+enum MovementType {
+  STEADY,
+  FLEXION,
+  EXTENSION,
+  SUPINATION,
+  PRONATION
+};
+
+MovementType currentMovement = STEADY;
+bool isRecording = false;
+bool shouldSaveData = false;
+unsigned long recordingStartTime = 0;
+bool movementSelected = false;
+
+// Data structures
+struct ElbowData {
+  float accelX, accelY, accelZ;
+  float gyroX, gyroY, gyroZ;
+  float angleX, angleY, angleZ; // Calculated angles
+  unsigned long timestamp;
+  float elbowAngle; // Estimated elbow angle
+  float forearmAngle; // Estimated forearm rotation angle
+};
+
+struct PatientInfo {
+  String gender;
+  int age;
+  String arm; // "LEFT" or "RIGHT"
+  String status;
+  MovementType movement;
+};
+
+// Use a fixed-size array instead of Vector
+const int MAX_DATA_POINTS = 1000;
+ElbowData recordedData[MAX_DATA_POINTS];
+int dataIndex = 0;
+
+PatientInfo patientInfo;
+
+// Movement pattern tracking
+MovementPattern movementPattern;
+
+// Angle calculation variables
+float integratedAngleX = 0, integratedAngleY = 0, integratedAngleZ = 0;
+unsigned long lastIntegrationTime = 0;
+float estimatedElbowAngle = 0; // Flexion/Extension angle
+float estimatedRotationAngle = 0; // Supination/Pronation angle
+
+// Filter variables for noise reduction
+float filteredAccX = 0, filteredAccY = 0, filteredAccZ = 0;
+float filteredGyroX = 0, filteredGyroY = 0, filteredGyroZ = 0;
+const float ALPHA = 0.1; // Low-pass filter coefficient
+
+void setup(void) {
+  Serial.begin(115200);
+  
+  // Initialize I2C for MPU9250
+  Wire.begin(21, 22);
+  Wire.setClock(400000);
+  
+  // Try to initialize MPU9250
+  if (!initMPU9250()) {
+    Serial.println("MPU9250 not detected. Check connections.");
+    mpuAvailable = false;
+  } else {
+    Serial.println("MPU9250 initialized successfully.");
+    delay(100);
+    mpuAvailable = true;
+    
+    // Calibrate MPU9250
+    calibrateMPU9250();
+  }
+  
+  Serial.println("\n==========================================");
+  Serial.println("     ELBOW MOVEMENT ANALYSIS SYSTEM");
+  Serial.println("           Clinical Accuracy");
+  Serial.println("==========================================");
+  Serial.println("EXCEL IMPORT READY!");
+  Serial.println("Connect using:");
+  Serial.println("1. Excel Data Streamer (Windows)");
+  Serial.println("2. PLX-DAQ software");
+  Serial.println("3. Serial terminal with CSV logging");
+  Serial.println("\nELBOW MOVEMENT TYPES:");
+  Serial.println("1. STEADY");
+  Serial.println("2. FLEXION");
+  Serial.println("3. EXTENSION");
+  Serial.println("4. SUPINATION");
+  Serial.println("5. PRONATION");
+  Serial.println("\nSelect movement type (1-5):");
+}
+
+bool initMPU9250() {
+  // Wake up the MPU9250
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0x00); // Set to zero to wake up
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure gyroscope range (±250 dps - appropriate for elbow)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1B); // GYRO_CONFIG register
+  Wire.write(0x00); // ±250 dps
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure accelerometer range (±4g - appropriate for elbow)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1C); // ACCEL_CONFIG register
+  Wire.write(0x08); // ±4g
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure low pass filter (DLPF = 3, 44Hz bandwidth)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1A); // CONFIG register
+  Wire.write(0x03); // 44 Hz bandwidth
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  return true;
+}
+
+void calibrateMPU9250() {
+  Serial.println("\n=== MPU9250 CALIBRATION ===");
+  Serial.println("Place elbow in neutral position (arm hanging down)");
+  Serial.println("Keep completely still for 3 seconds...");
+  delay(3000);
+  
+  float sumAccX = 0, sumAccY = 0, sumAccZ = 0;
+  float sumGyroX = 0, sumGyroY = 0, sumGyroZ = 0;
+  int samples = 100;
+  
+  for(int i = 0; i < samples; i++) {
+    float ax, ay, az, gx, gy, gz;
+    readRawMPU9250(ax, ay, az, gx, gy, gz);
+    
+    sumAccX += ax;
+    sumAccY += ay;
+    sumAccZ += az;
+    sumGyroX += gx;
+    sumGyroY += gy;
+    sumGyroZ += gz;
+    
+    delay(10);
+  }
+  
+  // Store offsets (these would normally be used to correct readings)
+  Serial.print("Accelerometer bias - X: "); Serial.print(sumAccX/samples, 4);
+  Serial.print(" Y: "); Serial.print(sumAccY/samples, 4);
+  Serial.print(" Z: "); Serial.print(sumAccZ/samples, 4);
+  Serial.println();
+  
+  Serial.print("Gyroscope bias - X: "); Serial.print(sumGyroX/samples, 4);
+  Serial.print(" Y: "); Serial.print(sumGyroY/samples, 4);
+  Serial.print(" Z: "); Serial.print(sumGyroZ/samples, 4);
+  Serial.println();
+  
+  Serial.println("✓ Calibration complete!");
+}
+
+void readRawMPU9250(float &ax, float &ay, float &az, float &gx, float &gy, float &gz) {
+  if (!mpuAvailable) {
+    ax = ay = az = gx = gy = gz = 0;
+    return;
+  }
+  
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x3B);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU9250_ADDRESS, 14, true);
+  
+  int16_t accelX = Wire.read() << 8 | Wire.read();
+  int16_t accelY = Wire.read() << 8 | Wire.read();
+  int16_t accelZ = Wire.read() << 8 | Wire.read();
+  Wire.read(); Wire.read(); // Temperature
+  int16_t gyroX = Wire.read() << 8 | Wire.read();
+  int16_t gyroY = Wire.read() << 8 | Wire.read();
+  int16_t gyroZ = Wire.read() << 8 | Wire.read();
+  
+  // Convert to proper units (±4g range)
+  ax = accelX / 8192.0;  // ±4g range: 8192 LSB/g
+  ay = accelY / 8192.0;
+  az = accelZ / 8192.0;
+  
+  // Convert to proper units (±250 degrees/s range)
+  gx = gyroX / 131.0;    // ±250 degrees/s range: 131 LSB/dps
+  gy = gyroY / 131.0;
+  gz = gyroZ / 131.0;
+}
+
+void readAllSensors(ElbowData &data) {
+  float rawAccX, rawAccY, rawAccZ;
+  float rawGyroX, rawGyroY, rawGyroZ;
+  
+  readRawMPU9250(rawAccX, rawAccY, rawAccZ, rawGyroX, rawGyroY, rawGyroZ);
+  
+  // Apply low-pass filter
+  filteredAccX = ALPHA * rawAccX + (1 - ALPHA) * filteredAccX;
+  filteredAccY = ALPHA * rawAccY + (1 - ALPHA) * filteredAccY;
+  filteredAccZ = ALPHA * rawAccZ + (1 - ALPHA) * filteredAccZ;
+  filteredGyroX = ALPHA * rawGyroX + (1 - ALPHA) * filteredGyroX;
+  filteredGyroY = ALPHA * rawGyroY + (1 - ALPHA) * filteredGyroY;
+  filteredGyroZ = ALPHA * rawGyroZ + (1 - ALPHA) * filteredGyroZ;
+  
+  // Store filtered data
+  data.accelX = filteredAccX;
+  data.accelY = filteredAccY;
+  data.accelZ = filteredAccZ;
+  data.gyroX = filteredGyroX;
+  data.gyroY = filteredGyroY;
+  data.gyroZ = filteredGyroZ;
+  
+  // Calculate angles from accelerometer (for static conditions)
+  data.angleX = atan2(filteredAccY, filteredAccZ) * 180.0 / PI;
+  data.angleY = atan2(-filteredAccX, sqrt(filteredAccY*filteredAccY + filteredAccZ*filteredAccZ)) * 180.0 / PI;
+  data.angleZ = atan2(filteredAccY, filteredAccX) * 180.0 / PI;
+  
+  // Estimate elbow angle (flexion/extension)
+  // For elbow: Assume sensor on forearm, measure angle relative to gravity
+  if (currentMovement == FLEXION || currentMovement == EXTENSION) {
+    // Use accelerometer to estimate angle when movement is slow
+    data.elbowAngle = 90 + data.angleY; // Adjust based on sensor placement
+  } else {
+    // For rotation movements, track forearm angle
+    data.forearmAngle = data.angleZ;
+  }
+  
+  // Update min/max values for pattern analysis
+  movementPattern.minAccelX = min(movementPattern.minAccelX, data.accelX);
+  movementPattern.maxAccelX = max(movementPattern.maxAccelX, data.accelX);
+  movementPattern.minAccelY = min(movementPattern.minAccelY, data.accelY);
+  movementPattern.maxAccelY = max(movementPattern.maxAccelY, data.accelY);
+  movementPattern.minAccelZ = min(movementPattern.minAccelZ, data.accelZ);
+  movementPattern.maxAccelZ = max(movementPattern.maxAccelZ, data.accelZ);
+  
+  movementPattern.minGyroX = min(movementPattern.minGyroX, data.gyroX);
+  movementPattern.maxGyroX = max(movementPattern.maxGyroX, data.gyroX);
+  movementPattern.minGyroY = min(movementPattern.minGyroY, data.gyroY);
+  movementPattern.maxGyroY = max(movementPattern.maxGyroY, data.gyroY);
+  movementPattern.minGyroZ = min(movementPattern.minGyroZ, data.gyroZ);
+  movementPattern.maxGyroZ = max(movementPattern.maxGyroZ, data.gyroZ);
+  
+  data.timestamp = millis() - recordingStartTime;
+}
+
+String analyzeMovementPattern() {
+  if (!mpuAvailable) return "No IMU data";
+  
+  // Calculate ranges
+  movementPattern.accelRangeX = abs(movementPattern.maxAccelX - movementPattern.minAccelX);
+  movementPattern.accelRangeY = abs(movementPattern.maxAccelY - movementPattern.minAccelY);
+  movementPattern.accelRangeZ = abs(movementPattern.maxAccelZ - movementPattern.minAccelZ);
+  movementPattern.gyroRangeX = abs(movementPattern.maxGyroX - movementPattern.minGyroX);
+  movementPattern.gyroRangeY = abs(movementPattern.maxGyroY - movementPattern.minGyroY);
+  movementPattern.gyroRangeZ = abs(movementPattern.maxGyroZ - movementPattern.minGyroZ);
+  
+  // Pattern detection for elbow movements
+  if (movementPattern.gyroRangeY > 50.0) { // Significant Y-axis gyro movement
+    return "Flexion/Extension movement detected";
+  } else if (movementPattern.gyroRangeZ > 30.0) { // Z-axis gyro movement
+    return "Forearm rotation detected";
+  } else if (movementPattern.gyroRangeX > 30.0) { // X-axis gyro movement
+    return "Varus/Valgus movement detected";
+  }
+  
+  return "Minimal movement";
+}
+
+void startRecording() {
+  isRecording = true;
+  recordingStartTime = millis();
+  dataIndex = 0;
+  
+  // Reset movement pattern tracking
+  movementPattern = MovementPattern();
+  
+  // Reset angle integration
+  integratedAngleX = integratedAngleY = integratedAngleZ = 0;
+  estimatedElbowAngle = estimatedRotationAngle = 0;
+  lastIntegrationTime = millis();
+  
+  Serial.println("\n=== RECORDING STARTED ===");
+  Serial.println("Press 's' to STOP recording");
+  
+  // Display specific instructions based on movement type
+  switch(currentMovement) {
+    case FLEXION:
+      Serial.println("Movement: ELBOW FLEXION (bend elbow)");
+      Serial.println("Perform smooth bending motion");
+      break;
+    case EXTENSION:
+      Serial.println("Movement: ELBOW EXTENSION (straighten elbow)");
+      Serial.println("Perform smooth straightening motion");
+      break;
+    case SUPINATION:
+      Serial.println("Movement: FOREARM SUPINATION (palm up)");
+      Serial.println("Rotate forearm to palm-up position");
+      break;
+    case PRONATION:
+      Serial.println("Movement: FOREARM PRONATION (palm down)");
+      Serial.println("Rotate forearm to palm-down position");
+      break;
+    default:
+      Serial.println("Live tracking of elbow angles");
+  }
+}
+
+void stopRecording() {
+  isRecording = false;
+  movementSelected = false;
+  
+  Serial.println("\n=== RECORDING STOPPED ===");
+  Serial.print("Duration: ");
+  Serial.print((millis() - recordingStartTime) / 1000.0, 1);
+  Serial.println(" seconds");
+  Serial.print("Data points collected: ");
+  Serial.println(dataIndex);
+  
+  Serial.println("\nOptions:");
+  Serial.println("  'y' - Send data to Excel");
+  Serial.println("  'n' - Discard data");
+  
+  shouldSaveData = true;
+}
+
+String readSerialLine() {
+  String input = "";
+  unsigned long startTime = millis();
+  
+  while (millis() - startTime < 30000) {
+    if (Serial.available() > 0) {
+      char c = Serial.read();
+      
+      if (c == '\n' || c == '\r') {
+        while (Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        return input;
+      } else {
+        input += c;
+      }
+    }
+    delay(10);
+  }
+  return input;
+}
+
+void getPatientInfo() {
+  Serial.println("\n=== PATIENT INFORMATION ===");
+  
+  while(Serial.available() > 0) Serial.read();
+  
+  Serial.print("Gender (M/F): ");
+  patientInfo.gender = readSerialLine();
+  patientInfo.gender.trim();
+  Serial.println(patientInfo.gender);
+  
+  Serial.print("Age: ");
+  String ageStr = readSerialLine();
+  patientInfo.age = ageStr.toInt();
+  Serial.println(patientInfo.age);
+  
+  Serial.print("Arm (LEFT/RIGHT): ");
+  patientInfo.arm = readSerialLine();
+  patientInfo.arm.trim();
+  Serial.println(patientInfo.arm);
+  
+  Serial.print("Status (Healthy/Patient): ");
+  patientInfo.status = readSerialLine();
+  patientInfo.status.trim();
+  Serial.println(patientInfo.status);
+  
+  patientInfo.movement = currentMovement;
+  
+  Serial.println("\nPatient information saved!");
+}
+
+void sendToExcelPLXDAQ() {
+  Serial.println("CLEARDATA"); // Clear Excel sheet in PLX-DAQ
+  Serial.println("LABEL,Timestamp,Gender,Age,Arm,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,ElbowAngle,ForearmAngle");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case FLEXION: movementStr = "FLEXION"; break;
+    case EXTENSION: movementStr = "EXTENSION"; break;
+    case SUPINATION: movementStr = "SUPINATION"; break;
+    case PRONATION: movementStr = "PRONATION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    ElbowData data = recordedData[i];
+    
+    Serial.print("DATA,");
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.arm); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.elbowAngle, 1); Serial.print(",");
+    Serial.println(data.forearmAngle, 1);
+    
+    delay(5);
+  }
+  
+  Serial.println("SAVEWORKBOOKAS,Elbow_Data");
+  Serial.println("\n✓ Data sent to Excel via PLX-DAQ!");
+}
+
+void sendToExcelDataStreamer() {
+  // Header for Excel Data Streamer
+  Serial.println("Timestamp,Gender,Age,Arm,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,ElbowAngle,ForearmAngle");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case FLEXION: movementStr = "FLEXION"; break;
+    case EXTENSION: movementStr = "EXTENSION"; break;
+    case SUPINATION: movementStr = "SUPINATION"; break;
+    case PRONATION: movementStr = "PRONATION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    ElbowData data = recordedData[i];
+    
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.arm); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.elbowAngle, 1); Serial.print(",");
+    Serial.println(data.forearmAngle, 1);
+    
+    delay(5);
+  }
+  
+  Serial.println("\n✓ Data sent to Excel Data Streamer!");
+}
+
+void sendToCSV() {
+  Serial.println("\n=== CSV DATA START ===");
+  Serial.println("Timestamp,Gender,Age,Arm,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,ElbowAngle,ForearmAngle");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case FLEXION: movementStr = "FLEXION"; break;
+    case EXTENSION: movementStr = "EXTENSION"; break;
+    case SUPINATION: movementStr = "SUPINATION"; break;
+    case PRONATION: movementStr = "PRONATION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    ElbowData data = recordedData[i];
+    
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.arm); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.elbowAngle, 1); Serial.print(",");
+    Serial.println(data.forearmAngle, 1);
+  }
+  
+  Serial.println("=== CSV DATA END ===");
+  Serial.println("\n✓ CSV data ready. Save from Serial Terminal.");
+}
+
+void printAngleSummary() {
+  Serial.println("\n=== ELBOW MOVEMENT ANALYSIS SUMMARY ===");
+  
+  // Calculate min/max angles from recorded data
+  float minAngleX = 180, maxAngleX = -180;
+  float minAngleY = 180, maxAngleY = -180;
+  float minAngleZ = 180, maxAngleZ = -180;
+  float minElbowAngle = 180, maxElbowAngle = 0;
+  float minForearmAngle = 180, maxForearmAngle = -180;
+  
+  for (int i = 0; i < dataIndex; i++) {
+    ElbowData data = recordedData[i];
+    
+    minAngleX = min(minAngleX, data.angleX);
+    maxAngleX = max(maxAngleX, data.angleX);
+    minAngleY = min(minAngleY, data.angleY);
+    maxAngleY = max(maxAngleY, data.angleY);
+    minAngleZ = min(minAngleZ, data.angleZ);
+    maxAngleZ = max(maxAngleZ, data.angleZ);
+    minElbowAngle = min(minElbowAngle, data.elbowAngle);
+    maxElbowAngle = max(maxElbowAngle, data.elbowAngle);
+    minForearmAngle = min(minForearmAngle, data.forearmAngle);
+    maxForearmAngle = max(maxForearmAngle, data.forearmAngle);
+  }
+  
+  Serial.println("\nANGLE RANGES:");
+  Serial.print("X-axis (Roll):  "); Serial.print(minAngleX, 1); Serial.print("° to "); Serial.print(maxAngleX, 1); 
+  Serial.print("°  Range: "); Serial.print(maxAngleX - minAngleX, 1); Serial.println("°");
+  
+  Serial.print("Y-axis (Pitch): "); Serial.print(minAngleY, 1); Serial.print("° to "); Serial.print(maxAngleY, 1);
+  Serial.print("°  Range: "); Serial.print(maxAngleY - minAngleY, 1); Serial.println("°");
+  
+  Serial.print("Z-axis (Yaw):   "); Serial.print(minAngleZ, 1); Serial.print("° to "); Serial.print(maxAngleZ, 1);
+  Serial.print("°  Range: "); Serial.print(maxAngleZ - minAngleZ, 1); Serial.println("°");
+  
+  if (currentMovement == FLEXION || currentMovement == EXTENSION) {
+    Serial.print("\nELBOW FLEXION/EXTENSION: ");
+    Serial.print(minElbowAngle, 1); Serial.print("° to "); Serial.print(maxElbowAngle, 1);
+    Serial.print("°  Range: "); Serial.print(maxElbowAngle - minElbowAngle, 1); Serial.println("°");
+  }
+  
+  if (currentMovement == SUPINATION || currentMovement == PRONATION) {
+    Serial.print("\nFOREARM ROTATION: ");
+    Serial.print(minForearmAngle, 1); Serial.print("° to "); Serial.print(maxForearmAngle, 1);
+    Serial.print("°  Range: "); Serial.print(maxForearmAngle - minForearmAngle, 1); Serial.println("°");
+  }
+  
+  // IMU Movement Pattern Analysis
+  if (mpuAvailable) {
+    movementPattern.accelRangeX = abs(movementPattern.maxAccelX - movementPattern.minAccelX);
+    movementPattern.accelRangeY = abs(movementPattern.maxAccelY - movementPattern.minAccelY);
+    movementPattern.accelRangeZ = abs(movementPattern.maxAccelZ - movementPattern.minAccelZ);
+    movementPattern.gyroRangeX = abs(movementPattern.maxGyroX - movementPattern.minGyroX);
+    movementPattern.gyroRangeY = abs(movementPattern.maxGyroY - movementPattern.minGyroY);
+    movementPattern.gyroRangeZ = abs(movementPattern.maxGyroZ - movementPattern.minGyroZ);
+    
+    Serial.println("\n=== IMU MOVEMENT PATTERN ===");
+    Serial.println("Accelerometer Ranges (g):");
+    Serial.print("  X-axis: "); Serial.print(movementPattern.accelRangeX, 3);
+    Serial.print("  Y-axis: "); Serial.print(movementPattern.accelRangeY, 3);
+    Serial.print("  Z-axis: "); Serial.print(movementPattern.accelRangeZ, 3);
+    
+    Serial.println("\nGyroscope Ranges (°/s):");
+    Serial.print("  X-axis: "); Serial.print(movementPattern.gyroRangeX, 1);
+    Serial.print("  Y-axis: "); Serial.print(movementPattern.gyroRangeY, 1);
+    Serial.print("  Z-axis: "); Serial.print(movementPattern.gyroRangeZ, 1);
+    
+    Serial.println("\n\n=== MOVEMENT INTERPRETATION ===");
+    Serial.println(analyzeMovementPattern());
+  }
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char command = Serial.read();
+    
+    if (command == '\n' || command == '\r') {
+      if (movementSelected && !isRecording && !shouldSaveData) {
+        startRecording();
+      }
+      return;
+    }
+    
+    if (shouldSaveData) {
+      if (command == 'y' || command == 'Y') {
+        while(Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        
+        getPatientInfo();
+        
+        Serial.println("\n=== SELECT EXPORT METHOD ===");
+        Serial.println("1. PLX-DAQ (Recommended for Excel)");
+        Serial.println("2. Excel Data Streamer");
+        Serial.println("3. CSV for Serial Terminal");
+        Serial.println("4. View summary only");
+        Serial.print("Choose (1-4): ");
+        
+        // Wait for method selection
+        while(Serial.available() == 0);
+        char method = Serial.read();
+        
+        switch(method) {
+          case '1':
+            sendToExcelPLXDAQ();
+            break;
+          case '2':
+            sendToExcelDataStreamer();
+            break;
+          case '3':
+            sendToCSV();
+            break;
+          case '4':
+            printAngleSummary();
+            break;
+        }
+        
+        printAngleSummary();
+        shouldSaveData = false;
+        movementSelected = false;
+        Serial.println("\nSelect new movement type (1-5):");
+        
+      } else if (command == 'n' || command == 'N') {
+        while(Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        
+        shouldSaveData = false;
+        movementSelected = false;
+        Serial.println("Data discarded.");
+        Serial.println("\nSelect new movement type (1-5):");
+      }
+      return;
+    }
+    
+    if (!isRecording) {
+      switch(command) {
+        case '1': 
+          currentMovement = STEADY; 
+          movementSelected = true;
+          Serial.print("\nSelected: STEADY");
+          Serial.println("\nPress 'ENTER' to start recording in neutral position");
+          break;
+        case '2': 
+          currentMovement = FLEXION; 
+          movementSelected = true;
+          Serial.print("\nSelected: FLEXION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Perform elbow bending motion");
+          break;
+        case '3': 
+          currentMovement = EXTENSION; 
+          movementSelected = true;
+          Serial.print("\nSelected: EXTENSION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Perform elbow straightening motion");
+          break;
+        case '4': 
+          currentMovement = SUPINATION; 
+          movementSelected = true;
+          Serial.print("\nSelected: SUPINATION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Rotate forearm to palm-up position");
+          break;
+        case '5': 
+          currentMovement = PRONATION; 
+          movementSelected = true;
+          Serial.print("\nSelected: PRONATION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Rotate forearm to palm-down position");
+          break;
+        case 'c': 
+        case 'C':
+          Serial.println("\n=== RECALIBRATING MPU9250 ===");
+          calibrateMPU9250();
+          Serial.println("\nSelect movement type (1-5):");
+          break;
+      }
+      
+      if (Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+        Serial.read();
+      }
+    } else {
+      if (command == 's' || command == 'S') {
+        stopRecording();
+      }
+    }
+  }
+  
+  if (isRecording) {
+    if (dataIndex < MAX_DATA_POINTS) {
+      readAllSensors(recordedData[dataIndex]);
+      dataIndex++;
+      
+      // Live display
+      static unsigned long lastDisplay = 0;
+      if (millis() - lastDisplay > 300) {
+        ElbowData data = recordedData[dataIndex-1];
+        
+        Serial.print("⏱ ");
+        Serial.print(data.timestamp / 1000.0, 1);
+        Serial.print("s | ");
+        
+        // Display based on movement type
+        switch(currentMovement) {
+          case FLEXION:
+          case EXTENSION:
+            Serial.print("Elbow: ");
+            Serial.print(data.elbowAngle, 1);
+            Serial.print("° | Accel Y: ");
+            Serial.print(data.accelY, 2);
+            Serial.print("g | Gyro Y: ");
+            Serial.print(data.gyroY, 1);
+            Serial.println("°/s");
+            break;
+          case SUPINATION:
+          case PRONATION:
+            Serial.print("Forearm: ");
+            Serial.print(data.forearmAngle, 1);
+            Serial.print("° | Accel Z: ");
+            Serial.print(data.accelZ, 2);
+            Serial.print("g | Gyro Z: ");
+            Serial.print(data.gyroZ, 1);
+            Serial.println("°/s");
+            break;
+          default:
+            Serial.print("Angles: ");
+            Serial.print("X:");
+            Serial.print(data.angleX, 1);
+            Serial.print("° Y:");
+            Serial.print(data.angleY, 1);
+            Serial.print("° Z:");
+            Serial.print(data.angleZ, 1);
+            Serial.println("°");
+        }
+        lastDisplay = millis();
+      }
+    } else {
+      Serial.println("Data buffer full! Stopping recording.");
+      stopRecording();
+    }
+  }
+  
+  delay(10);
+}
