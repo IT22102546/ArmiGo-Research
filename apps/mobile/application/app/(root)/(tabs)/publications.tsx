@@ -1,934 +1,549 @@
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  Image,
-  TouchableOpacity,
-  ScrollView,
   StyleSheet,
-  Alert,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
   ActivityIndicator,
-  RefreshControl,
+  Image,
 } from "react-native";
-import React, { useEffect, useState } from "react";
-import { icons, images } from "@/constants";
-import { apiFetch } from "@/utils/api";
+import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { LineChart, PieChart } from "react-native-chart-kit";
 import useAuthStore from "@/stores/authStore";
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
+import { icons, images } from "@/constants";
 
-export default function Publications() {
-  const [publications, setPublications] = useState<any[]>([]);
+const { width: screenWidth } = Dimensions.get("window");
+
+export default function ProgressOverview() {
+  const { currentUser, isSignedIn } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [purchases, setPurchases] = useState({});
-  const [pagination, setPagination] = useState({
-    page: 1,
-    totalPages: 1,
-    total: 0,
-  });
-  const { currentUser, isSignedIn, refreshTokens } = useAuthStore();
-  const router = useRouter();
+  const [selectedTimeframe, setSelectedTimeframe] = useState("week");
+  const [selectedChild, setSelectedChild] = useState(null);
+  const [isPhysiotherapist, setIsPhysiotherapist] = useState(false);
 
-  // Enhanced API call function with token refresh
-  const makeAuthenticatedRequest = async (endpoint, options = {}) => {
-    try {
-      const response = await apiFetch(endpoint, options);
+  // Mock children data
+  const children = [
+    { id: 1, name: "Emma Johnson", age: 8, condition: "Elbow Rehabilitation", image: images.test },
+    { id: 2, name: "Noah Smith", age: 10, condition: "Knee Strengthening", image: images.test },
+  ];
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("401");
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+  // Mock patients data for physiotherapist
+  const patients = [
+    { id: 1, name: "John Smith", age: 8, condition: "Elbow Rehabilitation", sessions: 12, image: images.test },
+    { id: 2, name: "Sarah Wilson", age: 7, condition: "Finger Dexterity", sessions: 8, image: images.test },
+    { id: 3, name: "Michael Brown", age: 9, condition: "Shoulder Mobility", sessions: 15, image: images.test },
+  ];
 
-      const result = await response.json();
-      return result; // Return the full result object
-    } catch (error) {
-      console.error("API request error:", error);
-      throw error;
-    }
+  // Mock progress data for parent view
+  const childProgressData = {
+    week: [65, 70, 72, 75, 78, 80, 82],
+    month: [60, 65, 68, 72, 75, 78, 80, 82, 85, 88, 90, 92],
+    year: [50, 55, 60, 65, 70, 75, 80, 82, 85, 88, 90, 92],
   };
 
-  // Fetch Publications from API
-  const fetchPublications = async (page = 1) => {
-    try {
-      if (!isSignedIn || !currentUser) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
+  // Mock body part progress for parent view
+  const bodyPartProgress = [
+    { part: "Fingers", progress: 85, color: "#4B9BFF", sessions: 15 },
+    { part: "Wrist", progress: 78, color: "#6BCF7F", sessions: 12 },
+    { part: "Elbow", progress: 92, color: "#FF6B6B", sessions: 20 },
+    { part: "Shoulder", progress: 70, color: "#FFB74D", sessions: 10 },
+  ];
 
-      console.log(" Fetching Publications for user:", currentUser.email);
+  // Mock gaming/play data
+  const gamingData = [
+    { date: "Today", duration: "45 mins", exercises: 8, score: 95 },
+    { date: "Yesterday", duration: "38 mins", exercises: 6, score: 88 },
+    { date: "2 days ago", duration: "42 mins", exercises: 7, score: 92 },
+  ];
 
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        limit: "20",
-        status: "PUBLISHED",
-        sortBy: "newest",
-      });
+  // Mock analysis insights for parent
+  const analysisInsights = [
+    { 
+      title: "Excellent Progress!", 
+      description: "Emma has improved elbow mobility by 40% this week.",
+      icon: "trending-up",
+      color: "#6BCF7F"
+    },
+    { 
+      title: "Consistency Award", 
+      description: "Completed all exercises for 7 days straight!",
+      icon: "check-circle",
+      color: "#4B9BFF"
+    },
+    { 
+      title: "Focus Area", 
+      description: "Wrist exercises need more practice.",
+      icon: "warning",
+      color: "#FFB74D"
+    },
+  ];
 
-      // Make the request
-      const response = await apiFetch(
-        `/api/v1/publications?${queryParams.toString()}`
-      );
+  // Mock patient overview for physiotherapist
+  const patientOverview = [
+    { 
+      patient: "John Smith", 
+      status: "Excellent Progress", 
+      lastSession: "Today",
+      nextSession: "Tomorrow, 3 PM",
+      compliance: 95
+    },
+    { 
+      patient: "Sarah Wilson", 
+      status: "Good Progress", 
+      lastSession: "Yesterday",
+      nextSession: "Dec 20, 10 AM",
+      compliance: 85
+    },
+    { 
+      patient: "Michael Brown", 
+      status: "Needs Attention", 
+      lastSession: "2 days ago",
+      nextSession: "Dec 19, 2 PM",
+      compliance: 65
+    },
+  ];
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log("Publications API response:", result);
-
-      // CORRECTED: Get data from the correct structure
-      const publicationsArray = result?.data || [];
-      const paginationData = result?.pagination || {
-        page: 1,
-        limit: 20,
-        total: 0,
-        totalPages: 1,
-      };
-
-      console.log(
-        " Publications fetched successfully:",
-        publicationsArray.length,
-        "Publications"
-      );
-
-      // If refreshing or first page, replace publications
-      if (page === 1) {
-        setPublications(publicationsArray);
-      } else {
-        setPublications((prev) => [...prev, ...publicationsArray]);
-      }
-
-      setPagination(paginationData);
-
-      // If user is logged in, fetch their purchases
-      if (currentUser) {
-        fetchUserPurchases();
-      }
-    } catch (error) {
-      console.error(" Error fetching Publications:", error);
-
-      if (error.message.includes("401")) {
-        // Handle token refresh
-        const refreshSuccess = await refreshTokens();
-        if (refreshSuccess) {
-          // Retry the request after refresh
-          return fetchPublications(page);
-        } else {
-          Alert.alert("Session Expired", "Please sign in again", [
-            { text: "OK", onPress: () => useAuthStore.getState().signOut() },
-          ]);
-        }
-      } else {
-        // Set empty array as fallback
-        setPublications([]);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  // Fetch user's purchases
-  const fetchUserPurchases = async () => {
-    try {
-      const purchasesData = await makeAuthenticatedRequest(
-        "/api/v1/publications/user/purchases?page=1&limit=100"
-      );
-
-      // Create a map of purchased publication IDs for quick lookup
-      const purchasesMap = {};
-      const purchasesList = purchasesData?.purchases || [];
-
-      console.log(" Purchases fetched:", purchasesList.length, "items");
-
-      purchasesList.forEach((purchase) => {
-        if (purchase.publication?.id) {
-          purchasesMap[purchase.publication.id] = true;
-        } else if (purchase.publicationId) {
-          purchasesMap[purchase.publicationId] = true;
-        }
-      });
-
-      setPurchases(purchasesMap);
-    } catch (error) {
-      console.error("Error fetching purchases:", error);
-      // Silently fail - purchases data is not critical for viewing
-    }
-  };
-
-  // Handle purchase
-  const handlePurchase = async (publicationId, publicationTitle, price) => {
-    try {
-      if (!isSignedIn) {
-        Alert.alert(
-          "Sign In Required",
-          "Please sign in to purchase publications",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Sign In", onPress: () => router.push("/sign-in") },
-          ]
-        );
-        return;
-      }
-
-      Alert.alert(
-        "Confirm Purchase",
-        `Purchase "${publicationTitle}" for LKR ${price.toFixed(2)}?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Purchase",
-            onPress: async () => {
-              try {
-                const purchaseResult = await makeAuthenticatedRequest(
-                  `/api/v1/publications/${publicationId}/purchase`,
-                  {
-                    method: "POST",
-                  }
-                );
-
-                console.log("Purchase successful:", purchaseResult);
-
-                Alert.alert("Success", "Publication purchased successfully!", [
-                  {
-                    text: "OK",
-                    onPress: () => {
-                      // Refresh purchases status
-                      fetchUserPurchases();
-                    },
-                  },
-                ]);
-              } catch (error) {
-                console.error("Purchase error details:", error);
-                Alert.alert(
-                  "Purchase Failed",
-                  error.message ||
-                    "Failed to purchase publication. Please check your wallet balance."
-                );
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      console.error("Purchase error:", error);
-      Alert.alert("Error", "Failed to process purchase");
-    }
-  };
-
-  // Handle download
-  const handleDownload = async (publicationId) => {
-    try {
-      const downloadData = await makeAuthenticatedRequest(
-        `/api/v1/publications/${publicationId}/download`
-      );
-
-      if (downloadData.url) {
-        Alert.alert(
-          "Download Available",
-          "The download URL has been generated.",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                // You can implement file download here
-                // For now, just log the URL
-                console.log("Download URL:", downloadData.url);
-              },
-            },
-          ]
-        );
-      }
-    } catch (error) {
-      console.error("Download error:", error);
-      Alert.alert(
-        "Download Failed",
-        error.message || "Failed to generate download link."
-      );
-    }
-  };
-
-  // Handle refresh
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchPublications(1);
-  };
-
-  // Load more publications
-  const loadMorePublications = () => {
-    if (pagination.page < pagination.totalPages && !loading) {
-      fetchPublications(pagination.page + 1);
-    }
-  };
+  // Mock played activities for physiotherapist
+  const playedActivities = [
+    { patient: "John Smith", game: "Finger Flex Challenge", duration: "15 mins", score: 98, date: "Today" },
+    { patient: "Sarah Wilson", game: "Wrist Rotation Game", duration: "12 mins", score: 87, date: "Yesterday" },
+    { patient: "Michael Brown", game: "Elbow Bend Adventure", duration: "20 mins", score: 72, date: "Today" },
+  ];
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      if (isSignedIn && currentUser) {
-        await fetchPublications(1);
-      } else {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [isSignedIn, currentUser]);
+    // Simulate loading
+    setTimeout(() => {
+      setLoading(false);
+      // Check if user is physiotherapist
+      const userRole = currentUser?.role || "";
+      setIsPhysiotherapist(
+        userRole.includes("PHYSIOTHERAPIST") || 
+        userRole.includes("DOCTOR") ||
+        userRole === "Physiotherapist"
+      );
+      // Set first child/patient as selected
+      setSelectedChild(isPhysiotherapist ? patients[0] : children[0]);
+    }, 1000);
+  }, [currentUser]);
 
-  // Publication Card Component - Updated for backend data structure
-  const PublicationCard = ({ publication }) => {
-    const isPurchased = purchases[publication.id];
-    const finalPrice = publication.discountPrice || publication.price;
-    const purchaseCount = publication._count?.purchases || 0;
-    const reviewCount = publication._count?.reviews || 0;
-
-    return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Image
-            source={
-              publication.coverImage
-                ? { uri: publication.coverImage }
-                : images.test
-            }
-            style={styles.publicationImage}
-          />
-          <View style={styles.cardContent}>
-            <Text style={styles.title}>{publication.title}</Text>
-
-            <Text style={styles.description} numberOfLines={2}>
-              {publication.shortDescription ||
-                publication.description ||
-                "No description available"}
-            </Text>
-
-            <View style={styles.metaInfo}>
-              <Text style={styles.author}>
-                By {publication.author || "Unknown"}
-              </Text>
-
-              {publication.publisher && (
-                <View style={styles.publisherTag}>
-                  <Text style={styles.publisherText}>
-                    {publication.publisher}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Stats row */}
-            <View style={styles.statsContainer}>
-              {purchaseCount > 0 && (
-                <View style={styles.statItem}>
-                  <Text style={styles.statText}>{purchaseCount} purchases</Text>
-                </View>
-              )}
-
-              {reviewCount > 0 && (
-                <View style={styles.statItem}>
-                  <Image source={icons.star} style={styles.statIcon} />
-                  <Text style={styles.statText}>{reviewCount} reviews</Text>
-                </View>
-              )}
-
-              {publication.downloads > 0 && (
-                <View style={styles.statItem}>
-                  <Image source={icons.download} style={styles.statIcon} />
-                  <Text style={styles.statText}>
-                    {publication.downloads} downloads
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Rating and price section */}
-        <View style={styles.ratingPriceContainer}>
-          {publication.rating && (
-            <View style={styles.ratingContainer}>
-              <Image source={icons.star} style={styles.starIcon} />
-              <Text style={styles.ratingText}>
-                {publication.rating.toFixed(1)}
-              </Text>
-              <Text style={styles.ratingCount}>({reviewCount})</Text>
-            </View>
-          )}
-
-          <View style={styles.priceContainer}>
-            {publication.discountPrice && (
-              <Text style={styles.originalPrice}>
-                LKR {publication.price.toFixed(2)}
-              </Text>
-            )}
-            <Text style={styles.finalPrice}>LKR {finalPrice.toFixed(2)}</Text>
-            {publication.discountPrice && (
-              <View style={styles.discountBadge}>
-                <Text style={styles.discountText}>
-                  Save{" "}
-                  {(
-                    ((publication.price - publication.discountPrice) /
-                      publication.price) *
-                    100
-                  ).toFixed(0)}
-                  %
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Action buttons */}
-        <View style={styles.actionContainer}>
-          {isPurchased ? (
-            <>
-              <TouchableOpacity
-                style={styles.downloadButton}
-                onPress={() => handleDownload(publication.id)}
-              >
-                <Image source={icons.download} style={styles.buttonIcon} />
-                <Text style={styles.downloadButtonText}>Download</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.reviewButton}
-                onPress={() => {
-                  // Navigate to review screen or show review modal
-                  Alert.alert(
-                    "Leave a Review",
-                    "Would you like to review this publication?",
-                    [
-                      { text: "Later" },
-                      {
-                        text: "Review Now",
-                        onPress: () => {
-                          // Implement review functionality
-                          router.push({
-                            pathname: "/review",
-                            params: {
-                              publicationId: publication.id,
-                              title: publication.title,
-                            },
-                          });
-                        },
-                      },
-                    ]
-                  );
-                }}
-              >
-                <Image source={icons.star} style={styles.buttonIcon} />
-                <Text style={styles.reviewButtonText}>Review</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={styles.buyButton}
-              onPress={() =>
-                handlePurchase(publication.id, publication.title, finalPrice)
-              }
-            >
-              <View style={styles.buyButtonContent}>
-                <Image
-                  source={icons.shoppingCart}
-                  style={styles.buyButtonIcon}
-                />
-                <View style={styles.buyButtonTextContainer}>
-                  <Text style={styles.buyButtonText}>Buy Now</Text>
-                  <Text style={styles.buyButtonSubText}>
-                    {publication.discountPrice
-                      ? "Discounted Price"
-                      : "Regular Price"}
-                  </Text>
-                </View>
-                <Text style={styles.buyButtonPrice}>
-                  LKR {finalPrice.toFixed(2)}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Status and metadata */}
-        <View style={styles.footerContainer}>
-          <View style={styles.statusContainer}>
-            <View
-              style={[
-                styles.statusBadge,
-                publication.status === "PUBLISHED"
-                  ? styles.publishedBadge
-                  : publication.status === "DRAFT"
-                    ? styles.draftBadge
-                    : styles.archivedBadge,
-              ]}
-            >
-              <Text style={styles.statusText}>
-                {publication.status?.toLowerCase()}
-              </Text>
-            </View>
-
-            {publication.publishedAt && (
-              <Text style={styles.publishedDate}>
-                {new Date(publication.publishedAt).toLocaleDateString()}
-              </Text>
-            )}
-          </View>
-
-          {publication.fileType && (
-            <View style={styles.fileTypeContainer}>
-              <Image
-                source={publication.fileType === "pdf" ? icons.pdf : icons.file}
-                style={styles.fileTypeIcon}
-              />
-              <Text style={styles.fileTypeText}>
-                {publication.fileType.toUpperCase()}
-                {publication.fileSize && ` • ${publication.fileSize} MB`}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
-
-  if (loading && !refreshing) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007bff" />
-        <Text style={styles.loadingText}>Loading Publications...</Text>
+        <ActivityIndicator size="large" color="#0057FF" />
+        <Text style={styles.loadingText}>Loading Progress Data...</Text>
       </View>
     );
   }
 
   if (!isSignedIn || !currentUser) {
     return (
-      <View style={styles.authContainer}>
-        <Text style={styles.authTitle}>Sign In Required</Text>
-        <Text style={styles.authText}>
-          Please sign in to view and purchase publications
-        </Text>
-        <TouchableOpacity
-          style={styles.signInButton}
-          onPress={() => router.push("/sign-in")}
-        >
-          <Text style={styles.signInButtonText}>Sign In</Text>
-        </TouchableOpacity>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Please sign in to view progress</Text>
       </View>
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={["#007bff"]}
-          tintColor="#007bff"
-        />
-      }
-    >
+  // Chart configuration
+  const chartConfig = {
+    backgroundColor: "#ffffff",
+    backgroundGradientFrom: "#ffffff",
+    backgroundGradientTo: "#ffffff",
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(0, 87, 255, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+    style: {
+      borderRadius: 16,
+    },
+    propsForDots: {
+      r: "6",
+      strokeWidth: "2",
+      stroke: "#0057FF",
+    },
+  };
+
+  const chartData = {
+    labels: selectedTimeframe === "week" 
+      ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+      : selectedTimeframe === "month"
+      ? ["W1", "W2", "W3", "W4"]
+      : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    datasets: [{
+      data: selectedTimeframe === "week" ? childProgressData.week :
+             selectedTimeframe === "month" ? childProgressData.month :
+             childProgressData.year,
+      color: (opacity = 1) => `rgba(0, 87, 255, ${opacity})`,
+      strokeWidth: 2
+    }]
+  };
+
+  // Parent View Components
+  const ParentProgressView = () => (
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.statsOverview}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.welcomeText}>Progress Overview</Text>
+            <Text style={styles.userName}>{currentUser?.firstName || "Parent"}</Text>
+          </View>
+          <TouchableOpacity style={styles.shareButton}>
+            <MaterialIcons name="share" size={20} color="#0057FF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Child Selector */}
+        <View style={styles.childSelector}>
+          <Text style={styles.sectionTitle}>Select Child</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.childScroll}>
+            {children.map((child) => (
+              <TouchableOpacity
+                key={child.id}
+                style={[
+                  styles.childCard,
+                  selectedChild?.id === child.id && styles.selectedChildCard
+                ]}
+                onPress={() => setSelectedChild(child)}
+              >
+                <Image source={child.image} style={styles.childImage} />
+                <View style={styles.childInfo}>
+                  <Text style={styles.childName}>{child.name}</Text>
+                  <Text style={styles.childCondition}>{child.condition}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* Today's Gaming Hours */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Today's Gaming Hours</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAllText}>Details</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.gamingCard}>
+          <View style={styles.gamingStats}>
+            <View style={styles.gamingStat}>
+              <MaterialIcons name="timer" size={24} color="#4B9BFF" />
+              <Text style={styles.gamingStatValue}>45 mins</Text>
+              <Text style={styles.gamingStatLabel}>Duration</Text>
+            </View>
+            <View style={styles.gamingStat}>
+              <MaterialIcons name="fitness" size={24} color="#6BCF7F" />
+              <Text style={styles.gamingStatValue}>8</Text>
+              <Text style={styles.gamingStatLabel}>Exercises</Text>
+            </View>
+            <View style={styles.gamingStat}>
+              <MaterialIcons name="star" size={24} color="#FFB74D" />
+              <Text style={styles.gamingStatValue}>95%</Text>
+              <Text style={styles.gamingStatLabel}>Score</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.startGamingButton}>
+            <MaterialIcons name="play-arrow" size={20} color="#FFF" />
+            <Text style={styles.startGamingText}>Continue Gaming</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Progress Chart */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Progress Trend</Text>
+          <View style={styles.timeframeSelector}>
+            {["week", "month", "year"].map((timeframe) => (
+              <TouchableOpacity
+                key={timeframe}
+                style={[
+                  styles.timeframeButton,
+                  selectedTimeframe === timeframe && styles.selectedTimeframeButton
+                ]}
+                onPress={() => setSelectedTimeframe(timeframe)}
+              >
+                <Text style={[
+                  styles.timeframeText,
+                  selectedTimeframe === timeframe && styles.selectedTimeframeText
+                ]}>
+                  {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={styles.chartContainer}>
+          <LineChart
+            data={chartData}
+            width={screenWidth - 40}
+            height={220}
+            chartConfig={chartConfig}
+            bezier
+            style={styles.chart}
+          />
+        </View>
+      </View>
+
+      {/* Body Part Analysis */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Body Part Analysis</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAllText}>View All</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.analysisGrid}>
+          {bodyPartProgress.map((item) => (
+            <View key={item.part} style={styles.analysisCard}>
+              <View style={styles.analysisHeader}>
+                <View style={[styles.analysisIcon, { backgroundColor: item.color }]}>
+                  <MaterialIcons name="accessibility" size={20} color="#FFF" />
+                </View>
+                <Text style={styles.analysisTitle}>{item.part}</Text>
+              </View>
+              <Text style={styles.analysisProgress}>{item.progress}%</Text>
+              <Text style={styles.analysisSessions}>{item.sessions} sessions</Text>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${item.progress}%`, backgroundColor: item.color }]} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Insights & Recommendations */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Insights & Recommendations</Text>
+          <MaterialIcons name="insights" size={24} color="#0057FF" />
+        </View>
+        <View style={styles.insightsContainer}>
+          {analysisInsights.map((insight, index) => (
+            <View key={index} style={styles.insightCard}>
+              <View style={[styles.insightIcon, { backgroundColor: insight.color + '20' }]}>
+                <MaterialIcons name={insight.icon} size={20} color={insight.color} />
+              </View>
+              <View style={styles.insightContent}>
+                <Text style={styles.insightTitle}>{insight.title}</Text>
+                <Text style={styles.insightDescription}>{insight.description}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Recent Gaming Sessions */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Gaming Sessions</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAllText}>History</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.gamingSessions}>
+          {gamingData.map((session, index) => (
+            <View key={index} style={styles.gamingSession}>
+              <View style={styles.sessionHeader}>
+                <Text style={styles.sessionDate}>{session.date}</Text>
+                <View style={styles.sessionScore}>
+                  <MaterialIcons name="star" size={16} color="#FFB74D" />
+                  <Text style={styles.sessionScoreText}>{session.score}%</Text>
+                </View>
+              </View>
+              <View style={styles.sessionDetails}>
+                <View style={styles.sessionDetail}>
+                  <MaterialIcons name="timer" size={14} color="#666" />
+                  <Text style={styles.sessionDetailText}>{session.duration}</Text>
+                </View>
+                <View style={styles.sessionDetail}>
+                  <MaterialIcons name="fitness" size={14} color="#666" />
+                  <Text style={styles.sessionDetailText}>{session.exercises} exercises</Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
+  );
+
+  // Physiotherapist View Components
+  const PhysiotherapistProgressView = () => (
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.welcomeText}>Patient Progress</Text>
+            <Text style={styles.userName}>Dr. {currentUser?.lastName || "Therapist"}</Text>
+          </View>
+          <TouchableOpacity style={styles.reportButton}>
+            <MaterialIcons name="description" size={20} color="#0057FF" />
+            <Text style={styles.reportButtonText}>Generate Report</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Patient Stats */}
+        <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{pagination.total}</Text>
-            <Text style={styles.statLabel}>Total Publications</Text>
+            <Text style={styles.statNumber}>{patients.length}</Text>
+            <Text style={styles.statLabel}>Active Patients</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
-              {Object.keys(purchases).length}
-            </Text>
-            <Text style={styles.statLabel}>Your Purchases</Text>
+            <Text style={styles.statNumber}>85%</Text>
+            <Text style={styles.statLabel}>Avg. Compliance</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>24</Text>
+            <Text style={styles.statLabel}>Total Sessions</Text>
           </View>
         </View>
       </View>
 
-      {publications.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>No Publications Found</Text>
-          <Text style={styles.emptyText}>
-            There are currently no published materials available. Check back
-            later for new content.
-          </Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-            <Text style={styles.refreshButtonText}>Refresh</Text>
+      {/* Patient Overview */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Patient Overview</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAllText}>All Patients</Text>
           </TouchableOpacity>
         </View>
-      ) : (
-        <>
-          <View style={styles.resultsHeader}>
-            <Text style={styles.resultsCount}>
-              Showing {publications.length} of {pagination.total} publications
-            </Text>
-            <Text style={styles.pageInfo}>
-              Page {pagination.page} of {pagination.totalPages}
-            </Text>
-          </View>
-
-          {publications.map((publication) => (
-            <PublicationCard key={publication.id} publication={publication} />
-          ))}
-
-          {pagination.page < pagination.totalPages && (
-            <TouchableOpacity
-              style={styles.loadMoreButton}
-              onPress={loadMorePublications}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#007bff" />
-              ) : (
-                <Text style={styles.loadMoreText}>Load More Publications</Text>
-              )}
+        <View style={styles.patientsContainer}>
+          {patientOverview.map((patient, index) => (
+            <TouchableOpacity key={index} style={styles.patientCard}>
+              <View style={styles.patientHeader}>
+                <Image source={images.test} style={styles.patientImage} />
+                <View style={styles.patientInfo}>
+                  <Text style={styles.patientName}>{patient.patient}</Text>
+                  <Text style={styles.patientStatus}>{patient.status}</Text>
+                </View>
+                <View style={[
+                  styles.complianceBadge,
+                  patient.compliance >= 90 && styles.excellentCompliance,
+                  patient.compliance < 90 && patient.compliance >= 70 && styles.goodCompliance,
+                  patient.compliance < 70 && styles.needsAttentionCompliance
+                ]}>
+                  <Text style={styles.complianceText}>{patient.compliance}%</Text>
+                </View>
+              </View>
+              <View style={styles.patientDetails}>
+                <View style={styles.patientDetail}>
+                  <MaterialIcons name="history" size={14} color="#666" />
+                  <Text style={styles.patientDetailText}>Last: {patient.lastSession}</Text>
+                </View>
+                <View style={styles.patientDetail}>
+                  <MaterialIcons name="schedule" size={14} color="#666" />
+                  <Text style={styles.patientDetailText}>Next: {patient.nextSession}</Text>
+                </View>
+              </View>
             </TouchableOpacity>
-          )}
-        </>
-      )}
+          ))}
+        </View>
+      </View>
+
+      {/* Recently Played Activities */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Game Activities</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAllText}>View All</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.activitiesContainer}>
+          {playedActivities.map((activity, index) => (
+            <View key={index} style={styles.activityCard}>
+              <View style={styles.activityHeader}>
+                <View style={styles.activityPatient}>
+                  <Image source={images.test} style={styles.activityPatientImage} />
+                  <View>
+                    <Text style={styles.activityPatientName}>{activity.patient}</Text>
+                    <Text style={styles.activityGame}>{activity.game}</Text>
+                  </View>
+                </View>
+                <View style={styles.activityScore}>
+                  <Text style={styles.activityScoreText}>{activity.score}%</Text>
+                  <MaterialIcons name="star" size={16} color="#FFB74D" />
+                </View>
+              </View>
+              <View style={styles.activityDetails}>
+                <View style={styles.activityDetail}>
+                  <MaterialIcons name="timer" size={14} color="#666" />
+                  <Text style={styles.activityDetailText}>{activity.duration}</Text>
+                </View>
+                <Text style={styles.activityDate}>{activity.date}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Compliance Analytics */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Compliance Analytics</Text>
+        <View style={styles.complianceChart}>
+          <PieChart
+            data={[
+              { name: "Excellent", population: 45, color: "#6BCF7F", legendFontColor: "#333" },
+              { name: "Good", population: 35, color: "#4B9BFF", legendFontColor: "#333" },
+              { name: "Needs Attention", population: 20, color: "#FF6B6B", legendFontColor: "#333" },
+            ]}
+            width={screenWidth - 40}
+            height={200}
+            chartConfig={chartConfig}
+            accessor="population"
+            backgroundColor="transparent"
+            paddingLeft="15"
+            absolute
+          />
+        </View>
+      </View>
+
+      {/* Quick Actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.quickActionsGrid}>
+          <TouchableOpacity style={styles.quickActionCard}>
+            <View style={[styles.quickActionIcon, { backgroundColor: "#E3F2FD" }]}>
+              <MaterialIcons name="assignment" size={24} color="#2196F3" />
+            </View>
+            <Text style={styles.quickActionText}>Add Exercise</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickActionCard}>
+            <View style={[styles.quickActionIcon, { backgroundColor: "#E8F5E9" }]}>
+              <MaterialIcons name="schedule" size={24} color="#4CAF50" />
+            </View>
+            <Text style={styles.quickActionText}>Schedule Session</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickActionCard}>
+            <View style={[styles.quickActionIcon, { backgroundColor: "#FFF3E0" }]}>
+              <MaterialIcons name="analytics" size={24} color="#FF9800" />
+            </View>
+            <Text style={styles.quickActionText}>Detailed Analytics</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickActionCard}>
+            <View style={[styles.quickActionIcon, { backgroundColor: "#F3E5F5" }]}>
+              <MaterialIcons name="message" size={24} color="#9C27B0" />
+            </View>
+            <Text style={styles.quickActionText}>Message Parents</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </ScrollView>
   );
+
+  return isPhysiotherapist ? <PhysiotherapistProgressView /> : <ParentProgressView />;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  header: {
-    marginBottom: 24,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#1a1a1a",
-    marginBottom: 8,
-  },
-  pageSubtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 20,
-  },
-  statsOverview: {
-    flexDirection: "row",
-    gap: 16,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#005CFF",
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "#666",
-    textAlign: "center",
-  },
-  resultsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  resultsCount: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "500",
-  },
-  pageInfo: {
-    fontSize: 12,
-    color: "#999",
-    backgroundColor: "#e9ecef",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  publicationImage: {
-    width: 80,
-    height: 100,
-    borderRadius: 8,
-    marginRight: 16,
-    backgroundColor: "#e9ecef",
-  },
-  cardContent: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#2d3436",
-    marginBottom: 8,
-    lineHeight: 24,
-  },
-  description: {
-    fontSize: 14,
-    color: "#636e72",
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  metaInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    marginBottom: 12,
-  },
-  author: {
-    fontSize: 13,
-    color: "#666",
-    marginRight: 12,
-  },
-  publisherTag: {
-    backgroundColor: "#e9ecef",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  publisherText: {
-    fontSize: 11,
-    color: "#495057",
-    fontWeight: "500",
-  },
-  statsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 16,
-  },
-  statItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statIcon: {
-    width: 14,
-    height: 14,
-    marginRight: 4,
-    tintColor: "#6c757d",
-  },
-  statText: {
-    fontSize: 12,
-    color: "#6c757d",
-  },
-  ratingPriceContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e9ecef",
-  },
-  ratingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  starIcon: {
-    width: 18,
-    height: 18,
-    marginRight: 4,
-    tintColor: "#ffc107",
-  },
-  ratingText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginRight: 4,
-  },
-  ratingCount: {
-    fontSize: 12,
-    color: "#6c757d",
-  },
-  priceContainer: {
-    alignItems: "flex-end",
-  },
-  originalPrice: {
-    fontSize: 14,
-    color: "#6c757d",
-    textDecorationLine: "line-through",
-    marginBottom: 2,
-  },
-  finalPrice: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#28a745",
-  },
-  discountBadge: {
-    backgroundColor: "#dc3545",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 4,
-  },
-  discountText: {
-    fontSize: 10,
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  actionContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  buyButton: {
-    flex: 1,
-    backgroundColor: "#005CFF",
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  buyButtonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-  },
-  buyButtonIcon: {
-    width: 20,
-    height: 20,
-    tintColor: "#fff",
-    marginRight: 12,
-  },
-  buyButtonTextContainer: {
-    flex: 1,
-  },
-  buyButtonText: {
-    color: "#ffffff",
-    fontWeight: "bold",
-    fontSize: 16,
-    marginBottom: 2,
-  },
-  buyButtonSubText: {
-    color: "rgba(255, 255, 255, 0.8)",
-    fontSize: 11,
-  },
-  buyButtonPrice: {
-    color: "#ffffff",
-    fontWeight: "bold",
-    fontSize: 18,
-    marginLeft: 8,
-  },
-  downloadButton: {
-    flex: 1,
-    backgroundColor: "#28a745",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 14,
-    borderRadius: 10,
-  },
-  reviewButton: {
-    flex: 1,
-    backgroundColor: "#ffc107",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 14,
-    borderRadius: 10,
-  },
-  buttonIcon: {
-    width: 18,
-    height: 18,
-    marginRight: 8,
-    tintColor: "#fff",
-  },
-  downloadButtonText: {
-    color: "#ffffff",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-  reviewButtonText: {
-    color: "#ffffff",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-  footerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e9ecef",
-  },
-  statusContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  publishedBadge: {
-    backgroundColor: "#d4edda",
-  },
-  draftBadge: {
-    backgroundColor: "#fff3cd",
-  },
-  archivedBadge: {
-    backgroundColor: "#f8d7da",
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: "bold",
-    textTransform: "uppercase",
-  },
-  publishedBadgeText: {
-    color: "#155724",
-  },
-  draftBadgeText: {
-    color: "#856404",
-  },
-  archivedBadgeText: {
-    color: "#721c24",
-  },
-  publishedDate: {
-    fontSize: 11,
-    color: "#6c757d",
-  },
-  fileTypeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  fileTypeIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 6,
-    tintColor: "#6c757d",
-  },
-  fileTypeText: {
-    fontSize: 11,
-    color: "#6c757d",
+    backgroundColor: "#f8fafc",
   },
   loadingContainer: {
     flex: 1,
@@ -940,88 +555,566 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: "#666",
+    fontFamily: "Poppins-Regular",
   },
-  authContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    paddingHorizontal: 24,
+  errorText: {
+    fontSize: 16,
+    color: "#dc3545",
+    textAlign: "center",
+    fontFamily: "Poppins-Regular",
   },
-  authTitle: {
+  header: {
+    backgroundColor: "#0057FF",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+  },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.9)",
+    fontFamily: "Poppins-Regular",
+  },
+  userName: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 12,
-  },
-  authText: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  signInButton: {
-    backgroundColor: "#005CFF",
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 10,
-  },
-  signInButtonText: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontFamily: "Poppins-Bold",
   },
-  emptyContainer: {
-    flex: 1,
+  shareButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 20,
   },
-  emptyImage: {
-    width: 120,
-    height: 120,
-    marginBottom: 24,
-    opacity: 0.7,
-    borderRadius: 60,
+  reportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
   },
-  emptyTitle: {
+  reportButtonText: {
+    color: "#0057FF",
+    fontSize: 12,
+    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
+  },
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    padding: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    marginHorizontal: 5,
+  },
+  statNumber: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 22,
-  },
-  refreshButton: {
-    backgroundColor: "#005CFF",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  refreshButtonText: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "500",
+    fontFamily: "Poppins-Bold",
   },
-  loadMoreButton: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 10,
+  statLabel: {
+    fontSize: 10,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginTop: 4,
+    fontFamily: "Poppins-Regular",
+  },
+  childSelector: {
+    marginTop: 20,
+  },
+  childScroll: {
+    marginTop: 10,
+  },
+  childCard: {
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "#dee2e6",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    padding: 12,
+    borderRadius: 12,
+    marginRight: 10,
+    width: 220,
   },
-  loadMoreText: {
-    color: "#005CFF",
-    fontSize: 16,
+  selectedChildCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderWidth: 1,
+    borderColor: "#fff",
+  },
+  childImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  childInfo: {
+    flex: 1,
+  },
+  childName: {
+    fontSize: 14,
     fontWeight: "600",
+    color: "#fff",
+    fontFamily: "Poppins-SemiBold",
+  },
+  childCondition: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginTop: 2,
+    fontFamily: "Poppins-Regular",
+  },
+  section: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1e293b",
+    fontFamily: "Poppins-Bold",
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: "#3b82f6",
+    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
+  },
+  gamingCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  gamingStats: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 20,
+  },
+  gamingStat: {
+    alignItems: "center",
+  },
+  gamingStatValue: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1e293b",
+    marginTop: 8,
+    fontFamily: "Poppins-Bold",
+  },
+  gamingStatLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 4,
+    fontFamily: "Poppins-Regular",
+  },
+  startGamingButton: {
+    backgroundColor: "#0057FF",
+    paddingVertical: 12,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  startGamingText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+    fontFamily: "Poppins-Bold",
+  },
+  timeframeSelector: {
+    flexDirection: "row",
+    backgroundColor: "#f1f5f9",
+    borderRadius: 20,
+    padding: 4,
+  },
+  timeframeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  selectedTimeframeButton: {
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  timeframeText: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "500",
+    fontFamily: "Poppins-Medium",
+  },
+  selectedTimeframeText: {
+    color: "#0057FF",
+    fontWeight: "600",
+  },
+  chartContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  chart: {
+    borderRadius: 16,
+  },
+  analysisGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  analysisCard: {
+    width: "48%",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  analysisHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  analysisIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  analysisTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  analysisProgress: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1e293b",
+    marginBottom: 4,
+    fontFamily: "Poppins-Bold",
+  },
+  analysisSessions: {
+    fontSize: 11,
+    color: "#64748b",
+    marginBottom: 8,
+    fontFamily: "Poppins-Regular",
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: "#e2e8f0",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  insightsContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 16,
+  },
+  insightCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  insightIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  insightContent: {
+    flex: 1,
+  },
+  insightTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 4,
+    fontFamily: "Poppins-SemiBold",
+  },
+  insightDescription: {
+    fontSize: 12,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+  },
+  gamingSessions: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 16,
+  },
+  gamingSession: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  sessionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  sessionDate: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  sessionScore: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  sessionScoreText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  sessionDetails: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  sessionDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  sessionDetailText: {
+    fontSize: 12,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+  },
+  // Physiotherapist specific styles
+  patientsContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 16,
+  },
+  patientCard: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  patientHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  patientImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  patientInfo: {
+    flex: 1,
+  },
+  patientName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  patientStatus: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 2,
+    fontFamily: "Poppins-Regular",
+  },
+  complianceBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  excellentCompliance: {
+    backgroundColor: "#E8F5E9",
+  },
+  goodCompliance: {
+    backgroundColor: "#E3F2FD",
+  },
+  needsAttentionCompliance: {
+    backgroundColor: "#FFEBEE",
+  },
+  complianceText: {
+    fontSize: 12,
+    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
+  },
+  patientDetails: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  patientDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  patientDetailText: {
+    fontSize: 12,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+  },
+  activitiesContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 16,
+  },
+  activityCard: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  activityHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  activityPatient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  activityPatientImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  activityPatientName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  activityGame: {
+    fontSize: 12,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+  },
+  activityScore: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  activityScoreText: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#1e293b",
+    fontFamily: "Poppins-Bold",
+  },
+  activityDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  activityDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  activityDetailText: {
+    fontSize: 12,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+  },
+  activityDate: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontFamily: "Poppins-Regular",
+  },
+  complianceChart: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  quickActionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  quickActionCard: {
+    width: "48%",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  quickActionText: {
+    fontSize: 12,
+    color: "#1e293b",
+    fontWeight: "600",
+    textAlign: "center",
+    fontFamily: "Poppins-SemiBold",
   },
 });
