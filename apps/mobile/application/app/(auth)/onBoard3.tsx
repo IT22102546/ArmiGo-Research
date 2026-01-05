@@ -511,7 +511,7 @@ const OnBoard3: React.FC = () => {
           <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
 
           {/* Title */}
-          <Text style={styles.header}>Learn APP</Text>
+          <Text style={styles.header}>ArmiGo</Text>
 
           {/* Light Blue Wave - BELOW the white wave */}
           <View style={styles.lightBlueWaveContainer}>
@@ -608,7 +608,7 @@ const OnBoard3: React.FC = () => {
 
               {/* Description text */}
               <Text style={styles.description}>
-                Check your attendance, results,{"\n"}and rankings easily
+                Check your attendance, results,{"\n"}and rankings easily.
               </Text>
 
               {/* Dots Indicator */}
