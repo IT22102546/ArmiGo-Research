@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -31,21 +30,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ApiClient } from "@/lib/api/api-client";
-import { toast } from "sonner";
-import { format } from "date-fns";
 import {
-  Plus,
   Search,
   FileText,
-  Video,
-  Image,
+  Settings,
   File,
   Download,
   Eye,
@@ -54,17 +46,19 @@ import {
   Filter,
   Upload,
   BookOpen,
+  Wrench,
+  PlayCircle,
 } from "lucide-react";
 
 type MaterialType =
-  | "NOTES"
-  | "SLIDES"
-  | "VIDEO"
-  | "ASSIGNMENT"
-  | "REFERENCE"
-  | "OTHER";
+  | "SETUP_GUIDE"
+  | "USER_MANUAL"
+  | "VIDEO_TUTORIAL"
+  | "GAME_GUIDE"
+  | "TROUBLESHOOTING"
+  | "MAINTENANCE";
 
-interface CourseMaterial {
+interface ProductResource {
   id: string;
   title: string;
   description?: string;
@@ -72,74 +66,273 @@ interface CourseMaterial {
   fileUrl: string;
   fileSize?: number;
   fileType?: string;
-  grade: string[];
-  subject?: string;
-  classId?: string;
+  category: string[];
+  productModel?: string;
   isPublic: boolean;
-  downloads: number;
+  views: number;
   uploadedById: string;
   uploadedBy?: {
     firstName: string;
     lastName: string;
   };
-  class?: {
-    name: string;
-  };
   createdAt: string;
 }
 
-export default function CourseMaterialsPage() {
-  const queryClient = useQueryClient();
+const initialResources: ProductResource[] = [
+  {
+    id: "1",
+    title: "ArmiGo Pro Quick Start Guide",
+    description:
+      "Complete setup guide for first-time users of ArmiGo Pro Gaming Device. Learn how to unbox, connect, and start playing in minutes.",
+    type: "SETUP_GUIDE",
+    fileUrl: "/resources/quick-start-guide.pdf",
+    fileSize: 2457600,
+    fileType: "application/pdf",
+    category: ["ArmiGo Pro", "Getting Started"],
+    productModel: "ArmiGo Pro",
+    isPublic: true,
+    views: 1245,
+    uploadedById: "admin-1",
+    uploadedBy: {
+      firstName: "Kasun",
+      lastName: "Perera",
+    },
+    createdAt: "2024-01-10T08:30:00Z",
+  },
+  {
+    id: "2",
+    title: "Complete User Manual - ArmiGo Devices",
+    description:
+      "Comprehensive user manual covering all features, settings, and troubleshooting for ArmiGo gaming devices.",
+    type: "USER_MANUAL",
+    fileUrl: "/resources/user-manual.pdf",
+    fileSize: 8912000,
+    fileType: "application/pdf",
+    category: ["ArmiGo Pro", "ArmiGo Lite", "Documentation"],
+    productModel: "All Models",
+    isPublic: true,
+    views: 2341,
+    uploadedById: "admin-1",
+    uploadedBy: {
+      firstName: "Kasun",
+      lastName: "Perera",
+    },
+    createdAt: "2024-01-05T10:00:00Z",
+  },
+  {
+    id: "3",
+    title: "Controller Pairing Tutorial Video",
+    description:
+      "Step-by-step video tutorial on how to pair wireless controllers with your ArmiGo device. Includes troubleshooting tips.",
+    type: "VIDEO_TUTORIAL",
+    fileUrl: "/resources/controller-pairing.mp4",
+    fileSize: 45678000,
+    fileType: "video/mp4",
+    category: ["Accessories", "Controllers", "Tutorial"],
+    productModel: "All Models",
+    isPublic: true,
+    views: 892,
+    uploadedById: "admin-2",
+    uploadedBy: {
+      firstName: "Saman",
+      lastName: "Silva",
+    },
+    createdAt: "2024-01-12T14:20:00Z",
+  },
+  {
+    id: "4",
+    title: "Top 10 Games Setup Guide",
+    description:
+      "Installation and configuration guide for the most popular games on ArmiGo. Includes optimal settings and tips.",
+    type: "GAME_GUIDE",
+    fileUrl: "/resources/top-games-guide.pdf",
+    fileSize: 5234000,
+    fileType: "application/pdf",
+    category: ["Games", "Configuration"],
+    productModel: "ArmiGo Pro",
+    isPublic: true,
+    views: 1567,
+    uploadedById: "admin-2",
+    uploadedBy: {
+      firstName: "Saman",
+      lastName: "Silva",
+    },
+    createdAt: "2024-01-08T11:45:00Z",
+  },
+  {
+    id: "5",
+    title: "Common Issues and Solutions",
+    description:
+      "Troubleshooting guide for common problems like connectivity issues, audio problems, and performance optimization.",
+    type: "TROUBLESHOOTING",
+    fileUrl: "/resources/troubleshooting.pdf",
+    fileSize: 3456000,
+    fileType: "application/pdf",
+    category: ["Support", "Technical"],
+    productModel: "All Models",
+    isPublic: true,
+    views: 3421,
+    uploadedById: "admin-1",
+    uploadedBy: {
+      firstName: "Kasun",
+      lastName: "Perera",
+    },
+    createdAt: "2024-01-15T09:00:00Z",
+  },
+  {
+    id: "6",
+    title: "Device Maintenance and Care",
+    description:
+      "Best practices for cleaning, storing, and maintaining your ArmiGo device to ensure longevity and optimal performance.",
+    type: "MAINTENANCE",
+    fileUrl: "/resources/maintenance-guide.pdf",
+    fileSize: 1890000,
+    fileType: "application/pdf",
+    category: ["Care", "Maintenance"],
+    productModel: "All Models",
+    isPublic: true,
+    views: 678,
+    uploadedById: "admin-1",
+    uploadedBy: {
+      firstName: "Kasun",
+      lastName: "Perera",
+    },
+    createdAt: "2024-01-11T15:30:00Z",
+  },
+  {
+    id: "7",
+    title: "Wi-Fi Setup and Optimization",
+    description:
+      "Video guide on connecting your ArmiGo device to Wi-Fi and optimizing network settings for the best gaming experience.",
+    type: "VIDEO_TUTORIAL",
+    fileUrl: "/resources/wifi-setup.mp4",
+    fileSize: 38900000,
+    fileType: "video/mp4",
+    category: ["Network", "Setup", "Tutorial"],
+    productModel: "All Models",
+    isPublic: true,
+    views: 1123,
+    uploadedById: "admin-2",
+    uploadedBy: {
+      firstName: "Saman",
+      lastName: "Silva",
+    },
+    createdAt: "2024-01-14T16:00:00Z",
+  },
+  {
+    id: "8",
+    title: "ArmiGo Lite Getting Started",
+    description:
+      "Complete beginner's guide for ArmiGo Lite users including unboxing, setup, and first game installation.",
+    type: "SETUP_GUIDE",
+    fileUrl: "/resources/lite-getting-started.pdf",
+    fileSize: 1567000,
+    fileType: "application/pdf",
+    category: ["ArmiGo Lite", "Getting Started"],
+    productModel: "ArmiGo Lite",
+    isPublic: true,
+    views: 834,
+    uploadedById: "admin-1",
+    uploadedBy: {
+      firstName: "Kasun",
+      lastName: "Perera",
+    },
+    createdAt: "2024-01-13T10:15:00Z",
+  },
+  {
+    id: "9",
+    title: "Multiplayer Gaming Setup",
+    description:
+      "Learn how to set up local and online multiplayer gaming sessions with friends and family on ArmiGo devices.",
+    type: "GAME_GUIDE",
+    fileUrl: "/resources/multiplayer-guide.pdf",
+    fileSize: 4123000,
+    fileType: "application/pdf",
+    category: ["Games", "Multiplayer"],
+    productModel: "ArmiGo Pro",
+    isPublic: true,
+    views: 1890,
+    uploadedById: "admin-2",
+    uploadedBy: {
+      firstName: "Saman",
+      lastName: "Silva",
+    },
+    createdAt: "2024-01-09T13:45:00Z",
+  },
+  {
+    id: "10",
+    title: "System Updates and Backup",
+    description:
+      "Guide on keeping your ArmiGo device up-to-date with the latest system updates and backing up your game data.",
+    type: "MAINTENANCE",
+    fileUrl: "/resources/updates-backup.pdf",
+    fileSize: 2678000,
+    fileType: "application/pdf",
+    category: ["System", "Updates", "Backup"],
+    productModel: "All Models",
+    isPublic: true,
+    views: 945,
+    uploadedById: "admin-1",
+    uploadedBy: {
+      firstName: "Kasun",
+      lastName: "Perera",
+    },
+    createdAt: "2024-01-07T11:00:00Z",
+  },
+];
+
+export default function ProductResourcesPage() {
+  const [resources, setResources] =
+    useState<ProductResource[]>(initialResources);
   const [filters, setFilters] = useState({
     search: "",
     type: "",
-    grade: "",
+    category: "",
   });
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [selectedMaterial, setSelectedMaterial] =
-    useState<CourseMaterial | null>(null);
+  const [selectedResource, setSelectedResource] =
+    useState<ProductResource | null>(null);
 
-  const { data: materials, isLoading } = useQuery({
-    queryKey: ["course-materials", filters],
-    queryFn: async () => {
-      const params: any = {};
-      if (filters.type) params.type = filters.type;
-      if (filters.grade) params.grade = filters.grade;
-      if (filters.search) params.search = filters.search;
+  const filteredResources = resources.filter((resource) => {
+    const matchesSearch =
+      !filters.search ||
+      resource.title.toLowerCase().includes(filters.search.toLowerCase()) ||
+      resource.description
+        ?.toLowerCase()
+        .includes(filters.search.toLowerCase());
 
-      const response = await ApiClient.get<any>("/course-materials", {
-        params,
-      });
-      return response?.data || response || [];
-    },
+    const matchesType = !filters.type || resource.type === filters.type;
+
+    const matchesCategory =
+      !filters.category ||
+      resource.category.some((c) =>
+        c.toLowerCase().includes(filters.category.toLowerCase())
+      );
+
+    return matchesSearch && matchesType && matchesCategory;
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await ApiClient.delete(`/course-materials/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["course-materials"] });
-      toast.success("Material deleted successfully");
-    },
-    onError: () => {
-      toast.error("Failed to delete material");
-    },
-  });
-
-  const materialsList = Array.isArray(materials)
-    ? materials
-    : materials?.materials || [];
+  const handleDelete = (id: string) => {
+    if (confirm("Are you sure you want to delete this resource?")) {
+      setResources(resources.filter((r) => r.id !== id));
+      alert("Resource deleted successfully");
+    }
+  };
 
   const getTypeIcon = (type: MaterialType) => {
     switch (type) {
-      case "VIDEO":
-        return <Video className="h-4 w-4" />;
-      case "SLIDES":
-        return <Image className="h-4 w-4" />;
-      case "NOTES":
-      case "ASSIGNMENT":
+      case "VIDEO_TUTORIAL":
+        return <PlayCircle className="h-4 w-4" />;
+      case "SETUP_GUIDE":
+        return <Settings className="h-4 w-4" />;
+      case "USER_MANUAL":
+        return <BookOpen className="h-4 w-4" />;
+      case "GAME_GUIDE":
         return <FileText className="h-4 w-4" />;
+      case "TROUBLESHOOTING":
+        return <Wrench className="h-4 w-4" />;
+      case "MAINTENANCE":
+        return <Settings className="h-4 w-4" />;
       default:
         return <File className="h-4 w-4" />;
     }
@@ -147,14 +340,14 @@ export default function CourseMaterialsPage() {
 
   const getTypeBadge = (type: MaterialType) => {
     const styles: Record<MaterialType, string> = {
-      NOTES: "bg-blue-100 text-blue-800",
-      SLIDES: "bg-purple-100 text-purple-800",
-      VIDEO: "bg-red-100 text-red-800",
-      ASSIGNMENT: "bg-green-100 text-green-800",
-      REFERENCE: "bg-yellow-100 text-yellow-800",
-      OTHER: "bg-gray-100 text-gray-800",
+      SETUP_GUIDE: "bg-blue-100 text-blue-800",
+      USER_MANUAL: "bg-purple-100 text-purple-800",
+      VIDEO_TUTORIAL: "bg-red-100 text-red-800",
+      GAME_GUIDE: "bg-green-100 text-green-800",
+      TROUBLESHOOTING: "bg-yellow-100 text-yellow-800",
+      MAINTENANCE: "bg-orange-100 text-orange-800",
     };
-    return <Badge className={styles[type]}>{type}</Badge>;
+    return <Badge className={styles[type]}>{type.replace("_", " ")}</Badge>;
   };
 
   const formatFileSize = (bytes?: number) => {
@@ -164,54 +357,38 @@ export default function CourseMaterialsPage() {
     return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
   };
 
-  const handleView = (material: CourseMaterial) => {
-    setSelectedMaterial(material);
+  const handleView = (resource: ProductResource) => {
+    setSelectedResource(resource);
     setViewDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this material?")) {
-      deleteMutation.mutate(id);
-    }
-  };
-
   const stats = {
-    total: materialsList.length,
-    notes: materialsList.filter((m: CourseMaterial) => m.type === "NOTES")
-      .length,
-    videos: materialsList.filter((m: CourseMaterial) => m.type === "VIDEO")
-      .length,
-    assignments: materialsList.filter(
-      (m: CourseMaterial) => m.type === "ASSIGNMENT"
+    total: filteredResources.length,
+    guides: filteredResources.filter(
+      (r: ProductResource) =>
+        r.type === "SETUP_GUIDE" || r.type === "USER_MANUAL"
+    ).length,
+    videos: filteredResources.filter(
+      (r: ProductResource) => r.type === "VIDEO_TUTORIAL"
+    ).length,
+    support: filteredResources.filter(
+      (r: ProductResource) =>
+        r.type === "TROUBLESHOOTING" || r.type === "MAINTENANCE"
     ).length,
   };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6 p-6">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 md:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
-        </div>
-        <Skeleton className="h-96" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Course Materials</h1>
+          <h1 className="text-3xl font-bold">Product Resource Library</h1>
           <p className="text-muted-foreground">
-            Manage uploaded course materials and resources
+            Guides, tutorials, and support materials for customers
           </p>
         </div>
         <Button>
           <Upload className="h-4 w-4 mr-2" />
-          Upload Material
+          Upload Resource
         </Button>
       </div>
 
@@ -220,7 +397,7 @@ export default function CourseMaterialsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Materials
+              Total Resources
             </CardTitle>
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -231,20 +408,22 @@ export default function CourseMaterialsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Notes</CardTitle>
-            <FileText className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium">Setup Guides</CardTitle>
+            <Settings className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {stats.notes}
+              {stats.guides}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Videos</CardTitle>
-            <Video className="h-4 w-4 text-red-600" />
+            <CardTitle className="text-sm font-medium">
+              Video Tutorials
+            </CardTitle>
+            <PlayCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
@@ -255,12 +434,12 @@ export default function CourseMaterialsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Assignments</CardTitle>
-            <FileText className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium">Support Docs</CardTitle>
+            <Wrench className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.assignments}
+            <div className="text-2xl font-bold text-orange-600">
+              {stats.support}
             </div>
           </CardContent>
         </Card>
@@ -295,41 +474,45 @@ export default function CourseMaterialsPage() {
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Material Type" />
+                <SelectValue placeholder="Resource Type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="NOTES">Notes</SelectItem>
-                <SelectItem value="SLIDES">Slides</SelectItem>
-                <SelectItem value="VIDEO">Video</SelectItem>
-                <SelectItem value="ASSIGNMENT">Assignment</SelectItem>
-                <SelectItem value="REFERENCE">Reference</SelectItem>
-                <SelectItem value="OTHER">Other</SelectItem>
+                <SelectItem value="SETUP_GUIDE">Setup Guide</SelectItem>
+                <SelectItem value="USER_MANUAL">User Manual</SelectItem>
+                <SelectItem value="VIDEO_TUTORIAL">Video Tutorial</SelectItem>
+                <SelectItem value="GAME_GUIDE">Game Guide</SelectItem>
+                <SelectItem value="TROUBLESHOOTING">Troubleshooting</SelectItem>
+                <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
               </SelectContent>
             </Select>
 
             <Select
-              value={filters.grade}
+              value={filters.category}
               onValueChange={(value) =>
-                setFilters({ ...filters, grade: value === "all" ? "" : value })
+                setFilters({
+                  ...filters,
+                  category: value === "all" ? "" : value,
+                })
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Grade" />
+                <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Grades</SelectItem>
-                {[...Array(13)].map((_, i) => (
-                  <SelectItem key={i} value={`Grade ${i + 1}`}>
-                    Grade {i + 1}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="ArmiGo Pro">ArmiGo Pro</SelectItem>
+                <SelectItem value="ArmiGo Lite">ArmiGo Lite</SelectItem>
+                <SelectItem value="Getting Started">Getting Started</SelectItem>
+                <SelectItem value="Games">Games</SelectItem>
+                <SelectItem value="Support">Support</SelectItem>
+                <SelectItem value="Tutorial">Tutorial</SelectItem>
               </SelectContent>
             </Select>
 
             <Button
               variant="outline"
-              onClick={() => setFilters({ search: "", type: "", grade: "" })}
+              onClick={() => setFilters({ search: "", type: "", category: "" })}
             >
               Clear Filters
             </Button>
@@ -337,12 +520,12 @@ export default function CourseMaterialsPage() {
         </CardContent>
       </Card>
 
-      {/* Materials Table */}
+      {/* Resources Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Materials</CardTitle>
+          <CardTitle>Resources</CardTitle>
           <CardDescription>
-            {materialsList.length} material(s) found
+            {filteredResources.length} resource(s) found
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -351,75 +534,82 @@ export default function CourseMaterialsPage() {
               <TableRow>
                 <TableHead>Title</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Grade</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead>Uploaded By</TableHead>
                 <TableHead>Size</TableHead>
-                <TableHead>Downloads</TableHead>
+                <TableHead>Views</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {materialsList.length === 0 ? (
+              {filteredResources.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={8}
                     className="text-center text-muted-foreground"
                   >
-                    No materials found
+                    No resources found
                   </TableCell>
                 </TableRow>
               ) : (
-                materialsList.map((material: CourseMaterial) => (
-                  <TableRow key={material.id}>
+                filteredResources.map((resource: ProductResource) => (
+                  <TableRow key={resource.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {getTypeIcon(material.type)}
+                        {getTypeIcon(resource.type)}
                         <div>
-                          <div className="font-medium">{material.title}</div>
-                          {material.description && (
+                          <div className="font-medium">{resource.title}</div>
+                          {resource.description && (
                             <div className="text-sm text-muted-foreground line-clamp-1">
-                              {material.description}
+                              {resource.description}
                             </div>
                           )}
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{getTypeBadge(material.type)}</TableCell>
+                    <TableCell>{getTypeBadge(resource.type)}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {material.grade?.map((g, i) => (
+                        {resource.category?.map((c, i) => (
                           <Badge key={i} variant="outline" className="text-xs">
-                            {g}
+                            {c}
                           </Badge>
                         ))}
                       </div>
                     </TableCell>
                     <TableCell>
-                      {material.uploadedBy
-                        ? `${material.uploadedBy.firstName} ${material.uploadedBy.lastName}`
+                      {resource.uploadedBy
+                        ? `${resource.uploadedBy.firstName} ${resource.uploadedBy.lastName}`
                         : "-"}
                     </TableCell>
-                    <TableCell>{formatFileSize(material.fileSize)}</TableCell>
-                    <TableCell>{material.downloads || 0}</TableCell>
+                    <TableCell>{formatFileSize(resource.fileSize)}</TableCell>
+                    <TableCell>{resource.views || 0}</TableCell>
                     <TableCell>
-                      {format(new Date(material.createdAt), "MMM dd, yyyy")}
+                      {new Date(resource.createdAt).toLocaleDateString(
+                        "en-US",
+                        {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        }
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleView(material)}
+                          onClick={() => handleView(resource)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {material.fileUrl && (
+                        {resource.fileUrl && (
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() =>
-                              window.open(material.fileUrl, "_blank")
+                              window.open(resource.fileUrl, "_blank")
                             }
                           >
                             <Download className="h-4 w-4" />
@@ -431,7 +621,7 @@ export default function CourseMaterialsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(material.id)}
+                          onClick={() => handleDelete(resource.id)}
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
@@ -445,56 +635,77 @@ export default function CourseMaterialsPage() {
         </CardContent>
       </Card>
 
-      {/* View Material Dialog */}
+      {/* View Resource Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Material Details</DialogTitle>
+            <DialogTitle>Resource Details</DialogTitle>
           </DialogHeader>
-          {selectedMaterial && (
+          {selectedResource && (
             <div className="space-y-4">
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-muted rounded-lg">
-                  {getTypeIcon(selectedMaterial.type)}
+                  {getTypeIcon(selectedResource.type)}
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-lg">
-                    {selectedMaterial.title}
+                    {selectedResource.title}
                   </h3>
-                  {selectedMaterial.description && (
+                  {selectedResource.description && (
                     <p className="text-muted-foreground mt-1">
-                      {selectedMaterial.description}
+                      {selectedResource.description}
                     </p>
                   )}
                 </div>
-                {getTypeBadge(selectedMaterial.type)}
+                {getTypeBadge(selectedResource.type)}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-muted-foreground">Grade(s)</Label>
+                  <Label className="text-muted-foreground">Categories</Label>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {selectedMaterial.grade?.map((g, i) => (
+                    {selectedResource.category?.map((c, i) => (
                       <Badge key={i} variant="secondary">
-                        {g}
+                        {c}
                       </Badge>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">File Size</Label>
+                  <Label className="text-muted-foreground">Product Model</Label>
                   <p className="mt-1">
-                    {formatFileSize(selectedMaterial.fileSize)}
+                    {selectedResource.productModel || "All Models"}
                   </p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">Downloads</Label>
-                  <p className="mt-1">{selectedMaterial.downloads || 0}</p>
+                  <Label className="text-muted-foreground">File Size</Label>
+                  <p className="mt-1">
+                    {formatFileSize(selectedResource.fileSize)}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Views</Label>
+                  <p className="mt-1">{selectedResource.views || 0}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Uploaded By</Label>
+                  <p className="mt-1">
+                    {selectedResource.uploadedBy
+                      ? `${selectedResource.uploadedBy.firstName} ${selectedResource.uploadedBy.lastName}`
+                      : "-"}
+                  </p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Uploaded</Label>
                   <p className="mt-1">
-                    {format(new Date(selectedMaterial.createdAt), "PPp")}
+                    {new Date(selectedResource.createdAt).toLocaleDateString(
+                      "en-US",
+                      {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      }
+                    )}
                   </p>
                 </div>
               </div>
@@ -503,17 +714,17 @@ export default function CourseMaterialsPage() {
                 <Label className="text-muted-foreground">Visibility</Label>
                 <Badge
                   className="mt-1"
-                  variant={selectedMaterial.isPublic ? "default" : "secondary"}
+                  variant={selectedResource.isPublic ? "default" : "secondary"}
                 >
-                  {selectedMaterial.isPublic ? "Public" : "Private"}
+                  {selectedResource.isPublic ? "Public" : "Private"}
                 </Badge>
               </div>
             </div>
           )}
           <DialogFooter>
-            {selectedMaterial?.fileUrl && (
+            {selectedResource?.fileUrl && (
               <Button
-                onClick={() => window.open(selectedMaterial.fileUrl, "_blank")}
+                onClick={() => window.open(selectedResource.fileUrl, "_blank")}
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download
