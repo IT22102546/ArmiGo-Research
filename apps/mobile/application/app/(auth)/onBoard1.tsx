@@ -510,7 +510,7 @@ const OnBoard1: React.FC = () => {
           <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
 
           {/* Title */}
-          <Text style={styles.header}>Learn APP</Text>
+          <Text style={styles.header}>ArmiGo</Text>
 
           {/* Light Blue Wave - BELOW the white wave */}
           <View style={styles.lightBlueWaveContainer}>
@@ -594,7 +594,7 @@ const OnBoard1: React.FC = () => {
                 maskElement={
                   <View style={styles.maskElement}>
                     <Text style={styles.gradientTitleMask}>
-                      Join Live Classes
+                      Online sessions
                     </Text>
                   </View>
                 }
@@ -609,7 +609,7 @@ const OnBoard1: React.FC = () => {
 
               {/* Description text */}
               <Text style={styles.description}>
-                Attend your grade classes online,{"\n"}from anywhere
+               Attend your daily therapy sessions online,{"\n"}consultations and progress {"\n"} tracking.
               </Text>
 
               {/* Dots Indicator */}

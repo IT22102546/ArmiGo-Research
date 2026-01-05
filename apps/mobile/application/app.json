@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "LearnApp",
+    "name": "ArmiGo",
     "slug": "faite",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/images/LearnUpLogo.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.learnup.app"
+      "package": "com.armigo.app"
     },
     "web": {
       "bundler": "metro",
