@@ -1,0 +1,49 @@
+packages:
+  - apps/*
+  - '!apps/mobile'
+  - '!apps/mobile-desktop'
+  - packages/*
+
+catalog:
+  # Core dependencies
+  react: "^18.3.1"
+  react-dom: "^18.3.1"
+  typescript: "^5.3.0"
+
+  # Backend dependencies
+  "@nestjs/common": "^10.3.0"
+  "@nestjs/core": "^10.3.0"
+  "@nestjs/config": "^3.0.0"
+  "@prisma/client": "^5.22.0"
+  prisma: "^5.22.0"
+
+  # Shared utilities
+  zod: "^3.25.76"
+  "date-fns": "^3.3.0"
+
+  # Testing
+  vitest: "^1.2.0"
+  "@testing-library/react": "^16.3.0"
+  jest: "^29.5.14"
+
+  # TypeScript
+  "@types/node": "^20.19.23"
+
+  # Build tools
+  rimraf: "^6.0.1"
+  prettier: "^3.3.3"
+
+# Prefer workspace packages
+prefer-workspace-packages: true
+
+ignoredBuiltDependencies:
+  - '@firebase/util'
+  - '@nestjs/core'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@swc/core'
+  - esbuild
+  - msgpackr-extract
+  - prisma
+  - protobufjs
+  - unrs-resolver
