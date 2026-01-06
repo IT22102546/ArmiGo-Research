@@ -1,4 +1,10 @@
-# 🎓 LearnApp Platform
+# 🎓 Armigo Platform
+## 📋 Introduction
+ArmiGo is a gamified VR-based therapy system designed specifically for upper limb rehabilitation in children with hemiplegia. This innovative solution integrates multi-sensor wearable technology, real-time machine learning, and immersive virtual reality to transform traditional rehabilitation into an engaging, effective, and accessible experience.
+
+Developed in response to the critical gaps in pediatric rehab—including lack of access, high costs, low motivation, and limited therapist availability ArmiGo enables home-based therapy that is both fun and clinically impactful. Through sensor-fused gloves and sleeves, interactive VR games, and AI-powered feedback, the system not only tracks movement but also guides, corrects, and motivates young patients throughout their recovery journey.
+
+Aligned with the needs of Sri Lanka and similar low-resource settings, ArmiGo stands as a scalable, affordable, and holistic rehabilitation companion empowering children to regain movement, independence, and confidence.
 
 ## 📋 Prerequisites
 
