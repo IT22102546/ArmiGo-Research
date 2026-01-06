@@ -1,0 +1,13 @@
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\bin\Debug\GyroSensorReceiver.exe.config
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\bin\Debug\GyroSensorReceiver.exe
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\bin\Debug\GyroSensorReceiver.pdb
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\bin\Debug\Newtonsoft.Json.dll
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\bin\Debug\Newtonsoft.Json.xml
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\obj\x86\Debug\GyroSensorReceiver.csproj.AssemblyReference.cache
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\obj\x86\Debug\MainForm.resources
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\obj\x86\Debug\GyroSensorReceiver.Properties.Resources.resources
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\obj\x86\Debug\GyroSensorReceiver.csproj.GenerateResource.cache
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\obj\x86\Debug\GyroSensorReceiver.csproj.CoreCompileInputs.cache
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\obj\x86\Debug\GyroSens.D93F9CFD.Up2Date
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\obj\x86\Debug\GyroSensorReceiver.exe
+C:\Users\Asanka Dilshan\Downloads\GyroMocapUE4-master\GyroMocapUE4-master\GyroSensorReceiver\GyroSensorReceiver\obj\x86\Debug\GyroSensorReceiver.pdb

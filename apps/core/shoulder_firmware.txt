@@ -1,0 +1,884 @@
+#include <Wire.h>
+#include <math.h>
+
+// MPU9250 variables
+const int MPU9250_ADDRESS = 0x68;
+bool mpuAvailable = false;
+
+// Movement pattern detection
+struct MovementPattern {
+  float accelRangeX = 0, accelRangeY = 0, accelRangeZ = 0;
+  float gyroRangeX = 0, gyroRangeY = 0, gyroRangeZ = 0;
+  float maxAccelX = -1000, minAccelX = 1000;
+  float maxAccelY = -1000, minAccelY = 1000;
+  float maxAccelZ = -1000, minAccelZ = 1000;
+  float maxGyroX = -1000, minGyroX = 1000;
+  float maxGyroY = -1000, minGyroY = 1000;
+  float maxGyroZ = -1000, minGyroZ = 1000;
+};
+
+// System state variables - UPDATED FOR SHOULDER
+enum MovementType {
+  STEADY,
+  SHOULDER_FLEXION,      // Arm forward raise
+  SHOULDER_EXTENSION,    // Arm forward lower
+  SHOULDER_ABDUCTION,    // Arm side raise
+  SHOULDER_ADDUCTION,    // Arm side lower
+  SHOULDER_CIRCUMDUCTION // Arm circles
+};
+
+MovementType currentMovement = STEADY;
+bool isRecording = false;
+bool shouldSaveData = false;
+unsigned long recordingStartTime = 0;
+bool movementSelected = false;
+
+// Data structures - UPDATED FOR SHOULDER
+struct ShoulderData {
+  float accelX, accelY, accelZ;
+  float gyroX, gyroY, gyroZ;
+  float angleX, angleY, angleZ; // Calculated angles
+  
+  // SHOULDER SPECIFIC ANGLES
+  float shoulderFlexionAngle;    // Forward/backward angle (sagittal plane)
+  float shoulderAbductionAngle;  // Sideways angle (frontal plane)
+  float shoulderRotationAngle;   // Internal/external rotation (transverse plane)
+  float shoulderElevation;       // Overall arm elevation
+  
+  unsigned long timestamp;
+};
+
+struct PatientInfo {
+  String gender;
+  int age;
+  String arm; // "LEFT" or "RIGHT"
+  String status;
+  MovementType movement;
+};
+
+// Use a fixed-size array instead of Vector
+const int MAX_DATA_POINTS = 1000;
+ShoulderData recordedData[MAX_DATA_POINTS];
+int dataIndex = 0;
+
+PatientInfo patientInfo;
+
+// Movement pattern tracking
+MovementPattern movementPattern;
+
+// Angle calculation variables
+float integratedAngleX = 0, integratedAngleY = 0, integratedAngleZ = 0;
+unsigned long lastIntegrationTime = 0;
+
+// Shoulder angle estimates
+float estimatedFlexionAngle = 0;    // Forward/backward movement
+float estimatedAbductionAngle = 0;  // Sideways movement
+float estimatedRotationAngle = 0;   // Arm rotation
+
+// Sensor orientation variables
+// Assuming sensor is placed on upper arm (humerus)
+float neutralAccelX = 0, neutralAccelY = 0, neutralAccelZ = 0;
+bool neutralCalibrated = false;
+
+// Filter variables for noise reduction
+float filteredAccX = 0, filteredAccY = 0, filteredAccZ = 0;
+float filteredGyroX = 0, filteredGyroY = 0, filteredGyroZ = 0;
+const float ALPHA = 0.1; // Low-pass filter coefficient
+
+void setup(void) {
+  Serial.begin(115200);
+  
+  // Initialize I2C for MPU9250
+  Wire.begin(21, 22);
+  Wire.setClock(400000);
+  
+  // Try to initialize MPU9250
+  if (!initMPU9250()) {
+    Serial.println("MPU9250 not detected. Check connections.");
+    mpuAvailable = false;
+  } else {
+    Serial.println("MPU9250 initialized successfully.");
+    delay(100);
+    mpuAvailable = true;
+    
+    // Calibrate MPU9250
+    calibrateMPU9250();
+  }
+  
+  Serial.println("\n==========================================");
+  Serial.println("     SHOULDER MOVEMENT ANALYSIS SYSTEM");
+  Serial.println("           Clinical Accuracy");
+  Serial.println("==========================================");
+  Serial.println("EXCEL IMPORT READY!");
+  Serial.println("Connect using:");
+  Serial.println("1. Excel Data Streamer (Windows)");
+  Serial.println("2. PLX-DAQ software");
+  Serial.println("3. Serial terminal with CSV logging");
+  Serial.println("\nSHOULDER MOVEMENT TYPES:");
+  Serial.println("1. STEADY (neutral position)");
+  Serial.println("2. SHOULDER FLEXION (forward raise)");
+  Serial.println("3. SHOULDER EXTENSION (forward lower)");
+  Serial.println("4. SHOULDER ABDUCTION (side raise)");
+  Serial.println("5. SHOULDER ADDUCTION (side lower)");
+  Serial.println("6. SHOULDER CIRCUMDUCTION (arm circles)");
+  Serial.println("\nSelect movement type (1-6):");
+}
+
+bool initMPU9250() {
+  // Wake up the MPU9250
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0x00); // Set to zero to wake up
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure gyroscope range (±250 dps - appropriate for shoulder)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1B); // GYRO_CONFIG register
+  Wire.write(0x00); // ±250 dps
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure accelerometer range (±4g - appropriate for shoulder)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1C); // ACCEL_CONFIG register
+  Wire.write(0x08); // ±4g
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  // Configure low pass filter (DLPF = 3, 44Hz bandwidth)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x1A); // CONFIG register
+  Wire.write(0x03); // 44 Hz bandwidth
+  if (Wire.endTransmission() != 0) return false;
+  delay(10);
+  
+  return true;
+}
+
+void calibrateMPU9250() {
+  Serial.println("\n=== SHOULDER SENSOR CALIBRATION ===");
+  Serial.println("Stand in anatomical position:");
+  Serial.println("1. Stand straight");
+  Serial.println("2. Arms at sides");
+  Serial.println("3. Palms facing forward");
+  Serial.println("4. Keep completely still for 3 seconds...");
+  delay(3000);
+  
+  float sumAccX = 0, sumAccY = 0, sumAccZ = 0;
+  float sumGyroX = 0, sumGyroY = 0, sumGyroZ = 0;
+  int samples = 100;
+  
+  for(int i = 0; i < samples; i++) {
+    float ax, ay, az, gx, gy, gz;
+    readRawMPU9250(ax, ay, az, gx, gy, gz);
+    
+    sumAccX += ax;
+    sumAccY += ay;
+    sumAccZ += az;
+    sumGyroX += gx;
+    sumGyroY += gy;
+    sumGyroZ += gz;
+    
+    delay(10);
+  }
+  
+  // Store neutral position for shoulder
+  neutralAccelX = sumAccX / samples;
+  neutralAccelY = sumAccY / samples;
+  neutralAccelZ = sumAccZ / samples;
+  neutralCalibrated = true;
+  
+  Serial.print("Neutral position set - Accel X: "); Serial.print(neutralAccelX, 4);
+  Serial.print(" Y: "); Serial.print(neutralAccelY, 4);
+  Serial.print(" Z: "); Serial.print(neutralAccelZ, 4);
+  Serial.println();
+  
+  Serial.print("Gyroscope bias - X: "); Serial.print(sumGyroX/samples, 4);
+  Serial.print(" Y: "); Serial.print(sumGyroY/samples, 4);
+  Serial.print(" Z: "); Serial.print(sumGyroZ/samples, 4);
+  Serial.println();
+  
+  Serial.println("✓ Shoulder calibration complete!");
+}
+
+void readRawMPU9250(float &ax, float &ay, float &az, float &gx, float &gy, float &gz) {
+  if (!mpuAvailable) {
+    ax = ay = az = gx = gy = gz = 0;
+    return;
+  }
+  
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(0x3B);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU9250_ADDRESS, 14, true);
+  
+  int16_t accelX = Wire.read() << 8 | Wire.read();
+  int16_t accelY = Wire.read() << 8 | Wire.read();
+  int16_t accelZ = Wire.read() << 8 | Wire.read();
+  Wire.read(); Wire.read(); // Temperature
+  int16_t gyroX = Wire.read() << 8 | Wire.read();
+  int16_t gyroY = Wire.read() << 8 | Wire.read();
+  int16_t gyroZ = Wire.read() << 8 | Wire.read();
+  
+  // Convert to proper units (±4g range)
+  ax = accelX / 8192.0;  // ±4g range: 8192 LSB/g
+  ay = accelY / 8192.0;
+  az = accelZ / 8192.0;
+  
+  // Convert to proper units (±250 degrees/s range)
+  gx = gyroX / 131.0;    // ±250 degrees/s range: 131 LSB/dps
+  gy = gyroY / 131.0;
+  gz = gyroZ / 131.0;
+}
+
+void readAllSensors(ShoulderData &data) {
+  float rawAccX, rawAccY, rawAccZ;
+  float rawGyroX, rawGyroY, rawGyroZ;
+  
+  readRawMPU9250(rawAccX, rawAccY, rawAccZ, rawGyroX, rawGyroY, rawGyroZ);
+  
+  // Apply low-pass filter
+  filteredAccX = ALPHA * rawAccX + (1 - ALPHA) * filteredAccX;
+  filteredAccY = ALPHA * rawAccY + (1 - ALPHA) * filteredAccY;
+  filteredAccZ = ALPHA * rawAccZ + (1 - ALPHA) * filteredAccZ;
+  filteredGyroX = ALPHA * rawGyroX + (1 - ALPHA) * filteredGyroX;
+  filteredGyroY = ALPHA * rawGyroY + (1 - ALPHA) * filteredGyroY;
+  filteredGyroZ = ALPHA * rawGyroZ + (1 - ALPHA) * filteredGyroZ;
+  
+  // Store filtered data
+  data.accelX = filteredAccX;
+  data.accelY = filteredAccY;
+  data.accelZ = filteredAccZ;
+  data.gyroX = filteredGyroX;
+  data.gyroY = filteredGyroY;
+  data.gyroZ = filteredGyroZ;
+  
+  // Calculate basic angles from accelerometer
+  // For shoulder, we need to interpret these differently
+  data.angleX = atan2(filteredAccY, filteredAccZ) * 180.0 / PI;  // Roll
+  data.angleY = atan2(-filteredAccX, sqrt(filteredAccY*filteredAccY + filteredAccZ*filteredAccZ)) * 180.0 / PI;  // Pitch
+  data.angleZ = atan2(filteredAccY, filteredAccX) * 180.0 / PI;  // Yaw
+  
+  // SHOULDER-SPECIFIC ANGLE CALCULATIONS
+  
+  // 1. Shoulder Flexion/Extension (Forward/Backward movement)
+  // Assuming sensor on upper arm, Y-axis indicates forward/backward tilt
+  if (neutralCalibrated) {
+    // Flexion angle (0° = arm down, 180° = arm up forward)
+    data.shoulderFlexionAngle = 90 + data.angleY; 
+    
+    // Adjust based on movement type
+    if (currentMovement == SHOULDER_FLEXION || currentMovement == SHOULDER_EXTENSION) {
+      data.shoulderFlexionAngle = constrain(data.shoulderFlexionAngle, 0, 180);
+    }
+  }
+  
+  // 2. Shoulder Abduction/Adduction (Sideways movement)
+  // X-axis indicates sideways tilt
+  data.shoulderAbductionAngle = 90 - data.angleX;
+  data.shoulderAbductionAngle = constrain(data.shoulderAbductionAngle, -90, 180);
+  
+  // 3. Shoulder Rotation (Internal/External)
+  // Z-axis indicates rotation around humerus
+  data.shoulderRotationAngle = data.angleZ;
+  
+  // 4. Overall Shoulder Elevation (combined flexion/abduction)
+  // Calculate elevation from vertical using all axes
+  float verticalComponent = abs(filteredAccZ);
+  float totalAcc = sqrt(filteredAccX*filteredAccX + filteredAccY*filteredAccY + filteredAccZ*filteredAccZ);
+  data.shoulderElevation = acos(verticalComponent / totalAcc) * 180.0 / PI;
+  
+  // Update min/max values for pattern analysis
+  movementPattern.minAccelX = min(movementPattern.minAccelX, data.accelX);
+  movementPattern.maxAccelX = max(movementPattern.maxAccelX, data.accelX);
+  movementPattern.minAccelY = min(movementPattern.minAccelY, data.accelY);
+  movementPattern.maxAccelY = max(movementPattern.maxAccelY, data.accelY);
+  movementPattern.minAccelZ = min(movementPattern.minAccelZ, data.accelZ);
+  movementPattern.maxAccelZ = max(movementPattern.maxAccelZ, data.accelZ);
+  
+  movementPattern.minGyroX = min(movementPattern.minGyroX, data.gyroX);
+  movementPattern.maxGyroX = max(movementPattern.maxGyroX, data.gyroX);
+  movementPattern.minGyroY = min(movementPattern.minGyroY, data.gyroY);
+  movementPattern.maxGyroY = max(movementPattern.maxGyroY, data.gyroY);
+  movementPattern.minGyroZ = min(movementPattern.minGyroZ, data.gyroZ);
+  movementPattern.maxGyroZ = max(movementPattern.maxGyroZ, data.gyroZ);
+  
+  data.timestamp = millis() - recordingStartTime;
+}
+
+String analyzeShoulderMovementPattern() {
+  if (!mpuAvailable) return "No IMU data";
+  
+  // Calculate ranges
+  movementPattern.accelRangeX = abs(movementPattern.maxAccelX - movementPattern.minAccelX);
+  movementPattern.accelRangeY = abs(movementPattern.maxAccelY - movementPattern.minAccelY);
+  movementPattern.accelRangeZ = abs(movementPattern.maxAccelZ - movementPattern.minAccelZ);
+  movementPattern.gyroRangeX = abs(movementPattern.maxGyroX - movementPattern.minGyroX);
+  movementPattern.gyroRangeY = abs(movementPattern.maxGyroY - movementPattern.minGyroY);
+  movementPattern.gyroRangeZ = abs(movementPattern.maxGyroZ - movementPattern.minGyroZ);
+  
+  // Pattern detection for shoulder movements
+  float movementThreshold = 40.0; // degrees/s
+  
+  if (movementPattern.gyroRangeY > movementThreshold && 
+      movementPattern.gyroRangeX < movementThreshold/2) {
+    return "Shoulder Flexion/Extension detected (forward plane)";
+  } else if (movementPattern.gyroRangeX > movementThreshold && 
+             movementPattern.gyroRangeY < movementThreshold/2) {
+    return "Shoulder Abduction/Adduction detected (side plane)";
+  } else if (movementPattern.gyroRangeY > movementThreshold/2 && 
+             movementPattern.gyroRangeX > movementThreshold/2) {
+    return "Shoulder Circumduction detected (circular motion)";
+  } else if (movementPattern.gyroRangeZ > movementThreshold) {
+    return "Shoulder Rotation detected";
+  }
+  
+  return "Minimal shoulder movement";
+}
+
+void startRecording() {
+  isRecording = true;
+  recordingStartTime = millis();
+  dataIndex = 0;
+  
+  // Reset movement pattern tracking
+  movementPattern = MovementPattern();
+  
+  // Reset angle integration
+  integratedAngleX = integratedAngleY = integratedAngleZ = 0;
+  estimatedFlexionAngle = estimatedAbductionAngle = estimatedRotationAngle = 0;
+  lastIntegrationTime = millis();
+  
+  Serial.println("\n=== SHOULDER RECORDING STARTED ===");
+  Serial.println("Press 's' to STOP recording");
+  
+  // Display specific instructions based on movement type
+  switch(currentMovement) {
+    case SHOULDER_FLEXION:
+      Serial.println("Movement: SHOULDER FLEXION");
+      Serial.println("Instructions: Raise arm forward in front of body");
+      Serial.println("Start: Arm at side, palm facing body");
+      Serial.println("End: Arm raised forward to shoulder height or higher");
+      break;
+    case SHOULDER_EXTENSION:
+      Serial.println("Movement: SHOULDER EXTENSION");
+      Serial.println("Instructions: Lower arm from forward position");
+      Serial.println("Start: Arm raised forward");
+      Serial.println("End: Arm at side");
+      break;
+    case SHOULDER_ABDUCTION:
+      Serial.println("Movement: SHOULDER ABDUCTION");
+      Serial.println("Instructions: Raise arm sideways away from body");
+      Serial.println("Start: Arm at side, palm facing body");
+      Serial.println("End: Arm raised sideways to shoulder height or higher");
+      break;
+    case SHOULDER_ADDUCTION:
+      Serial.println("Movement: SHOULDER ADDUCTION");
+      Serial.println("Instructions: Lower arm from sideways position");
+      Serial.println("Start: Arm raised sideways");
+      Serial.println("End: Arm at side");
+      break;
+    case SHOULDER_CIRCUMDUCTION:
+      Serial.println("Movement: SHOULDER CIRCUMDUCTION");
+      Serial.println("Instructions: Make arm circles");
+      Serial.println("Direction: Forward circles (or specify clockwise/counter)");
+      Serial.println("Size: Small to medium circles");
+      break;
+    default:
+      Serial.println("Live tracking of shoulder angles");
+  }
+}
+
+void stopRecording() {
+  isRecording = false;
+  movementSelected = false;
+  
+  Serial.println("\n=== RECORDING STOPPED ===");
+  Serial.print("Duration: ");
+  Serial.print((millis() - recordingStartTime) / 1000.0, 1);
+  Serial.println(" seconds");
+  Serial.print("Data points collected: ");
+  Serial.println(dataIndex);
+  
+  Serial.println("\nOptions:");
+  Serial.println("  'y' - Send data to Excel");
+  Serial.println("  'n' - Discard data");
+  
+  shouldSaveData = true;
+}
+
+String readSerialLine() {
+  String input = "";
+  unsigned long startTime = millis();
+  
+  while (millis() - startTime < 30000) {
+    if (Serial.available() > 0) {
+      char c = Serial.read();
+      
+      if (c == '\n' || c == '\r') {
+        while (Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        return input;
+      } else {
+        input += c;
+      }
+    }
+    delay(10);
+  }
+  return input;
+}
+
+void getPatientInfo() {
+  Serial.println("\n=== PATIENT INFORMATION ===");
+  
+  while(Serial.available() > 0) Serial.read();
+  
+  Serial.print("Gender (M/F): ");
+  patientInfo.gender = readSerialLine();
+  patientInfo.gender.trim();
+  Serial.println(patientInfo.gender);
+  
+  Serial.print("Age: ");
+  String ageStr = readSerialLine();
+  patientInfo.age = ageStr.toInt();
+  Serial.println(patientInfo.age);
+  
+  Serial.print("Arm (LEFT/RIGHT): ");
+  patientInfo.arm = readSerialLine();
+  patientInfo.arm.trim();
+  Serial.println(patientInfo.arm);
+  
+  Serial.print("Status (Healthy/Patient/Post-op): ");
+  patientInfo.status = readSerialLine();
+  patientInfo.status.trim();
+  Serial.println(patientInfo.status);
+  
+  patientInfo.movement = currentMovement;
+  
+  Serial.println("\nPatient information saved!");
+}
+
+void sendToExcelPLXDAQ() {
+  Serial.println("CLEARDATA"); // Clear Excel sheet in PLX-DAQ
+  Serial.println("LABEL,Timestamp,Gender,Age,Arm,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,FlexionAngle,AbductionAngle,RotationAngle,ShoulderElevation");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case SHOULDER_FLEXION: movementStr = "SHOULDER_FLEXION"; break;
+    case SHOULDER_EXTENSION: movementStr = "SHOULDER_EXTENSION"; break;
+    case SHOULDER_ABDUCTION: movementStr = "SHOULDER_ABDUCTION"; break;
+    case SHOULDER_ADDUCTION: movementStr = "SHOULDER_ADDUCTION"; break;
+    case SHOULDER_CIRCUMDUCTION: movementStr = "SHOULDER_CIRCUMDUCTION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    ShoulderData data = recordedData[i];
+    
+    Serial.print("DATA,");
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.arm); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.shoulderFlexionAngle, 1); Serial.print(",");
+    Serial.print(data.shoulderAbductionAngle, 1); Serial.print(",");
+    Serial.print(data.shoulderRotationAngle, 1); Serial.print(",");
+    Serial.println(data.shoulderElevation, 1);
+    
+    delay(5);
+  }
+  
+  Serial.println("SAVEWORKBOOKAS,Shoulder_Data");
+  Serial.println("\n✓ Data sent to Excel via PLX-DAQ!");
+}
+
+void sendToExcelDataStreamer() {
+  // Header for Excel Data Streamer
+  Serial.println("Timestamp,Gender,Age,Arm,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,FlexionAngle,AbductionAngle,RotationAngle,ShoulderElevation");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case SHOULDER_FLEXION: movementStr = "SHOULDER_FLEXION"; break;
+    case SHOULDER_EXTENSION: movementStr = "SHOULDER_EXTENSION"; break;
+    case SHOULDER_ABDUCTION: movementStr = "SHOULDER_ABDUCTION"; break;
+    case SHOULDER_ADDUCTION: movementStr = "SHOULDER_ADDUCTION"; break;
+    case SHOULDER_CIRCUMDUCTION: movementStr = "SHOULDER_CIRCUMDUCTION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    ShoulderData data = recordedData[i];
+    
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.arm); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.shoulderFlexionAngle, 1); Serial.print(",");
+    Serial.print(data.shoulderAbductionAngle, 1); Serial.print(",");
+    Serial.print(data.shoulderRotationAngle, 1); Serial.print(",");
+    Serial.println(data.shoulderElevation, 1);
+    
+    delay(5);
+  }
+  
+  Serial.println("\n✓ Data sent to Excel Data Streamer!");
+}
+
+void sendToCSV() {
+  Serial.println("\n=== CSV DATA START ===");
+  Serial.println("Timestamp,Gender,Age,Arm,Status,Movement,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,AngleX,AngleY,AngleZ,FlexionAngle,AbductionAngle,RotationAngle,ShoulderElevation");
+  
+  String movementStr;
+  switch(patientInfo.movement) {
+    case STEADY: movementStr = "STEADY"; break;
+    case SHOULDER_FLEXION: movementStr = "SHOULDER_FLEXION"; break;
+    case SHOULDER_EXTENSION: movementStr = "SHOULDER_EXTENSION"; break;
+    case SHOULDER_ABDUCTION: movementStr = "SHOULDER_ABDUCTION"; break;
+    case SHOULDER_ADDUCTION: movementStr = "SHOULDER_ADDUCTION"; break;
+    case SHOULDER_CIRCUMDUCTION: movementStr = "SHOULDER_CIRCUMDUCTION"; break;
+  }
+  
+  for (int i = 0; i < dataIndex; i++) {
+    ShoulderData data = recordedData[i];
+    
+    Serial.print(data.timestamp); Serial.print(",");
+    Serial.print(patientInfo.gender); Serial.print(",");
+    Serial.print(patientInfo.age); Serial.print(",");
+    Serial.print(patientInfo.arm); Serial.print(",");
+    Serial.print(patientInfo.status); Serial.print(",");
+    Serial.print(movementStr); Serial.print(",");
+    Serial.print(data.accelX, 3); Serial.print(",");
+    Serial.print(data.accelY, 3); Serial.print(",");
+    Serial.print(data.accelZ, 3); Serial.print(",");
+    Serial.print(data.gyroX, 3); Serial.print(",");
+    Serial.print(data.gyroY, 3); Serial.print(",");
+    Serial.print(data.gyroZ, 3); Serial.print(",");
+    Serial.print(data.angleX, 1); Serial.print(",");
+    Serial.print(data.angleY, 1); Serial.print(",");
+    Serial.print(data.angleZ, 1); Serial.print(",");
+    Serial.print(data.shoulderFlexionAngle, 1); Serial.print(",");
+    Serial.print(data.shoulderAbductionAngle, 1); Serial.print(",");
+    Serial.print(data.shoulderRotationAngle, 1); Serial.print(",");
+    Serial.println(data.shoulderElevation, 1);
+  }
+  
+  Serial.println("=== CSV DATA END ===");
+  Serial.println("\n✓ CSV data ready. Save from Serial Terminal.");
+}
+
+void printShoulderSummary() {
+  Serial.println("\n=== SHOULDER MOVEMENT ANALYSIS SUMMARY ===");
+  
+  // Calculate min/max angles from recorded data
+  float minFlexion = 180, maxFlexion = -180;
+  float minAbduction = 180, maxAbduction = -180;
+  float minRotation = 180, maxRotation = -180;
+  float minElevation = 180, maxElevation = 0;
+  
+  for (int i = 0; i < dataIndex; i++) {
+    ShoulderData data = recordedData[i];
+    
+    minFlexion = min(minFlexion, data.shoulderFlexionAngle);
+    maxFlexion = max(maxFlexion, data.shoulderFlexionAngle);
+    minAbduction = min(minAbduction, data.shoulderAbductionAngle);
+    maxAbduction = max(maxAbduction, data.shoulderAbductionAngle);
+    minRotation = min(minRotation, data.shoulderRotationAngle);
+    maxRotation = max(maxRotation, data.shoulderRotationAngle);
+    minElevation = min(minElevation, data.shoulderElevation);
+    maxElevation = max(maxElevation, data.shoulderElevation);
+  }
+  
+  Serial.println("\nSHOULDER ANGLE RANGES:");
+  
+  switch(currentMovement) {
+    case SHOULDER_FLEXION:
+    case SHOULDER_EXTENSION:
+      Serial.print("FLEXION/EXTENSION: ");
+      Serial.print(minFlexion, 1); Serial.print("° to "); Serial.print(maxFlexion, 1);
+      Serial.print("°  Range: "); Serial.print(maxFlexion - minFlexion, 1); Serial.println("°");
+      
+      Serial.print("Normal range: 0-180°");
+      if (maxFlexion < 120) Serial.println("  ⚠️ Limited flexion");
+      else if (maxFlexion >= 160) Serial.println("  ✓ Good range");
+      else Serial.println("  ⚠️ Reduced range");
+      break;
+      
+    case SHOULDER_ABDUCTION:
+    case SHOULDER_ADDUCTION:
+      Serial.print("ABDUCTION/ADDUCTION: ");
+      Serial.print(minAbduction, 1); Serial.print("° to "); Serial.print(maxAbduction, 1);
+      Serial.print("°  Range: "); Serial.print(maxAbduction - minAbduction, 1); Serial.println("°");
+      
+      Serial.print("Normal range: 0-180°");
+      if (maxAbduction < 90) Serial.println("  ⚠️ Limited abduction");
+      else if (maxAbduction >= 150) Serial.println("  ✓ Good range");
+      else Serial.println("  ⚠️ Reduced range");
+      break;
+      
+    case SHOULDER_CIRCUMDUCTION:
+      Serial.print("CIRCUMDUCTION ELEVATION: ");
+      Serial.print(minElevation, 1); Serial.print("° to "); Serial.print(maxElevation, 1);
+      Serial.print("°  Range: "); Serial.print(maxElevation - minElevation, 1); Serial.println("°");
+      
+      Serial.print("Circular motion diameter: ");
+      Serial.print(sin(maxElevation * PI / 180) * 100, 1); // Approximate cm if arm length ~100cm
+      Serial.println(" cm (estimated)");
+      break;
+  }
+  
+  // Shoulder Movement Pattern Analysis
+  if (mpuAvailable) {
+    movementPattern.accelRangeX = abs(movementPattern.maxAccelX - movementPattern.minAccelX);
+    movementPattern.accelRangeY = abs(movementPattern.maxAccelY - movementPattern.minAccelY);
+    movementPattern.accelRangeZ = abs(movementPattern.maxAccelZ - movementPattern.minAccelZ);
+    movementPattern.gyroRangeX = abs(movementPattern.maxGyroX - movementPattern.minGyroX);
+    movementPattern.gyroRangeY = abs(movementPattern.maxGyroY - movementPattern.minGyroY);
+    movementPattern.gyroRangeZ = abs(movementPattern.maxGyroZ - movementPattern.minGyroZ);
+    
+    Serial.println("\n=== SHOULDER MOVEMENT CHARACTERISTICS ===");
+    Serial.println(analyzeShoulderMovementPattern());
+    
+    Serial.println("\nMovement Smoothness Analysis:");
+    float avgGyro = (movementPattern.gyroRangeX + movementPattern.gyroRangeY + movementPattern.gyroRangeZ) / 3.0;
+    if (avgGyro < 20) Serial.println("  Very smooth movement");
+    else if (avgGyro < 50) Serial.println("  Smooth movement");
+    else if (avgGyro < 100) Serial.println("  Moderate movement");
+    else Serial.println("  Jerky/rapid movement");
+  }
+  
+  Serial.println("\n=== CLINICAL NOTES ===");
+  Serial.println("Normal shoulder ranges:");
+  Serial.println("- Flexion: 0-180°");
+  Serial.println("- Extension: 0-60°");
+  Serial.println("- Abduction: 0-180°");
+  Serial.println("- Adduction: 0-75°");
+  Serial.println("- External rotation: 0-90°");
+  Serial.println("- Internal rotation: 0-70°");
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char command = Serial.read();
+    
+    if (command == '\n' || command == '\r') {
+      if (movementSelected && !isRecording && !shouldSaveData) {
+        startRecording();
+      }
+      return;
+    }
+    
+    if (shouldSaveData) {
+      if (command == 'y' || command == 'Y') {
+        while(Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        
+        getPatientInfo();
+        
+        Serial.println("\n=== SELECT EXPORT METHOD ===");
+        Serial.println("1. PLX-DAQ (Recommended for Excel)");
+        Serial.println("2. Excel Data Streamer");
+        Serial.println("3. CSV for Serial Terminal");
+        Serial.println("4. View summary only");
+        Serial.print("Choose (1-4): ");
+        
+        // Wait for method selection
+        while(Serial.available() == 0);
+        char method = Serial.read();
+        
+        switch(method) {
+          case '1':
+            sendToExcelPLXDAQ();
+            break;
+          case '2':
+            sendToExcelDataStreamer();
+            break;
+          case '3':
+            sendToCSV();
+            break;
+          case '4':
+            printShoulderSummary();
+            break;
+        }
+        
+        printShoulderSummary();
+        shouldSaveData = false;
+        movementSelected = false;
+        Serial.println("\nSelect new movement type (1-6):");
+        
+      } else if (command == 'n' || command == 'N') {
+        while(Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+          Serial.read();
+        }
+        
+        shouldSaveData = false;
+        movementSelected = false;
+        Serial.println("Data discarded.");
+        Serial.println("\nSelect new movement type (1-6):");
+      }
+      return;
+    }
+    
+    if (!isRecording) {
+      switch(command) {
+        case '1': 
+          currentMovement = STEADY; 
+          movementSelected = true;
+          Serial.print("\nSelected: STEADY (neutral position)");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Note: Stand in anatomical position");
+          break;
+        case '2': 
+          currentMovement = SHOULDER_FLEXION; 
+          movementSelected = true;
+          Serial.print("\nSelected: SHOULDER FLEXION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Exercise: Forward arm raise");
+          Serial.println("Start: Arm at side, palm facing body");
+          Serial.println("End: Arm raised forward overhead");
+          break;
+        case '3': 
+          currentMovement = SHOULDER_EXTENSION; 
+          movementSelected = true;
+          Serial.print("\nSelected: SHOULDER EXTENSION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Exercise: Forward arm lower");
+          Serial.println("Start: Arm raised forward");
+          Serial.println("End: Arm at side");
+          break;
+        case '4': 
+          currentMovement = SHOULDER_ABDUCTION; 
+          movementSelected = true;
+          Serial.print("\nSelected: SHOULDER ABDUCTION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Exercise: Side arm raise");
+          Serial.println("Start: Arm at side, palm facing body");
+          Serial.println("End: Arm raised sideways overhead");
+          break;
+        case '5': 
+          currentMovement = SHOULDER_ADDUCTION; 
+          movementSelected = true;
+          Serial.print("\nSelected: SHOULDER ADDUCTION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Exercise: Side arm lower");
+          Serial.println("Start: Arm raised sideways");
+          Serial.println("End: Arm at side");
+          break;
+        case '6': 
+          currentMovement = SHOULDER_CIRCUMDUCTION; 
+          movementSelected = true;
+          Serial.print("\nSelected: SHOULDER CIRCUMDUCTION");
+          Serial.println("\nPress 'ENTER' to start recording");
+          Serial.println("Exercise: Arm circles");
+          Serial.println("Direction: Forward circles");
+          Serial.println("Size: Medium (about 30cm diameter)");
+          break;
+        case 'c': 
+        case 'C':
+          Serial.println("\n=== RECALIBRATING SHOULDER SENSOR ===");
+          calibrateMPU9250();
+          Serial.println("\nSelect movement type (1-6):");
+          break;
+      }
+      
+      if (Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
+        Serial.read();
+      }
+    } else {
+      if (command == 's' || command == 'S') {
+        stopRecording();
+      }
+    }
+  }
+  
+  if (isRecording) {
+    if (dataIndex < MAX_DATA_POINTS) {
+      readAllSensors(recordedData[dataIndex]);
+      dataIndex++;
+      
+      // Live display for shoulder movements
+      static unsigned long lastDisplay = 0;
+      if (millis() - lastDisplay > 300) {
+        ShoulderData data = recordedData[dataIndex-1];
+        
+        Serial.print("⏱ ");
+        Serial.print(data.timestamp / 1000.0, 1);
+        Serial.print("s | ");
+        
+        // Display based on shoulder movement type
+        switch(currentMovement) {
+          case SHOULDER_FLEXION:
+          case SHOULDER_EXTENSION:
+            Serial.print("Flexion: ");
+            Serial.print(data.shoulderFlexionAngle, 1);
+            Serial.print("° | Elevation: ");
+            Serial.print(data.shoulderElevation, 1);
+            Serial.print("° | Gyro: ");
+            Serial.print(data.gyroY, 1);
+            Serial.println("°/s");
+            break;
+            
+          case SHOULDER_ABDUCTION:
+          case SHOULDER_ADDUCTION:
+            Serial.print("Abduction: ");
+            Serial.print(data.shoulderAbductionAngle, 1);
+            Serial.print("° | Elevation: ");
+            Serial.print(data.shoulderElevation, 1);
+            Serial.print("° | Gyro: ");
+            Serial.print(data.gyroX, 1);
+            Serial.println("°/s");
+            break;
+            
+          case SHOULDER_CIRCUMDUCTION:
+            Serial.print("Elevation: ");
+            Serial.print(data.shoulderElevation, 1);
+            Serial.print("° | Rotation: ");
+            Serial.print(data.shoulderRotationAngle, 1);
+            Serial.print("° | Speed: ");
+            Serial.print(sqrt(data.gyroX*data.gyroX + data.gyroY*data.gyroY), 1);
+            Serial.println("°/s");
+            break;
+            
+          default:
+            Serial.print("Flexion: ");
+            Serial.print(data.shoulderFlexionAngle, 1);
+            Serial.print("° | Abduction: ");
+            Serial.print(data.shoulderAbductionAngle, 1);
+            Serial.print("° | Elevation: ");
+            Serial.print(data.shoulderElevation, 1);
+            Serial.println("°");
+        }
+        lastDisplay = millis();
+      }
+    } else {
+      Serial.println("Data buffer full! Stopping recording.");
+      stopRecording();
+    }
+  }
+  
+  delay(10);
+}

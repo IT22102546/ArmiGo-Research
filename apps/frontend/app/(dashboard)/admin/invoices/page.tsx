@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardHeader,
@@ -38,21 +37,301 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
 import { format } from "date-fns";
-import {
-  invoiceApi,
-  InvoiceType,
-  InvoiceStatus,
-  type Invoice,
-  type InvoiceItem,
-  type InvoiceFilterDto,
-  type InvoiceStatistics,
-} from "@/lib/api/invoice";
+
+// Product Purchase Invoice Types
+type InvoiceStatus = "PENDING" | "SENT" | "PAID" | "OVERDUE" | "CANCELLED";
+type InvoiceType =
+  | "DEVICE_PURCHASE"
+  | "GAME_LICENSE"
+  | "ACCESSORY_PURCHASE"
+  | "WARRANTY_EXTENSION"
+  | "SUBSCRIPTION"
+  | "BUNDLE_PACKAGE";
+
+interface InvoiceItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  type: InvoiceType;
+  status: InvoiceStatus;
+  items: InvoiceItem[];
+  subtotal: number;
+  tax: number;
+  discount?: number;
+  total: number;
+  dueDate: string;
+  issueDate: string;
+  paidDate?: string;
+  notes?: string;
+}
+
+// Dummy data - Gaming device purchase invoices
+const initialInvoices: Invoice[] = [
+  {
+    id: "INV-001",
+    invoiceNumber: "DEV-2024-001",
+    customerId: "CUST-001",
+    customerName: "Nimal Perera",
+    customerEmail: "nimal.p@email.com",
+    type: "DEVICE_PURCHASE",
+    status: "PAID",
+    items: [
+      {
+        description: "ArmiGo Gaming Device - Standard Edition",
+        quantity: 1,
+        unitPrice: 45000,
+        amount: 45000,
+      },
+      { description: "HDMI Cable", quantity: 1, unitPrice: 1500, amount: 1500 },
+    ],
+    subtotal: 46500,
+    tax: 0,
+    total: 46500,
+    issueDate: "2024-11-20T10:00:00Z",
+    dueDate: "2024-12-05T10:00:00Z",
+    paidDate: "2024-11-22T14:30:00Z",
+    notes: "Free shipping applied",
+  },
+  {
+    id: "INV-002",
+    invoiceNumber: "DEV-2024-002",
+    customerId: "CUST-002",
+    customerName: "Kamala Silva",
+    customerEmail: "kamala.s@email.com",
+    type: "GAME_LICENSE",
+    status: "PENDING",
+    items: [
+      {
+        description: "Brain Training Game Pack - Annual License",
+        quantity: 1,
+        unitPrice: 4500,
+        amount: 4500,
+      },
+      {
+        description: "Memory Challenge Game - Lifetime License",
+        quantity: 1,
+        unitPrice: 2000,
+        amount: 2000,
+      },
+      {
+        description: "Cognitive Skills Bundle",
+        quantity: 1,
+        unitPrice: 3500,
+        amount: 3500,
+      },
+    ],
+    subtotal: 10000,
+    tax: 0,
+    total: 10000,
+    issueDate: "2024-11-25T09:15:00Z",
+    dueDate: "2024-12-10T09:15:00Z",
+  },
+  {
+    id: "INV-003",
+    invoiceNumber: "DEV-2024-003",
+    customerId: "CUST-003",
+    customerName: "Sunil Fernando",
+    customerEmail: "sunil.f@email.com",
+    type: "BUNDLE_PACKAGE",
+    status: "SENT",
+    items: [
+      {
+        description: "ArmiGo Device - Premium Edition",
+        quantity: 1,
+        unitPrice: 65000,
+        amount: 65000,
+      },
+      {
+        description: "Premium Game Pack (10 Games)",
+        quantity: 1,
+        unitPrice: 15000,
+        amount: 15000,
+      },
+      {
+        description: "Extended Warranty (3 Years)",
+        quantity: 1,
+        unitPrice: 8000,
+        amount: 8000,
+      },
+      {
+        description: "Premium Controller",
+        quantity: 2,
+        unitPrice: 4500,
+        amount: 9000,
+      },
+    ],
+    subtotal: 97000,
+    tax: 0,
+    total: 97000,
+    issueDate: "2024-11-23T15:00:00Z",
+    dueDate: "2024-12-15T15:00:00Z",
+    notes: "Bundle discount applied",
+  },
+  {
+    id: "INV-004",
+    invoiceNumber: "DEV-2024-004",
+    customerId: "CUST-004",
+    customerName: "Amara Rathnayake",
+    customerEmail: "amara.r@email.com",
+    type: "ACCESSORY_PURCHASE",
+    status: "PAID",
+    items: [
+      {
+        description: "Wireless Controller - Pro Edition",
+        quantity: 2,
+        unitPrice: 5500,
+        amount: 11000,
+      },
+      {
+        description: "Protective Case",
+        quantity: 1,
+        unitPrice: 2500,
+        amount: 2500,
+      },
+    ],
+    subtotal: 13500,
+    tax: 0,
+    total: 13500,
+    issueDate: "2024-11-21T11:30:00Z",
+    dueDate: "2024-12-06T11:30:00Z",
+    paidDate: "2024-11-24T16:45:00Z",
+  },
+  {
+    id: "INV-005",
+    invoiceNumber: "DEV-2024-005",
+    customerId: "CUST-005",
+    customerName: "Priyanka Jayawardena",
+    customerEmail: "priyanka.j@email.com",
+    type: "SUBSCRIPTION",
+    status: "OVERDUE",
+    items: [
+      {
+        description: "ArmiGo Cloud Gaming - Monthly Subscription",
+        quantity: 1,
+        unitPrice: 1500,
+        amount: 1500,
+      },
+      {
+        description: "Premium Features Add-on",
+        quantity: 1,
+        unitPrice: 500,
+        amount: 500,
+      },
+      {
+        description: "Extra Storage Add-on",
+        quantity: 1,
+        unitPrice: 500,
+        amount: 500,
+      },
+    ],
+    subtotal: 2500,
+    tax: 0,
+    total: 2500,
+    issueDate: "2024-11-10T14:00:00Z",
+    dueDate: "2024-11-25T14:00:00Z",
+    notes: "Auto-renewal enabled",
+  },
+  {
+    id: "INV-006",
+    invoiceNumber: "DEV-2024-006",
+    customerId: "CUST-006",
+    customerName: "Rohan Wickramasinghe",
+    customerEmail: "rohan.w@email.com",
+    type: "WARRANTY_EXTENSION",
+    status: "PENDING",
+    items: [
+      {
+        description: "Extended Warranty - 2 Years",
+        quantity: 1,
+        unitPrice: 12000,
+        amount: 12000,
+      },
+      {
+        description: "Accidental Damage Coverage",
+        quantity: 1,
+        unitPrice: 5000,
+        amount: 5000,
+      },
+      {
+        description: "Priority Support",
+        quantity: 1,
+        unitPrice: 3000,
+        amount: 3000,
+      },
+    ],
+    subtotal: 20000,
+    tax: 0,
+    total: 20000,
+    issueDate: "2024-11-26T08:00:00Z",
+    dueDate: "2024-12-11T08:00:00Z",
+  },
+  {
+    id: "INV-007",
+    invoiceNumber: "DEV-2024-007",
+    customerId: "CUST-007",
+    customerName: "Sanduni Dissanayake",
+    customerEmail: "sanduni.d@email.com",
+    type: "DEVICE_PURCHASE",
+    status: "PAID",
+    items: [
+      {
+        description: "ArmiGo Gaming Device - Standard Edition",
+        quantity: 1,
+        unitPrice: 45000,
+        amount: 45000,
+      },
+      {
+        description: "Starter Game Pack (5 Games)",
+        quantity: 1,
+        unitPrice: 8000,
+        amount: 8000,
+      },
+    ],
+    subtotal: 53000,
+    tax: 0,
+    total: 53000,
+    issueDate: "2024-11-22T13:30:00Z",
+    dueDate: "2024-12-07T13:30:00Z",
+    paidDate: "2024-11-23T10:00:00Z",
+  },
+  {
+    id: "INV-008",
+    invoiceNumber: "DEV-2024-008",
+    customerId: "CUST-008",
+    customerName: "Chaminda Senanayake",
+    customerEmail: "chaminda.s@email.com",
+    type: "ACCESSORY_PURCHASE",
+    status: "CANCELLED",
+    items: [
+      {
+        description: "Screen Protector",
+        quantity: 1,
+        unitPrice: 800,
+        amount: 800,
+      },
+    ],
+    subtotal: 800,
+    tax: 0,
+    total: 800,
+    issueDate: "2024-11-24T10:00:00Z",
+    dueDate: "2024-12-09T10:00:00Z",
+    notes: "Customer cancelled order",
+  },
+];
+
 import {
   Plus,
   FileText,
-  DollarSign,
   Clock,
   CheckCircle,
   XCircle,
@@ -60,13 +339,17 @@ import {
   Send,
   Trash2,
   Eye,
-  Edit,
   Calendar,
 } from "lucide-react";
 
 export default function InvoiceGenerationPage() {
-  const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<InvoiceFilterDto>({
+  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
+  const [filters, setFilters] = useState<{
+    status?: InvoiceStatus;
+    type?: InvoiceType;
+    page: number;
+    limit: number;
+  }>({
     status: undefined,
     type: undefined,
     page: 1,
@@ -77,194 +360,85 @@ export default function InvoiceGenerationPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   // Generate form states
-  const [generateType, setGenerateType] = useState<
-    "monthly" | "enrollment" | "custom"
-  >("monthly");
-  const [studentId, setStudentId] = useState("");
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [enrollmentId, setEnrollmentId] = useState("");
   const [customItems, setCustomItems] = useState<InvoiceItem[]>([
     { description: "", quantity: 1, unitPrice: 0, amount: 0 },
   ]);
-  const [customType, setCustomType] = useState<InvoiceType>(InvoiceType.OTHER);
+  const [customType, setCustomType] = useState<InvoiceType>("DEVICE_PURCHASE");
   const [dueDate, setDueDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [notes, setNotes] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
 
-  // Queries
-  const { data: statisticsData } = useQuery({
-    queryKey: ["invoice-statistics"],
-    queryFn: async () => {
-      const response = await invoiceApi.getStatistics();
-      return (
-        response || {
-          total: 0,
-          paid: 0,
-          pending: 0,
-          overdue: 0,
-          cancelled: 0,
-          totalAmount: 0,
-          paidAmount: 0,
-          pendingAmount: 0,
-          overdueAmount: 0,
-        }
-      );
-    },
+  // Filter invoices
+  const filteredInvoices = invoices.filter((invoice) => {
+    if (filters.status && invoice.status !== filters.status) return false;
+    if (filters.type && invoice.type !== filters.type) return false;
+    return true;
   });
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["invoices", filters],
-    queryFn: async () => {
-      const response = await invoiceApi.getInvoiceList(filters);
-      return (
-        response || {
-          data: [],
-          pagination: { total: 0, page: 1, limit: 20, totalPages: 0 },
-        }
-      );
+  // Calculate statistics
+  const statistics = {
+    totalInvoices: invoices.length,
+    totalAmount: invoices.reduce((sum, inv) => sum + inv.total, 0),
+    paidAmount: invoices
+      .filter((inv) => inv.status === "PAID")
+      .reduce((sum, inv) => sum + inv.total, 0),
+    pendingAmount: invoices
+      .filter((inv) => inv.status === "PENDING" || inv.status === "SENT")
+      .reduce((sum, inv) => sum + inv.total, 0),
+    overdueAmount: invoices
+      .filter((inv) => inv.status === "OVERDUE")
+      .reduce((sum, inv) => sum + inv.total, 0),
+    statusBreakdown: {
+      PAID: invoices.filter((inv) => inv.status === "PAID").length,
+      PENDING: invoices.filter((inv) => inv.status === "PENDING").length,
+      SENT: invoices.filter((inv) => inv.status === "SENT").length,
+      OVERDUE: invoices.filter((inv) => inv.status === "OVERDUE").length,
+      CANCELLED: invoices.filter((inv) => inv.status === "CANCELLED").length,
     },
-  });
-
-  // Mutations
-  const generateMonthlyMutation = useMutation({
-    mutationFn: invoiceApi.generateMonthlyInvoice,
-    onSuccess: () => {
-      toast.success("Monthly invoice generated successfully");
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["invoice-statistics"] });
-      setGenerateDialogOpen(false);
-      resetGenerateForm();
-    },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message || "Failed to generate monthly invoice"
-      );
-    },
-  });
-
-  const generateEnrollmentMutation = useMutation({
-    mutationFn: invoiceApi.generateEnrollmentInvoice,
-    onSuccess: () => {
-      toast.success("Enrollment invoice generated successfully");
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["invoice-statistics"] });
-      setGenerateDialogOpen(false);
-      resetGenerateForm();
-    },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message ||
-          "Failed to generate enrollment invoice"
-      );
-    },
-  });
-
-  const createCustomMutation = useMutation({
-    mutationFn: invoiceApi.createInvoice,
-    onSuccess: () => {
-      toast.success("Custom invoice created successfully");
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["invoice-statistics"] });
-      setGenerateDialogOpen(false);
-      resetGenerateForm();
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.message || "Failed to create invoice");
-    },
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: invoiceApi.sendInvoice,
-    onSuccess: () => {
-      toast.success("Invoice sent successfully");
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.message || "Failed to send invoice");
-    },
-  });
-
-  const markPaidMutation = useMutation({
-    mutationFn: ({ id, paymentId }: { id: string; paymentId?: string }) =>
-      invoiceApi.markAsPaid(id, paymentId),
-    onSuccess: () => {
-      toast.success("Invoice marked as paid");
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["invoice-statistics"] });
-    },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message || "Failed to mark invoice as paid"
-      );
-    },
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
-      invoiceApi.cancelInvoice(id, reason),
-    onSuccess: () => {
-      toast.success("Invoice cancelled");
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["invoice-statistics"] });
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.message || "Failed to cancel invoice");
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: invoiceApi.deleteInvoice,
-    onSuccess: () => {
-      toast.success("Invoice deleted");
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["invoice-statistics"] });
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.message || "Failed to delete invoice");
-    },
-  });
+  };
 
   const resetGenerateForm = () => {
-    setStudentId("");
-    setMonth(new Date().getMonth() + 1);
-    setYear(new Date().getFullYear());
-    setEnrollmentId("");
+    setCustomerId("");
+    setCustomerName("");
+    setCustomerEmail("");
     setCustomItems([{ description: "", quantity: 1, unitPrice: 0, amount: 0 }]);
-    setCustomType(InvoiceType.OTHER);
+    setCustomType("DEVICE_PURCHASE");
     setDueDate(format(new Date(), "yyyy-MM-dd"));
     setNotes("");
   };
 
   const handleGenerate = () => {
-    if (generateType === "monthly") {
-      if (!studentId) {
-        toast.error("Please enter student ID");
-        return;
-      }
-      generateMonthlyMutation.mutate({ studentId, month, year });
-    } else if (generateType === "enrollment") {
-      if (!enrollmentId) {
-        toast.error("Please enter enrollment ID");
-        return;
-      }
-      generateEnrollmentMutation.mutate({ enrollmentId });
-    } else {
-      if (!studentId) {
-        toast.error("Please enter student ID");
-        return;
-      }
-      if (customItems.some((item) => !item.description || item.amount <= 0)) {
-        toast.error("Please fill in all invoice items");
-        return;
-      }
-      createCustomMutation.mutate({
-        studentId,
-        type: customType,
-        items: customItems,
-        dueDate,
-        notes: notes || undefined,
-      });
+    if (!customerId || !customerName || !customerEmail) {
+      alert("Please fill in customer details");
+      return;
     }
+    if (customItems.some((item) => !item.description || item.amount <= 0)) {
+      alert("Please fill in all invoice items");
+      return;
+    }
+
+    const newInvoice: Invoice = {
+      id: `INV-${String(invoices.length + 1).padStart(3, "0")}`,
+      invoiceNumber: `DEV-2024-${String(invoices.length + 1).padStart(3, "0")}`,
+      customerId,
+      customerName,
+      customerEmail,
+      type: customType,
+      status: "PENDING",
+      items: customItems,
+      subtotal: customItems.reduce((sum, item) => sum + item.amount, 0),
+      tax: 0,
+      total: customItems.reduce((sum, item) => sum + item.amount, 0),
+      issueDate: new Date().toISOString(),
+      dueDate: new Date(dueDate).toISOString(),
+      notes: notes || undefined,
+    };
+
+    setInvoices([...invoices, newInvoice]);
+    setGenerateDialogOpen(false);
+    resetGenerateForm();
   };
 
   const addCustomItem = () => {
@@ -277,7 +451,7 @@ export default function InvoiceGenerationPage() {
   const updateCustomItem = (
     index: number,
     field: keyof InvoiceItem,
-    value: any
+    value: string | number
   ) => {
     const newItems = [...customItems];
     newItems[index] = { ...newItems[index], [field]: value };
@@ -296,11 +470,11 @@ export default function InvoiceGenerationPage() {
 
   const getStatusIcon = (status: InvoiceStatus) => {
     switch (status) {
-      case InvoiceStatus.PAID:
+      case "PAID":
         return <CheckCircle className="h-4 w-4" />;
-      case InvoiceStatus.CANCELLED:
+      case "CANCELLED":
         return <XCircle className="h-4 w-4" />;
-      case InvoiceStatus.OVERDUE:
+      case "OVERDUE":
         return <AlertCircle className="h-4 w-4" />;
       default:
         return <Clock className="h-4 w-4" />;
@@ -309,13 +483,13 @@ export default function InvoiceGenerationPage() {
 
   const getStatusColor = (status: InvoiceStatus) => {
     switch (status) {
-      case InvoiceStatus.PAID:
+      case "PAID":
         return "bg-green-100 text-green-800 border-green-200";
-      case InvoiceStatus.CANCELLED:
+      case "CANCELLED":
         return "bg-gray-100 text-gray-800 border-gray-200";
-      case InvoiceStatus.OVERDUE:
+      case "OVERDUE":
         return "bg-red-100 text-red-800 border-red-200";
-      case InvoiceStatus.SENT:
+      case "SENT":
         return "bg-blue-100 text-blue-800 border-blue-200";
       default:
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
@@ -328,76 +502,62 @@ export default function InvoiceGenerationPage() {
   };
 
   const handleSend = (id: string) => {
-    if (confirm("Send this invoice to the student?")) {
-      sendMutation.mutate(id);
+    if (confirm("Send this invoice to the customer?")) {
+      setInvoices(
+        invoices.map((inv) =>
+          inv.id === id ? { ...inv, status: "SENT" as InvoiceStatus } : inv
+        )
+      );
     }
   };
 
   const handleMarkPaid = (id: string) => {
     const paymentId = prompt("Enter payment ID (optional):");
     if (paymentId !== null) {
-      markPaidMutation.mutate({ id, paymentId: paymentId || undefined });
+      setInvoices(
+        invoices.map((inv) =>
+          inv.id === id
+            ? {
+                ...inv,
+                status: "PAID" as InvoiceStatus,
+                paidDate: new Date().toISOString(),
+              }
+            : inv
+        )
+      );
     }
   };
 
   const handleCancel = (id: string) => {
     const reason = prompt("Enter cancellation reason (optional):");
     if (reason !== null) {
-      cancelMutation.mutate({ id, reason: reason || undefined });
+      setInvoices(
+        invoices.map((inv) =>
+          inv.id === id
+            ? {
+                ...inv,
+                status: "CANCELLED" as InvoiceStatus,
+                notes: reason || inv.notes,
+              }
+            : inv
+        )
+      );
     }
   };
 
   const handleDelete = (id: string) => {
     if (confirm("Are you sure you want to delete this invoice?")) {
-      deleteMutation.mutate(id);
+      setInvoices(invoices.filter((inv) => inv.id !== id));
     }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
-        <Skeleton className="h-96" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="border-red-200">
-        <CardContent className="pt-6">
-          <div className="text-red-600">
-            Error loading invoices. Please try again.
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const statistics = {
-    totalInvoices: statisticsData?.totalInvoices || 0,
-    totalAmount: statisticsData?.totalAmount || 0,
-    paidAmount: statisticsData?.paidAmount || 0,
-    pendingAmount: statisticsData?.pendingAmount || 0,
-    overdueAmount: statisticsData?.overdueAmount || 0,
-    statusBreakdown:
-      statisticsData?.statusBreakdown || ({} as Record<string, number>),
-    typeBreakdown:
-      statisticsData?.typeBreakdown || ({} as Record<string, number>),
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Invoice Management</h1>
+          <h1 className="text-3xl font-bold">Product Invoice Management</h1>
           <p className="text-muted-foreground">
-            Generate and manage student invoices
+            Generate and manage product purchase invoices
           </p>
         </div>
         <Button onClick={() => setGenerateDialogOpen(true)}>
@@ -430,7 +590,7 @@ export default function InvoiceGenerationPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {statistics.statusBreakdown?.[InvoiceStatus.PAID] || 0}
+              {statistics.statusBreakdown?.["PAID"] || 0}
             </div>
             <p className="text-xs text-muted-foreground">
               LKR {(statistics.paidAmount || 0).toLocaleString()}
@@ -445,8 +605,8 @@ export default function InvoiceGenerationPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
-              {(statistics.statusBreakdown?.[InvoiceStatus.PENDING] || 0) +
-                (statistics.statusBreakdown?.[InvoiceStatus.SENT] || 0)}
+              {(statistics.statusBreakdown?.["PENDING"] || 0) +
+                (statistics.statusBreakdown?.["SENT"] || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               LKR {(statistics.pendingAmount || 0).toLocaleString()}
@@ -461,7 +621,7 @@ export default function InvoiceGenerationPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {statistics.statusBreakdown?.[InvoiceStatus.OVERDUE] || 0}
+              {statistics.statusBreakdown?.["OVERDUE"] || 0}
             </div>
             <p className="text-xs text-muted-foreground">
               LKR {(statistics.overdueAmount || 0).toLocaleString()}
@@ -495,14 +655,11 @@ export default function InvoiceGenerationPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value={InvoiceStatus.DRAFT}>Draft</SelectItem>
-                  <SelectItem value={InvoiceStatus.PENDING}>Pending</SelectItem>
-                  <SelectItem value={InvoiceStatus.SENT}>Sent</SelectItem>
-                  <SelectItem value={InvoiceStatus.PAID}>Paid</SelectItem>
-                  <SelectItem value={InvoiceStatus.OVERDUE}>Overdue</SelectItem>
-                  <SelectItem value={InvoiceStatus.CANCELLED}>
-                    Cancelled
-                  </SelectItem>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="SENT">Sent</SelectItem>
+                  <SelectItem value="PAID">Paid</SelectItem>
+                  <SelectItem value="OVERDUE">Overdue</SelectItem>
+                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -524,17 +681,18 @@ export default function InvoiceGenerationPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value={InvoiceType.MONTHLY_FEE}>
-                    Monthly Fee
+                  <SelectItem value="DEVICE_PURCHASE">
+                    Device Purchase
                   </SelectItem>
-                  <SelectItem value={InvoiceType.ENROLLMENT_FEE}>
-                    Enrollment Fee
+                  <SelectItem value="GAME_LICENSE">Game License</SelectItem>
+                  <SelectItem value="ACCESSORY_PURCHASE">
+                    Accessory Purchase
                   </SelectItem>
-                  <SelectItem value={InvoiceType.EXAM_FEE}>Exam Fee</SelectItem>
-                  <SelectItem value={InvoiceType.MATERIAL_FEE}>
-                    Material Fee
+                  <SelectItem value="WARRANTY_EXTENSION">
+                    Warranty Extension
                   </SelectItem>
-                  <SelectItem value={InvoiceType.OTHER}>Other</SelectItem>
+                  <SelectItem value="SUBSCRIPTION">Subscription</SelectItem>
+                  <SelectItem value="BUNDLE_PACKAGE">Bundle Package</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -563,7 +721,7 @@ export default function InvoiceGenerationPage() {
         <CardHeader>
           <CardTitle>Invoices</CardTitle>
           <CardDescription>
-            {data?.pagination?.total || 0} total invoices
+            {filteredInvoices.length} total invoices
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -571,7 +729,7 @@ export default function InvoiceGenerationPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Invoice #</TableHead>
-                <TableHead>Student</TableHead>
+                <TableHead>Customer</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Due Date</TableHead>
@@ -580,18 +738,16 @@ export default function InvoiceGenerationPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data?.data.map((invoice) => (
+              {filteredInvoices.map((invoice) => (
                 <TableRow key={invoice.id}>
                   <TableCell className="font-mono text-sm">
                     {invoice.invoiceNumber}
                   </TableCell>
                   <TableCell>
                     <div>
-                      <div className="font-medium">
-                        {invoice.student?.firstName} {invoice.student?.lastName}
-                      </div>
+                      <div className="font-medium">{invoice.customerName}</div>
                       <div className="text-xs text-muted-foreground">
-                        {invoice.student?.email}
+                        {invoice.customerEmail}
                       </div>
                     </div>
                   </TableCell>
@@ -626,8 +782,8 @@ export default function InvoiceGenerationPage() {
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
-                      {invoice.status !== InvoiceStatus.PAID &&
-                        invoice.status !== InvoiceStatus.CANCELLED && (
+                      {invoice.status !== "PAID" &&
+                        invoice.status !== "CANCELLED" && (
                           <>
                             <Button
                               size="sm"
@@ -652,7 +808,7 @@ export default function InvoiceGenerationPage() {
                             </Button>
                           </>
                         )}
-                      {invoice.status !== InvoiceStatus.PAID && (
+                      {invoice.status !== "PAID" && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -665,7 +821,7 @@ export default function InvoiceGenerationPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {data?.data.length === 0 && (
+              {filteredInvoices.length === 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={7}
@@ -677,43 +833,6 @@ export default function InvoiceGenerationPage() {
               )}
             </TableBody>
           </Table>
-
-          {/* Pagination */}
-          {data && data.pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-muted-foreground">
-                Showing {(data.pagination.page - 1) * data.pagination.limit + 1}{" "}
-                to{" "}
-                {Math.min(
-                  data.pagination.page * data.pagination.limit,
-                  data.pagination.total
-                )}{" "}
-                of {data.pagination.total} invoices
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setFilters({ ...filters, page: filters.page! - 1 })
-                  }
-                  disabled={filters.page === 1}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setFilters({ ...filters, page: filters.page! + 1 })
-                  }
-                  disabled={filters.page === data.pagination.totalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -723,208 +842,159 @@ export default function InvoiceGenerationPage() {
           <DialogHeader>
             <DialogTitle>Generate Invoice</DialogTitle>
             <DialogDescription>
-              Create a new invoice for a student
+              Create a new product purchase invoice for a customer
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
+              <Label>Customer ID</Label>
+              <Input
+                placeholder="Enter customer ID"
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label>Customer Name</Label>
+              <Input
+                placeholder="Enter customer name"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label>Customer Email</Label>
+              <Input
+                type="email"
+                placeholder="Enter customer email"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+              />
+            </div>
+
+            <div>
               <Label>Invoice Type</Label>
               <Select
-                value={generateType}
-                onValueChange={(value: any) => setGenerateType(value)}
+                value={customType}
+                onValueChange={(value: InvoiceType) => setCustomType(value)}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="monthly">Monthly Fee</SelectItem>
-                  <SelectItem value="enrollment">Enrollment Fee</SelectItem>
-                  <SelectItem value="custom">Custom Invoice</SelectItem>
+                  <SelectItem value="DEVICE_PURCHASE">
+                    Device Purchase
+                  </SelectItem>
+                  <SelectItem value="GAME_LICENSE">Game License</SelectItem>
+                  <SelectItem value="ACCESSORY_PURCHASE">
+                    Accessory Purchase
+                  </SelectItem>
+                  <SelectItem value="WARRANTY_EXTENSION">
+                    Warranty Extension
+                  </SelectItem>
+                  <SelectItem value="SUBSCRIPTION">Subscription</SelectItem>
+                  <SelectItem value="BUNDLE_PACKAGE">Bundle Package</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {generateType === "monthly" && (
-              <>
-                <div>
-                  <Label>Student ID</Label>
-                  <Input
-                    placeholder="Enter student ID"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Month</Label>
-                    <Select
-                      value={month.toString()}
-                      onValueChange={(value) => setMonth(parseInt(value))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...Array(12)].map((_, i) => (
-                          <SelectItem key={i + 1} value={(i + 1).toString()}>
-                            {format(new Date(2024, i), "MMMM")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Year</Label>
+            <div>
+              <Label>Due Date</Label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label>Invoice Items</Label>
+              <div className="space-y-2">
+                {customItems.map((item, index) => (
+                  <div key={index} className="grid grid-cols-12 gap-2">
                     <Input
-                      type="number"
-                      value={year}
-                      onChange={(e) => setYear(parseInt(e.target.value))}
+                      className="col-span-5"
+                      placeholder="Description"
+                      value={item.description}
+                      onChange={(e) =>
+                        updateCustomItem(index, "description", e.target.value)
+                      }
                     />
+                    <Input
+                      className="col-span-2"
+                      type="number"
+                      placeholder="Qty"
+                      value={item.quantity}
+                      onChange={(e) =>
+                        updateCustomItem(
+                          index,
+                          "quantity",
+                          parseInt(e.target.value) || 0
+                        )
+                      }
+                    />
+                    <Input
+                      className="col-span-2"
+                      type="number"
+                      placeholder="Price"
+                      value={item.unitPrice}
+                      onChange={(e) =>
+                        updateCustomItem(
+                          index,
+                          "unitPrice",
+                          parseFloat(e.target.value) || 0
+                        )
+                      }
+                    />
+                    <Input
+                      className="col-span-2"
+                      type="number"
+                      placeholder="Amount"
+                      value={item.amount}
+                      readOnly
+                    />
+                    <Button
+                      className="col-span-1"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeCustomItem(index)}
+                      disabled={customItems.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                </div>
-              </>
-            )}
-
-            {generateType === "enrollment" && (
-              <div>
-                <Label>Enrollment ID</Label>
-                <Input
-                  placeholder="Enter enrollment ID"
-                  value={enrollmentId}
-                  onChange={(e) => setEnrollmentId(e.target.value)}
-                />
+                ))}
               </div>
-            )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={addCustomItem}
+                className="mt-2"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+              <div className="mt-4 text-right">
+                <div className="text-lg font-semibold">
+                  Total: LKR{" "}
+                  {customItems
+                    .reduce((sum, item) => sum + item.amount, 0)
+                    .toLocaleString()}
+                </div>
+              </div>
+            </div>
 
-            {generateType === "custom" && (
-              <>
-                <div>
-                  <Label>Student ID</Label>
-                  <Input
-                    placeholder="Enter student ID"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>Type</Label>
-                  <Select
-                    value={customType}
-                    onValueChange={(value: any) => setCustomType(value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={InvoiceType.EXAM_FEE}>
-                        Exam Fee
-                      </SelectItem>
-                      <SelectItem value={InvoiceType.MATERIAL_FEE}>
-                        Material Fee
-                      </SelectItem>
-                      <SelectItem value={InvoiceType.OTHER}>Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Due Date</Label>
-                  <Input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>Invoice Items</Label>
-                  <div className="space-y-2">
-                    {customItems.map((item, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-2">
-                        <Input
-                          className="col-span-5"
-                          placeholder="Description"
-                          value={item.description}
-                          onChange={(e) =>
-                            updateCustomItem(
-                              index,
-                              "description",
-                              e.target.value
-                            )
-                          }
-                        />
-                        <Input
-                          className="col-span-2"
-                          type="number"
-                          placeholder="Qty"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            updateCustomItem(
-                              index,
-                              "quantity",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                        />
-                        <Input
-                          className="col-span-2"
-                          type="number"
-                          placeholder="Price"
-                          value={item.unitPrice}
-                          onChange={(e) =>
-                            updateCustomItem(
-                              index,
-                              "unitPrice",
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                        />
-                        <Input
-                          className="col-span-2"
-                          type="number"
-                          placeholder="Amount"
-                          value={item.amount}
-                          readOnly
-                        />
-                        <Button
-                          className="col-span-1"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeCustomItem(index)}
-                          disabled={customItems.length === 1}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={addCustomItem}
-                    className="mt-2"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
-                  <div className="mt-4 text-right">
-                    <div className="text-lg font-semibold">
-                      Total: LKR{" "}
-                      {customItems
-                        .reduce((sum, item) => sum + item.amount, 0)
-                        .toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <Label>Notes (Optional)</Label>
-                  <Textarea
-                    placeholder="Add any notes..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                </div>
-              </>
-            )}
+            <div>
+              <Label>Notes (Optional)</Label>
+              <Textarea
+                placeholder="Add any notes..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
           </div>
 
           <DialogFooter>
@@ -934,16 +1004,7 @@ export default function InvoiceGenerationPage() {
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleGenerate}
-              disabled={
-                generateMonthlyMutation.isPending ||
-                generateEnrollmentMutation.isPending ||
-                createCustomMutation.isPending
-              }
-            >
-              Generate Invoice
-            </Button>
+            <Button onClick={handleGenerate}>Generate Invoice</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -962,13 +1023,12 @@ export default function InvoiceGenerationPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-muted-foreground">Student</Label>
+                  <Label className="text-muted-foreground">Customer</Label>
                   <div className="font-medium">
-                    {selectedInvoice.student?.firstName}{" "}
-                    {selectedInvoice.student?.lastName}
+                    {selectedInvoice.customerName}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {selectedInvoice.student?.email}
+                    {selectedInvoice.customerEmail}
                   </div>
                 </div>
                 <div>
@@ -983,10 +1043,14 @@ export default function InvoiceGenerationPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <Label className="text-muted-foreground">Type</Label>
+                  <div>{selectedInvoice.type.replace(/_/g, " ")}</div>
+                </div>
+                <div>
                   <Label className="text-muted-foreground">Issued Date</Label>
                   <div>
                     {format(
-                      new Date(selectedInvoice.issuedDate),
+                      new Date(selectedInvoice.issueDate),
                       "MMM dd, yyyy"
                     )}
                   </div>
@@ -1011,20 +1075,18 @@ export default function InvoiceGenerationPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(selectedInvoice.items as InvoiceItem[]).map(
-                      (item, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{item.description}</TableCell>
-                          <TableCell>{item.quantity}</TableCell>
-                          <TableCell>
-                            LKR {item.unitPrice.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            LKR {item.amount.toLocaleString()}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    )}
+                    {selectedInvoice.items.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{item.description}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>
+                          LKR {item.unitPrice.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          LKR {item.amount.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -1038,10 +1100,14 @@ export default function InvoiceGenerationPage() {
                   <span>Tax:</span>
                   <span>LKR {selectedInvoice.tax.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Discount:</span>
-                  <span>-LKR {selectedInvoice.discount.toLocaleString()}</span>
-                </div>
+                {selectedInvoice.discount && selectedInvoice.discount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Discount:</span>
+                    <span>
+                      -LKR {selectedInvoice.discount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-lg mt-2">
                   <span>Total:</span>
                   <span>LKR {selectedInvoice.total.toLocaleString()}</span>

@@ -104,8 +104,8 @@ const initialPayments: Payment[] = [
   {
     id: "PAY-2024-001",
     userId: "user-1",
-    amount: 299.99,
-    currency: "USD",
+    amount: 200,
+    currency: "LKR",
     status: "COMPLETED",
     method: "CREDIT_CARD",
     referenceType: "DEVICE_PURCHASE",
@@ -119,14 +119,14 @@ const initialPayments: Payment[] = [
       email: "kamal.silva@email.com",
       phone: "+94 77 123 4567",
     },
-    deviceModel: "GamePro X1",
+    deviceModel: "ArmiGo 4 in 1",
     quantity: 1,
   },
   {
     id: "PAY-2024-002",
     userId: "user-2",
     amount: 599.98,
-    currency: "USD",
+    currency: "LKR",
     status: "COMPLETED",
     method: "ONLINE_PAYMENT",
     referenceType: "DEVICE_PURCHASE",
@@ -140,14 +140,14 @@ const initialPayments: Payment[] = [
       email: "nimal.f@email.com",
       phone: "+94 76 987 6543",
     },
-    deviceModel: "GamePro X1 Pro",
+    deviceModel: "ArmiGo 4 in 1 Pro",
     quantity: 2,
   },
   {
     id: "PAY-2024-003",
     userId: "user-3",
-    amount: 49.99,
-    currency: "USD",
+    amount: 00,
+    currency: "LKR",
     status: "PENDING",
     method: "BANK_SLIP",
     referenceType: "GAME_LICENSE",
@@ -167,8 +167,8 @@ const initialPayments: Payment[] = [
   {
     id: "PAY-2024-004",
     userId: "user-4",
-    amount: 79.99,
-    currency: "USD",
+    amount: 00,
+    currency: "LKR",
     status: "COMPLETED",
     method: "DEBIT_CARD",
     referenceType: "WARRANTY_EXTENSION",
@@ -182,14 +182,14 @@ const initialPayments: Payment[] = [
       email: "amila.r@email.com",
       phone: "+94 75 345 6789",
     },
-    deviceModel: "GamePro X1",
+    deviceModel: "ArmiGo 4 in 1",
     quantity: 1,
   },
   {
     id: "PAY-2024-005",
     userId: "user-5",
-    amount: 129.99,
-    currency: "USD",
+    amount: 100,
+    currency: "LKR",
     status: "PROCESSING",
     method: "BANK_TRANSFER",
     referenceType: "ACCESSORY_PURCHASE",
@@ -209,8 +209,8 @@ const initialPayments: Payment[] = [
   {
     id: "PAY-2024-006",
     userId: "user-6",
-    amount: 299.99,
-    currency: "USD",
+    amount: 200,
+    currency: "LKR",
     status: "PENDING",
     method: "BANK_SLIP",
     referenceType: "DEVICE_PURCHASE",
@@ -224,14 +224,14 @@ const initialPayments: Payment[] = [
       email: "dilini.w@email.com",
       phone: "+94 77 567 8901",
     },
-    deviceModel: "GamePro X1",
+    deviceModel: "ArmiGo 4 in 1",
     quantity: 1,
   },
   {
     id: "PAY-2024-007",
     userId: "user-7",
-    amount: 19.99,
-    currency: "USD",
+    amount: 00,
+    currency: "LKR",
     status: "COMPLETED",
     method: "DIGITAL_WALLET",
     referenceType: "SUBSCRIPTION",
@@ -251,8 +251,8 @@ const initialPayments: Payment[] = [
   {
     id: "PAY-2024-008",
     userId: "user-8",
-    amount: 299.99,
-    currency: "USD",
+    amount: 200,
+    currency: "LKR",
     status: "FAILED",
     method: "CREDIT_CARD",
     referenceType: "DEVICE_PURCHASE",
@@ -266,14 +266,14 @@ const initialPayments: Payment[] = [
       email: "tharaka.g@email.com",
       phone: "+94 71 789 0123",
     },
-    deviceModel: "GamePro X1",
+    deviceModel: "ArmiGo 4 in 1",
     quantity: 1,
   },
   {
     id: "PAY-2024-009",
     userId: "user-9",
-    amount: 89.99,
-    currency: "USD",
+    amount: 00,
+    currency: "LKR",
     status: "COMPLETED",
     method: "ONLINE_PAYMENT",
     referenceType: "GAME_LICENSE",
@@ -293,8 +293,8 @@ const initialPayments: Payment[] = [
   {
     id: "PAY-2024-010",
     userId: "user-10",
-    amount: 449.99,
-    currency: "USD",
+    amount: 400,
+    currency: "LKR",
     status: "REFUNDED",
     method: "CREDIT_CARD",
     referenceType: "DEVICE_PURCHASE",
@@ -308,7 +308,7 @@ const initialPayments: Payment[] = [
       email: "priyanka.w@email.com",
       phone: "+94 72 901 2345",
     },
-    deviceModel: "GamePro X1 Pro",
+    deviceModel: "ArmiGo 4 in 1 Pro",
     quantity: 1,
   },
 ];
@@ -427,7 +427,9 @@ export function PaymentsListPage() {
 
     setPayments((prev) =>
       prev.map((p) =>
-        p.id === selectedPayment.id ? { ...p, status: "COMPLETED" as PaymentStatus } : p
+        p.id === selectedPayment.id
+          ? { ...p, status: "COMPLETED" as PaymentStatus }
+          : p
       )
     );
 
@@ -443,7 +445,9 @@ export function PaymentsListPage() {
 
     setPayments((prev) =>
       prev.map((p) =>
-        p.id === selectedPayment.id ? { ...p, status: "FAILED" as PaymentStatus } : p
+        p.id === selectedPayment.id
+          ? { ...p, status: "FAILED" as PaymentStatus }
+          : p
       )
     );
 
@@ -456,24 +460,29 @@ export function PaymentsListPage() {
     const config = {
       PENDING: {
         variant: "outline" as const,
-        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+        className:
+          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
       },
       PROCESSING: {
         variant: "outline" as const,
-        className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+        className:
+          "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
       },
       COMPLETED: {
         variant: "outline" as const,
-        className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+        className:
+          "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
       },
       FAILED: { variant: "destructive" as const, className: "" },
       REFUNDED: {
         variant: "outline" as const,
-        className: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+        className:
+          "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
       },
       CANCELLED: {
         variant: "outline" as const,
-        className: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+        className:
+          "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
       },
     };
 
@@ -551,7 +560,9 @@ export function PaymentsListPage() {
           </p>
         </div>
         <Button onClick={refreshPayments} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+          />
           Refresh
         </Button>
       </div>
@@ -700,10 +711,16 @@ export function PaymentsListPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="DEVICE_PURCHASE">Device Purchase</SelectItem>
+                  <SelectItem value="DEVICE_PURCHASE">
+                    Device Purchase
+                  </SelectItem>
                   <SelectItem value="GAME_LICENSE">Game License</SelectItem>
-                  <SelectItem value="WARRANTY_EXTENSION">Warranty Extension</SelectItem>
-                  <SelectItem value="ACCESSORY_PURCHASE">Accessory Purchase</SelectItem>
+                  <SelectItem value="WARRANTY_EXTENSION">
+                    Warranty Extension
+                  </SelectItem>
+                  <SelectItem value="ACCESSORY_PURCHASE">
+                    Accessory Purchase
+                  </SelectItem>
                   <SelectItem value="SUBSCRIPTION">Subscription</SelectItem>
                 </SelectContent>
               </Select>
@@ -969,7 +986,8 @@ export function PaymentsListPage() {
                 <div>
                   <Label>Amount</Label>
                   <p className="font-semibold text-lg">
-                    {selectedPayment.currency} {selectedPayment.amount.toFixed(2)}
+                    {selectedPayment.currency}{" "}
+                    {selectedPayment.amount.toFixed(2)}
                   </p>
                 </div>
                 <div>
@@ -1052,7 +1070,10 @@ export function PaymentsListPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700">
+            <Button
+              onClick={handleApprove}
+              className="bg-green-600 hover:bg-green-700"
+            >
               <CheckCircle className="h-4 w-4 mr-2" />
               Approve Payment
             </Button>
