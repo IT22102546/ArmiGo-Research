@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
+import Image from "next/image";
 import {
   Calendar,
   CheckCircle,
@@ -9,6 +10,7 @@ import {
   Eye,
   Filter,
   Gamepad2,
+  Loader2,
   Package,
   RefreshCw,
   Search,
@@ -161,7 +163,7 @@ const initialPayments: Payment[] = [
       email: "saman.p@email.com",
       phone: "+94 71 234 5678",
     },
-    deviceModel: null,
+    deviceModel: undefined,
     quantity: 1,
   },
   {
@@ -203,7 +205,7 @@ const initialPayments: Payment[] = [
       email: "ruwan.j@email.com",
       phone: "+94 72 456 7890",
     },
-    deviceModel: null,
+    deviceModel: undefined,
     quantity: 3,
   },
   {
@@ -245,7 +247,7 @@ const initialPayments: Payment[] = [
       email: "chamara.d@email.com",
       phone: "+94 76 678 9012",
     },
-    deviceModel: null,
+    deviceModel: undefined,
     quantity: 1,
   },
   {
@@ -287,7 +289,7 @@ const initialPayments: Payment[] = [
       email: "madhavi.s@email.com",
       phone: "+94 75 890 1234",
     },
-    deviceModel: null,
+    deviceModel: undefined,
     quantity: 2,
   },
   {
@@ -334,9 +336,7 @@ export function PaymentsListPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [methodFilter, setMethodFilter] = useState<string>("all");
-  const [referenceTypeFilter, setReferenceTypeFilter] = useState<string>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFilter, setDateFilter] = useState<string>("all");
 
   // Dialogs
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
@@ -348,28 +348,7 @@ export function PaymentsListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  useEffect(() => {
-    applyFilters();
-  }, [
-    payments,
-    searchTerm,
-    statusFilter,
-    methodFilter,
-    referenceTypeFilter,
-    dateFrom,
-    dateTo,
-  ]);
-
-  const refreshPayments = () => {
-    setLoading(true);
-    // Simulate loading
-    setTimeout(() => {
-      setPayments([...initialPayments]);
-      setLoading(false);
-    }, 500);
-  };
-
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...payments];
 
     // Search filter
@@ -399,27 +378,21 @@ export function PaymentsListPage() {
       filtered = filtered.filter((payment) => payment.method === methodFilter);
     }
 
-    // Reference type filter
-    if (referenceTypeFilter !== "all") {
-      filtered = filtered.filter(
-        (payment) => payment.referenceType === referenceTypeFilter
-      );
-    }
-
-    // Date range filter
-    if (dateFrom) {
-      filtered = filtered.filter(
-        (payment) => new Date(payment.createdAt) >= new Date(dateFrom)
-      );
-    }
-    if (dateTo) {
-      filtered = filtered.filter(
-        (payment) => new Date(payment.createdAt) <= new Date(dateTo)
-      );
-    }
-
     setFilteredPayments(filtered);
     setCurrentPage(1);
+  }, [payments, searchTerm, statusFilter, methodFilter]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
+
+  const refreshPayments = () => {
+    setLoading(true);
+    // Simulate loading
+    setTimeout(() => {
+      setPayments([...initialPayments]);
+      setLoading(false);
+    }, 500);
   };
 
   const handleApprove = () => {
@@ -427,7 +400,9 @@ export function PaymentsListPage() {
 
     setPayments((prev) =>
       prev.map((p) =>
-        p.id === selectedPayment.id ? { ...p, status: "COMPLETED" as PaymentStatus } : p
+        p.id === selectedPayment.id
+          ? { ...p, status: "COMPLETED" as PaymentStatus }
+          : p
       )
     );
 
@@ -443,7 +418,9 @@ export function PaymentsListPage() {
 
     setPayments((prev) =>
       prev.map((p) =>
-        p.id === selectedPayment.id ? { ...p, status: "FAILED" as PaymentStatus } : p
+        p.id === selectedPayment.id
+          ? { ...p, status: "FAILED" as PaymentStatus }
+          : p
       )
     );
 
@@ -456,24 +433,29 @@ export function PaymentsListPage() {
     const config = {
       PENDING: {
         variant: "outline" as const,
-        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+        className:
+          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
       },
       PROCESSING: {
         variant: "outline" as const,
-        className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+        className:
+          "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
       },
       COMPLETED: {
         variant: "outline" as const,
-        className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+        className:
+          "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
       },
       FAILED: { variant: "destructive" as const, className: "" },
       REFUNDED: {
         variant: "outline" as const,
-        className: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+        className:
+          "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
       },
       CANCELLED: {
         variant: "outline" as const,
-        className: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+        className:
+          "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
       },
     };
 
@@ -565,7 +547,9 @@ export function PaymentsListPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Payments
+            </CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -576,7 +560,9 @@ export function PaymentsListPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Pending Review
+            </CardTitle>
             <AlertCircle className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
@@ -588,11 +574,13 @@ export function PaymentsListPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.completed}</div>
-            <p className="text-xs text-muted-foreground">Successfully processed</p>
+            <p className="text-xs text-muted-foreground">
+              Successfully processed
+            </p>
           </CardContent>
         </Card>
 
@@ -602,7 +590,9 @@ export function PaymentsListPage() {
             <DollarSign className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">
+              ${stats.totalRevenue.toFixed(2)}
+            </div>
             <p className="text-xs text-muted-foreground">Completed payments</p>
           </CardContent>
         </Card>
@@ -687,6 +677,7 @@ export function PaymentsListPage() {
             </div>
           </div>
         </CardContent>
+      </Card>
 
       {/* Payments Table */}
       <Card>
@@ -696,7 +687,9 @@ export function PaymentsListPage() {
             Payments ({filteredPayments.length})
           </CardTitle>
           <CardDescription>
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredPayments.length)} of {filteredPayments.length} payments
+            Showing {startIndex + 1} to{" "}
+            {Math.min(endIndex, filteredPayments.length)} of{" "}
+            {filteredPayments.length} payments
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -719,9 +712,7 @@ export function PaymentsListPage() {
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8">
                       <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-muted-foreground">
-                        No payments found
-                      </p>
+                      <p className="text-muted-foreground">No payments found</p>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -757,7 +748,10 @@ export function PaymentsListPage() {
                       </TableCell>
                       <TableCell>
                         {payment.deviceModel ? (
-                          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                          <Badge
+                            variant="secondary"
+                            className="flex items-center gap-1 w-fit"
+                          >
                             <Gamepad2 className="h-3 w-3" />
                             {payment.deviceModel}
                           </Badge>
@@ -847,7 +841,7 @@ export function PaymentsListPage() {
                   }
                   disabled={currentPage === totalPages}
                 >
-                  {tc("next")}
+                  Next
                 </Button>
               </div>
             </div>
@@ -859,36 +853,45 @@ export function PaymentsListPage() {
       <Dialog open={viewSlipDialogOpen} onOpenChange={setViewSlipDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t("bankSlipPreview")}</DialogTitle>
+            <DialogTitle>Bank Slip Preview</DialogTitle>
             <DialogDescription>
-              {t("reviewBankSlipBeforeApproval")}
+              Review bank slip before approval
             </DialogDescription>
           </DialogHeader>
           {selectedPayment?.bankSlipUrl ? (
             <div className="space-y-4">
-              <img
-                src={selectedPayment.bankSlipUrl}
-                alt={t("bankSlip")}
-                className="w-full rounded-lg border"
-              />
+              <div className="relative w-full aspect-[4/3]">
+                <Image
+                  src={selectedPayment.bankSlipUrl}
+                  alt="Bank Slip"
+                  fill
+                  className="rounded-lg border object-contain"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <Label>{t("amount")}</Label>
+                  <Label>Amount</Label>
                   <p className="font-semibold">
                     {selectedPayment.currency}{" "}
                     {selectedPayment.amount.toFixed(2)}
                   </p>
                 </div>
                 <div>
-                  <Label>{t("referenceType")}</Label>
-                  <p>{selectedPayment.referenceType || "-"}</p>
+                  <Label>Type</Label>
+                  <p>{getReferenceTypeLabel(selectedPayment.referenceType)}</p>
                 </div>
+                {selectedPayment.deviceModel && (
+                  <div>
+                    <Label>Device</Label>
+                    <p>{selectedPayment.deviceModel}</p>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
             <div className="text-center py-8">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-muted-foreground">{t("noBankSlipUploaded")}</p>
+              <p className="text-muted-foreground">No bank slip uploaded</p>
             </div>
           )}
           <DialogFooter>
@@ -896,7 +899,7 @@ export function PaymentsListPage() {
               variant="outline"
               onClick={() => setViewSlipDialogOpen(false)}
             >
-              {tc("close")}
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -906,28 +909,35 @@ export function PaymentsListPage() {
       <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("approvePayment")}</DialogTitle>
+            <DialogTitle>Approve Payment</DialogTitle>
             <DialogDescription>
-              {t("confirmApprovalBankSlip")}
+              Confirm approval of this payment
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="flex items-center gap-2 text-green-600">
               <CheckCircle className="h-5 w-5" />
-              <span className="font-medium">{t("willMarkAsCompleted")}</span>
+              <span className="font-medium">
+                Payment will be marked as completed
+              </span>
             </div>
             {selectedPayment && (
               <div className="text-sm space-y-2">
                 <p>
-                  <strong>{t("amount")}:</strong> {selectedPayment.currency}{" "}
+                  <strong>Amount:</strong> {selectedPayment.currency}{" "}
                   {selectedPayment.amount.toFixed(2)}
                 </p>
                 <p>
-                  <strong>{t("user")}:</strong>{" "}
+                  <strong>Customer:</strong>{" "}
                   {selectedPayment.user
                     ? `${selectedPayment.user.firstName} ${selectedPayment.user.lastName}`
-                    : t("unknown")}
+                    : "Unknown"}
                 </p>
+                {selectedPayment.deviceModel && (
+                  <p>
+                    <strong>Device:</strong> {selectedPayment.deviceModel}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -936,11 +946,11 @@ export function PaymentsListPage() {
               variant="outline"
               onClick={() => setApproveDialogOpen(false)}
             >
-              {tc("cancel")}
+              Cancel
             </Button>
             <Button onClick={handleApprove}>
               <CheckCircle className="h-4 w-4 mr-2" />
-              {t("approvePayment")}
+              Approve Payment
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -950,20 +960,22 @@ export function PaymentsListPage() {
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("rejectPayment")}</DialogTitle>
+            <DialogTitle>Reject Payment</DialogTitle>
             <DialogDescription>
-              {t("provideReasonForRejection")}
+              Provide reason for payment rejection
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="flex items-center gap-2 text-red-600">
               <AlertCircle className="h-5 w-5" />
-              <span className="font-medium">{t("willMarkAsFailed")}</span>
+              <span className="font-medium">
+                Payment will be marked as failed
+              </span>
             </div>
             <div>
-              <Label>{t("rejectionReason")} *</Label>
+              <Label>Rejection Reason *</Label>
               <Textarea
-                placeholder={t("explainRejection")}
+                placeholder="Explain why this payment is being rejected..."
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 rows={4}
@@ -975,7 +987,7 @@ export function PaymentsListPage() {
               variant="outline"
               onClick={() => setRejectDialogOpen(false)}
             >
-              {tc("cancel")}
+              Cancel
             </Button>
             <Button
               variant="destructive"
@@ -983,7 +995,7 @@ export function PaymentsListPage() {
               disabled={!rejectReason.trim()}
             >
               <XCircle className="h-4 w-4 mr-2" />
-              {t("rejectPayment")}
+              Reject Payment
             </Button>
           </DialogFooter>
         </DialogContent>

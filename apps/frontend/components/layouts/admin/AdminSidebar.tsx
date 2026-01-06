@@ -135,16 +135,6 @@ export default function AdminSidebar({
     payments: [
       { href: "/admin/payments", icon: CreditCard, label: t("nav.payments") },
       { href: "/admin/invoices", icon: Receipt, label: t("nav.invoices") },
-      {
-        href: "/admin/payments/reconciliation",
-        icon: ClipboardList,
-        label: t("nav.reconciliation"),
-      },
-      {
-        href: "/admin/wallet-management",
-        icon: CreditCard,
-        label: t("nav.wallets"),
-      },
     ],
     content: [
       {
@@ -184,22 +174,6 @@ export default function AdminSidebar({
         href: "/admin/system/errors",
         icon: AlertTriangle,
         label: t("nav.errorLogs"),
-      },
-      { href: "/admin/system/jobs", icon: Clock, label: t("nav.jobsMonitor") },
-      {
-        href: "/admin/chat",
-        icon: MessageCircle,
-        label: t("nav.chatModeration"),
-      },
-      {
-        href: "/admin/mutual-transfers",
-        icon: ArrowLeftRight,
-        label: t("nav.mutualTransfers"),
-      },
-      {
-        href: "/admin/feature-flags",
-        icon: Settings,
-        label: t("nav.featureFlags"),
       },
     ],
   };
