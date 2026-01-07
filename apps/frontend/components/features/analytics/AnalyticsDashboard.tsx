@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getDisplayName } from "@/lib/utils/display";
 import {
   Card,
   CardContent,
@@ -19,7 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import styles from "./analytics-dashboard.module.css";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   BarChart,
@@ -47,32 +45,30 @@ import {
   Calendar,
   Target,
   Award,
-  Clock,
   FileText,
   Download,
-  Filter,
   RefreshCw,
 } from "lucide-react";
 
 interface DashboardStats {
   totalUsers: number;
-  totalStudents: number;
-  totalTeachers: number;
-  totalClasses: number;
-  activeEnrollments: number;
+  totalPatients: number;
+  totalTherapists: number;
+  totalSessions: number;
+  activePatients: number;
   totalRevenue: number;
   monthlyRevenue: number;
-  averageAttendance: number;
-  examPassRate: number;
-  completionRate: number;
-  userGrowthRate: number;
+  averageParticipation: number;
+  assessmentSuccessRate: number;
+  treatmentCompletionRate: number;
+  patientGrowthRate: number;
   revenueGrowthRate: number;
 }
 
-interface UserGrowthData {
+interface PatientGrowthData {
   month: string;
-  students: number;
-  teachers: number;
+  patients: number;
+  therapists: number;
   total: number;
 }
 
@@ -83,45 +79,45 @@ interface RevenueData {
   profit: number;
 }
 
-interface AttendanceData {
+interface ParticipationData {
   date: string;
   percentage: number;
   present: number;
   absent: number;
 }
 
-interface ExamPerformance {
-  subject: string;
-  passRate: number;
+interface AssessmentPerformance {
+  therapyType: string;
+  successRate: number;
   averageScore: number;
-  totalStudents: number;
+  totalPatients: number;
 }
 
-interface EnrollmentDistribution {
-  grade: string;
-  students: number;
+interface PatientDistribution {
+  department: string;
+  patients: number;
   percentage: number;
   [key: string]: string | number;
 }
 
-interface TopPerformingClasses {
+interface TopPerformingSessions {
   id: string;
   name: string;
-  subject: string;
-  teacher: string;
+  therapyType: string;
+  therapist: string;
   averageScore: number;
-  attendance: number;
-  enrollmentCount: number;
+  participation: number;
+  patientCount: number;
 }
 
-interface TeacherPerformance {
+interface TherapistPerformance {
   id: string;
   name: string;
-  subject: string;
-  classCount: number;
-  studentCount: number;
-  averageClassScore: number;
-  attendanceRate: number;
+  specialty: string;
+  sessionCount: number;
+  patientCount: number;
+  averagePatientProgress: number;
+  participationRate: number;
   rating: number;
 }
 
@@ -134,62 +130,222 @@ const COLORS = [
   "#82ca9d",
 ];
 
-export default function AnalyticsDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [userGrowth, setUserGrowth] = useState<UserGrowthData[]>([]);
-  const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
-  const [attendanceData, setAttendanceData] = useState<AttendanceData[]>([]);
-  const [examPerformance, setExamPerformance] = useState<ExamPerformance[]>([]);
-  const [enrollmentDist, setEnrollmentDist] = useState<
-    EnrollmentDistribution[]
-  >([]);
-  const [topClasses, setTopClasses] = useState<TopPerformingClasses[]>([]);
-  const [teacherPerformance, setTeacherPerformance] = useState<
-    TeacherPerformance[]
-  >([]);
+// Dummy data
+const dummyStats: DashboardStats = {
+  totalUsers: 145,
+  totalPatients: 98,
+  totalTherapists: 24,
+  totalSessions: 156,
+  activePatients: 82,
+  totalRevenue: 485000,
+  monthlyRevenue: 62000,
+  averageParticipation: 87.5,
+  assessmentSuccessRate: 78.3,
+  treatmentCompletionRate: 84.6,
+  patientGrowthRate: 12.4,
+  revenueGrowthRate: 8.7,
+};
 
-  const [loading, setLoading] = useState(true);
+const dummyPatientGrowth: PatientGrowthData[] = [
+  { month: "Jan", patients: 65, therapists: 20, total: 85 },
+  { month: "Feb", patients: 72, therapists: 21, total: 93 },
+  { month: "Mar", patients: 78, therapists: 22, total: 100 },
+  { month: "Apr", patients: 85, therapists: 23, total: 108 },
+  { month: "May", patients: 92, therapists: 24, total: 116 },
+  { month: "Jun", patients: 98, therapists: 24, total: 122 },
+];
+
+const dummyRevenueData: RevenueData[] = [
+  { month: "Jan", revenue: 58000, expenses: 42000, profit: 16000 },
+  { month: "Feb", revenue: 61000, expenses: 43000, profit: 18000 },
+  { month: "Mar", revenue: 59000, expenses: 41000, profit: 18000 },
+  { month: "Apr", revenue: 63000, expenses: 44000, profit: 19000 },
+  { month: "May", revenue: 60000, expenses: 42000, profit: 18000 },
+  { month: "Jun", revenue: 62000, expenses: 43000, profit: 19000 },
+];
+
+const dummyParticipationData: ParticipationData[] = [
+  { date: "Mon", percentage: 88, present: 72, absent: 10 },
+  { date: "Tue", percentage: 90, present: 74, absent: 8 },
+  { date: "Wed", percentage: 85, present: 70, absent: 12 },
+  { date: "Thu", percentage: 87, present: 71, absent: 11 },
+  { date: "Fri", percentage: 89, present: 73, absent: 9 },
+];
+
+const dummyAssessmentPerformance: AssessmentPerformance[] = [
+  {
+    therapyType: "Physical Therapy",
+    successRate: 82.5,
+    averageScore: 78.3,
+    totalPatients: 45,
+  },
+  {
+    therapyType: "Occupational Therapy",
+    successRate: 76.8,
+    averageScore: 74.2,
+    totalPatients: 32,
+  },
+  {
+    therapyType: "Speech Therapy",
+    successRate: 79.2,
+    averageScore: 76.5,
+    totalPatients: 28,
+  },
+  {
+    therapyType: "Cognitive Therapy",
+    successRate: 73.4,
+    averageScore: 71.8,
+    totalPatients: 25,
+  },
+  {
+    therapyType: "Aquatic Therapy",
+    successRate: 85.1,
+    averageScore: 80.6,
+    totalPatients: 18,
+  },
+];
+
+const dummyPatientDistribution: PatientDistribution[] = [
+  { department: "Neurological", patients: 28, percentage: 28.6 },
+  { department: "Orthopedic", patients: 24, percentage: 24.5 },
+  { department: "Pediatric", patients: 18, percentage: 18.4 },
+  { department: "Geriatric", patients: 15, percentage: 15.3 },
+  { department: "Sports Medicine", patients: 13, percentage: 13.2 },
+];
+
+const dummyTopSessions: TopPerformingSessions[] = [
+  {
+    id: "1",
+    name: "Morning PT Group",
+    therapyType: "Physical Therapy",
+    therapist: "Dr. Sarah Johnson",
+    averageScore: 85.2,
+    participation: 92,
+    patientCount: 12,
+  },
+  {
+    id: "2",
+    name: "Stroke Recovery",
+    therapyType: "Occupational Therapy",
+    therapist: "Dr. Michael Chen",
+    averageScore: 82.7,
+    participation: 89,
+    patientCount: 10,
+  },
+  {
+    id: "3",
+    name: "Speech Development",
+    therapyType: "Speech Therapy",
+    therapist: "Dr. Emily Rodriguez",
+    averageScore: 81.5,
+    participation: 91,
+    patientCount: 8,
+  },
+  {
+    id: "4",
+    name: "Cognitive Skills",
+    therapyType: "Cognitive Therapy",
+    therapist: "Dr. David Kim",
+    averageScore: 79.3,
+    participation: 87,
+    patientCount: 9,
+  },
+  {
+    id: "5",
+    name: "Aquatic Rehab",
+    therapyType: "Aquatic Therapy",
+    therapist: "Dr. Lisa Martinez",
+    averageScore: 88.1,
+    participation: 94,
+    patientCount: 7,
+  },
+];
+
+const dummyTherapistPerformance: TherapistPerformance[] = [
+  {
+    id: "1",
+    name: "Dr. Sarah Johnson",
+    specialty: "Physical Therapy",
+    sessionCount: 24,
+    patientCount: 35,
+    averagePatientProgress: 85.2,
+    participationRate: 92,
+    rating: 4.8,
+  },
+  {
+    id: "2",
+    name: "Dr. Michael Chen",
+    specialty: "Occupational Therapy",
+    sessionCount: 20,
+    patientCount: 28,
+    averagePatientProgress: 82.7,
+    participationRate: 89,
+    rating: 4.7,
+  },
+  {
+    id: "3",
+    name: "Dr. Emily Rodriguez",
+    specialty: "Speech Therapy",
+    sessionCount: 18,
+    patientCount: 24,
+    averagePatientProgress: 81.5,
+    participationRate: 91,
+    rating: 4.9,
+  },
+  {
+    id: "4",
+    name: "Dr. David Kim",
+    specialty: "Cognitive Therapy",
+    sessionCount: 16,
+    patientCount: 22,
+    averagePatientProgress: 79.3,
+    participationRate: 87,
+    rating: 4.6,
+  },
+  {
+    id: "5",
+    name: "Dr. Lisa Martinez",
+    specialty: "Aquatic Therapy",
+    sessionCount: 14,
+    patientCount: 18,
+    averagePatientProgress: 88.1,
+    participationRate: 94,
+    rating: 4.9,
+  },
+];
+
+export default function PatientAnalyticsDashboard() {
+  const [stats, _setStats] = useState<DashboardStats | null>(dummyStats);
+  const [patientGrowth, _setPatientGrowth] =
+    useState<PatientGrowthData[]>(dummyPatientGrowth);
+  const [revenueData, _setRevenueData] =
+    useState<RevenueData[]>(dummyRevenueData);
+  const [participationData, _setParticipationData] = useState<
+    ParticipationData[]
+  >(dummyParticipationData);
+  const [assessmentPerformance, _setAssessmentPerformance] = useState<
+    AssessmentPerformance[]
+  >(dummyAssessmentPerformance);
+  const [patientDist, _setPatientDist] = useState<PatientDistribution[]>(
+    dummyPatientDistribution
+  );
+  const [topSessions, _setTopSessions] =
+    useState<TopPerformingSessions[]>(dummyTopSessions);
+  const [therapistPerformance, _setTherapistPerformance] = useState<
+    TherapistPerformance[]
+  >(dummyTherapistPerformance);
+
+  const [loading, _setLoading] = useState(false);
   const [dateRange, setDateRange] = useState("30");
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchAnalytics();
+    // Using dummy data - no fetch needed
   }, [dateRange]);
 
   const fetchAnalytics = async () => {
-    try {
-      setLoading(true);
-
-      const endpoints = [
-        `/api/analytics/dashboard-stats?days=${dateRange}`,
-        `/api/analytics/user-growth?days=${dateRange}`,
-        `/api/analytics/revenue-analytics?days=${dateRange}`,
-        `/api/analytics/attendance-trends?days=${dateRange}`,
-        `/api/analytics/exam-performance?days=${dateRange}`,
-        `/api/analytics/enrollment-distribution`,
-        `/api/analytics/top-classes?days=${dateRange}`,
-        `/api/analytics/teacher-performance?days=${dateRange}`,
-      ];
-
-      const responses = await Promise.all(endpoints.map((url) => fetch(url)));
-      const data = await Promise.all(responses.map((res) => res.json()));
-
-      if (responses.every((res) => res.ok)) {
-        setStats(data[0].data);
-        setUserGrowth(data[1].data || []);
-        setRevenueData(data[2].data || []);
-        setAttendanceData(data[3].data || []);
-        setExamPerformance(data[4].data || []);
-        setEnrollmentDist(data[5].data || []);
-        setTopClasses(data[6].data || []);
-        setTeacherPerformance(data[7].data || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch analytics:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    // Simulate refresh with dummy data
+    setRefreshing(false);
   };
 
   const handleRefresh = async () => {
@@ -230,7 +386,7 @@ export default function AnalyticsDashboard() {
     title: string;
     value: string | number;
     change?: number;
-    icon: any;
+    icon: React.ComponentType<{ className?: string }>;
     color: string;
     prefix?: string;
     suffix?: string;
@@ -266,7 +422,7 @@ export default function AnalyticsDashboard() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading analytics...</p>
+          <p className="mt-2 text-gray-600">Loading patient analytics...</p>
         </div>
       </div>
     );
@@ -277,9 +433,9 @@ export default function AnalyticsDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
+          <h1 className="text-3xl font-bold">Patient Analytics Dashboard</h1>
           <p className="text-gray-600 mt-2">
-            Comprehensive insights and performance metrics
+            Comprehensive insights and rehabilitation performance metrics
           </p>
         </div>
 
@@ -320,13 +476,13 @@ export default function AnalyticsDashboard() {
           <StatCard
             title="Total Users"
             value={stats.totalUsers.toLocaleString()}
-            change={stats.userGrowthRate}
+            change={stats.patientGrowthRate}
             icon={Users}
             color="bg-blue-600"
           />
           <StatCard
-            title="Active Students"
-            value={stats.totalStudents.toLocaleString()}
+            title="Active Patients"
+            value={stats.totalPatients.toLocaleString()}
             icon={GraduationCap}
             color="bg-green-600"
           />
@@ -339,8 +495,8 @@ export default function AnalyticsDashboard() {
             prefix="$"
           />
           <StatCard
-            title="Avg Attendance"
-            value={stats.averageAttendance.toFixed(1)}
+            title="Avg Participation"
+            value={stats.averageParticipation.toFixed(1)}
             icon={Calendar}
             color="bg-orange-600"
             suffix="%"
@@ -352,9 +508,9 @@ export default function AnalyticsDashboard() {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="patients">Patients</TabsTrigger>
           <TabsTrigger value="financial">Financial</TabsTrigger>
-          <TabsTrigger value="academic">Academic</TabsTrigger>
+          <TabsTrigger value="clinical">Clinical</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
@@ -362,17 +518,17 @@ export default function AnalyticsDashboard() {
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* User Growth Chart */}
+            {/* Patient Growth Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>User Growth Trend</CardTitle>
+                <CardTitle>Patient Growth Trend</CardTitle>
                 <CardDescription>
-                  Student and teacher registration over time
+                  Patient and therapist registration over time
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={userGrowth}>
+                  <LineChart data={patientGrowth}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
@@ -380,47 +536,47 @@ export default function AnalyticsDashboard() {
                     <Legend />
                     <Line
                       type="monotone"
-                      dataKey="students"
+                      dataKey="patients"
                       stroke="#8884d8"
                       strokeWidth={2}
-                      name="Students"
+                      name="Patients"
                     />
                     <Line
                       type="monotone"
-                      dataKey="teachers"
+                      dataKey="therapists"
                       stroke="#82ca9d"
                       strokeWidth={2}
-                      name="Teachers"
+                      name="Therapists"
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
 
-            {/* Enrollment Distribution */}
+            {/* Patient Distribution */}
             <Card>
               <CardHeader>
-                <CardTitle>Grade Distribution</CardTitle>
+                <CardTitle>Department Distribution</CardTitle>
                 <CardDescription>
-                  Student enrollment by grade level
+                  Patient distribution by department
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={enrollmentDist}
+                      data={patientDist}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
                       outerRadius={120}
                       paddingAngle={5}
-                      dataKey="students"
+                      dataKey="patients"
                       label={({ payload }) =>
-                        `${payload.grade}: ${payload.percentage}%`
+                        `${payload.department}: ${payload.percentage}%`
                       }
                     >
-                      {enrollmentDist.map((entry, index) => (
+                      {patientDist.map((entry, index) => (
                         <Cell
                           key={`cell-${index}`}
                           fill={COLORS[index % COLORS.length]}
@@ -438,21 +594,21 @@ export default function AnalyticsDashboard() {
           {stats && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <StatCard
-                title="Active Classes"
-                value={stats.totalClasses}
+                title="Active Sessions"
+                value={stats.totalSessions}
                 icon={BookOpen}
                 color="bg-indigo-600"
               />
               <StatCard
-                title="Exam Pass Rate"
-                value={stats.examPassRate.toFixed(1)}
+                title="Assessment Success Rate"
+                value={stats.assessmentSuccessRate.toFixed(1)}
                 icon={Award}
                 color="bg-green-600"
                 suffix="%"
               />
               <StatCard
-                title="Course Completion"
-                value={stats.completionRate.toFixed(1)}
+                title="Treatment Completion"
+                value={stats.treatmentCompletionRate.toFixed(1)}
                 icon={Target}
                 color="bg-red-600"
                 suffix="%"
@@ -461,20 +617,20 @@ export default function AnalyticsDashboard() {
           )}
         </TabsContent>
 
-        {/* Users Tab */}
-        <TabsContent value="users" className="space-y-6">
+        {/* Patients Tab */}
+        <TabsContent value="patients" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Detailed User Growth */}
+            {/* Detailed Patient Growth */}
             <Card>
               <CardHeader>
-                <CardTitle>Detailed User Analytics</CardTitle>
+                <CardTitle>Detailed Patient Analytics</CardTitle>
                 <CardDescription>
-                  User registration and activity trends
+                  Patient registration and activity trends
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={350}>
-                  <AreaChart data={userGrowth}>
+                  <AreaChart data={patientGrowth}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
@@ -482,31 +638,31 @@ export default function AnalyticsDashboard() {
                     <Legend />
                     <Area
                       type="monotone"
-                      dataKey="students"
+                      dataKey="patients"
                       stackId="1"
                       stroke="#8884d8"
                       fill="#8884d8"
-                      name="Students"
+                      name="Patients"
                     />
                     <Area
                       type="monotone"
-                      dataKey="teachers"
+                      dataKey="therapists"
                       stackId="1"
                       stroke="#82ca9d"
                       fill="#82ca9d"
-                      name="Teachers"
+                      name="Therapists"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
 
-            {/* User Metrics */}
+            {/* Patient Metrics */}
             <Card>
               <CardHeader>
-                <CardTitle>User Metrics</CardTitle>
+                <CardTitle>Patient Metrics</CardTitle>
                 <CardDescription>
-                  Key user engagement statistics
+                  Key patient engagement statistics
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -515,31 +671,31 @@ export default function AnalyticsDashboard() {
                     <>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">
-                          Total Enrollments
+                          Active Patients
                         </span>
                         <span className="text-lg font-semibold">
-                          {stats.activeEnrollments}
+                          {stats.activePatients}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">
-                          Student-Teacher Ratio
+                          Patient-Therapist Ratio
                         </span>
                         <span className="text-lg font-semibold">
-                          {(stats.totalStudents / stats.totalTeachers).toFixed(
-                            1
-                          )}
+                          {(
+                            stats.totalPatients / stats.totalTherapists
+                          ).toFixed(1)}
                           :1
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">
-                          Classes per Teacher
+                          Sessions per Therapist
                         </span>
                         <span className="text-lg font-semibold">
-                          {(stats.totalClasses / stats.totalTeachers).toFixed(
-                            1
-                          )}
+                          {(
+                            stats.totalSessions / stats.totalTherapists
+                          ).toFixed(1)}
                         </span>
                       </div>
                       <div className="w-full bg-muted/80 rounded-full h-2">
@@ -547,17 +703,17 @@ export default function AnalyticsDashboard() {
                         <div
                           className={`bg-blue-600 h-2 rounded-full ${styles.progressBar}`}
                           style={{
-                            width: `${Math.min(100, Math.max(0, stats.userGrowthRate))}%`,
+                            width: `${Math.min(100, Math.max(0, stats.patientGrowthRate))}%`,
                           }}
                           role="progressbar"
-                          aria-valuenow={Math.round(stats.userGrowthRate)}
+                          aria-valuenow={Math.round(stats.patientGrowthRate)}
                           aria-valuemin={0}
                           aria-valuemax={100}
-                          aria-label="User growth rate percentage"
+                          aria-label="Patient growth rate percentage"
                         ></div>
                       </div>
                       <p className="text-sm text-gray-600">
-                        {stats.userGrowthRate.toFixed(1)}% growth rate this
+                        {stats.patientGrowthRate.toFixed(1)}% growth rate this
                         period
                       </p>
                     </>
@@ -623,11 +779,11 @@ export default function AnalyticsDashboard() {
                       </div>
                       <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
                         <span className="text-purple-800 font-medium">
-                          Revenue per Student
+                          Revenue per Patient
                         </span>
                         <span className="text-purple-900 text-xl font-bold">
                           $
-                          {(stats.totalRevenue / stats.totalStudents).toFixed(
+                          {(stats.totalRevenue / stats.totalPatients).toFixed(
                             2
                           )}
                         </span>
@@ -648,18 +804,18 @@ export default function AnalyticsDashboard() {
           </div>
         </TabsContent>
 
-        {/* Academic Tab */}
-        <TabsContent value="academic" className="space-y-6">
+        {/* Clinical Tab */}
+        <TabsContent value="clinical" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Attendance Trends */}
+            {/* Participation Trends */}
             <Card>
               <CardHeader>
-                <CardTitle>Attendance Trends</CardTitle>
-                <CardDescription>Daily attendance patterns</CardDescription>
+                <CardTitle>Patient Participation Trends</CardTitle>
+                <CardDescription>Daily participation patterns</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={attendanceData}>
+                  <LineChart data={participationData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
                     <YAxis />
@@ -675,34 +831,38 @@ export default function AnalyticsDashboard() {
               </CardContent>
             </Card>
 
-            {/* Exam Performance */}
+            {/* Assessment Performance */}
             <Card>
               <CardHeader>
-                <CardTitle>Exam Performance by Subject</CardTitle>
+                <CardTitle>Assessment Performance by Therapy Type</CardTitle>
                 <CardDescription>
-                  Pass rates across different subjects
+                  Success rates across different therapies
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={examPerformance}>
+                  <BarChart data={assessmentPerformance}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="subject" />
+                    <XAxis dataKey="therapyType" />
                     <YAxis />
                     <Tooltip />
-                    <Bar dataKey="passRate" fill="#82ca9d" name="Pass Rate %" />
+                    <Bar
+                      dataKey="successRate"
+                      fill="#82ca9d"
+                      name="Success Rate %"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>
 
-          {/* Academic Metrics */}
+          {/* Clinical Metrics */}
           <Card>
             <CardHeader>
-              <CardTitle>Academic Performance Metrics</CardTitle>
+              <CardTitle>Clinical Performance Metrics</CardTitle>
               <CardDescription>
-                Detailed subject-wise performance
+                Detailed therapy-wise performance
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -710,49 +870,49 @@ export default function AnalyticsDashboard() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left p-2">Subject</th>
-                      <th className="text-left p-2">Students</th>
-                      <th className="text-left p-2">Pass Rate</th>
+                      <th className="text-left p-2">Therapy Type</th>
+                      <th className="text-left p-2">Patients</th>
+                      <th className="text-left p-2">Success Rate</th>
                       <th className="text-left p-2">Average Score</th>
                       <th className="text-left p-2">Grade</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {examPerformance.map((subject, index) => (
+                    {assessmentPerformance.map((assessment, index) => (
                       <tr key={index} className="border-b">
                         <td className="p-2 font-medium">
-                          {getDisplayName(subject.subject)}
+                          {assessment.therapyType}
                         </td>
-                        <td className="p-2">{subject.totalStudents}</td>
+                        <td className="p-2">{assessment.totalPatients}</td>
                         <td className="p-2">
                           <Badge
                             className={
-                              subject.passRate >= 80
+                              assessment.successRate >= 80
                                 ? "bg-green-100 text-green-800"
-                                : subject.passRate >= 60
+                                : assessment.successRate >= 60
                                   ? "bg-yellow-100 text-yellow-800"
                                   : "bg-red-100 text-red-800"
                             }
                           >
-                            {subject.passRate.toFixed(1)}%
+                            {assessment.successRate.toFixed(1)}%
                           </Badge>
                         </td>
                         <td className="p-2">
-                          {subject.averageScore.toFixed(1)}
+                          {assessment.averageScore.toFixed(1)}
                         </td>
                         <td className="p-2">
                           <Badge
                             variant={
-                              subject.averageScore >= 80
+                              assessment.averageScore >= 80
                                 ? "default"
-                                : subject.averageScore >= 60
+                                : assessment.averageScore >= 60
                                   ? "secondary"
                                   : "destructive"
                             }
                           >
-                            {subject.averageScore >= 80
+                            {assessment.averageScore >= 80
                               ? "A"
-                              : subject.averageScore >= 60
+                              : assessment.averageScore >= 60
                                 ? "B"
                                 : "C"}
                           </Badge>
@@ -769,37 +929,36 @@ export default function AnalyticsDashboard() {
         {/* Performance Tab */}
         <TabsContent value="performance" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top Performing Classes */}
+            {/* Top Performing Sessions */}
             <Card>
               <CardHeader>
-                <CardTitle>Top Performing Classes</CardTitle>
+                <CardTitle>Top Performing Therapy Sessions</CardTitle>
                 <CardDescription>
-                  Best performing classes by various metrics
+                  Best performing sessions by various metrics
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {topClasses.slice(0, 5).map((classItem, index) => (
+                  {topSessions.slice(0, 5).map((session) => (
                     <div
-                      key={classItem.id}
+                      key={session.id}
                       className="flex items-center justify-between p-3 bg-muted rounded-lg"
                     >
                       <div>
-                        <p className="font-medium">{classItem.name}</p>
+                        <p className="font-medium">{session.name}</p>
                         <p className="text-sm text-gray-600">
-                          {getDisplayName(classItem.subject)} -{" "}
-                          {classItem.teacher}
+                          {session.therapyType} - {session.therapist}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {classItem.enrollmentCount} students
+                          {session.patientCount} patients
                         </p>
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-semibold text-green-600">
-                          {classItem.averageScore.toFixed(1)}%
+                          {session.averageScore.toFixed(1)}%
                         </p>
                         <p className="text-sm text-gray-600">
-                          {classItem.attendance.toFixed(1)}% attendance
+                          {session.participation.toFixed(1)}% participation
                         </p>
                       </div>
                     </div>
@@ -808,35 +967,36 @@ export default function AnalyticsDashboard() {
               </CardContent>
             </Card>
 
-            {/* Teacher Performance */}
+            {/* Therapist Performance */}
             <Card>
               <CardHeader>
-                <CardTitle>Teacher Performance</CardTitle>
-                <CardDescription>Top performing educators</CardDescription>
+                <CardTitle>Therapist Performance</CardTitle>
+                <CardDescription>Top performing therapists</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {teacherPerformance.slice(0, 5).map((teacher, index) => (
+                  {therapistPerformance.slice(0, 5).map((therapist) => (
                     <div
-                      key={teacher.id}
+                      key={therapist.id}
                       className="flex items-center justify-between p-3 bg-muted rounded-lg"
                     >
                       <div>
-                        <p className="font-medium">{teacher.name}</p>
+                        <p className="font-medium">{therapist.name}</p>
                         <p className="text-sm text-gray-600">
-                          {getDisplayName(teacher.subject)}
+                          {therapist.specialty}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {teacher.classCount} classes, {teacher.studentCount}{" "}
-                          students
+                          {therapist.sessionCount} sessions,{" "}
+                          {therapist.patientCount} patients
                         </p>
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-semibold text-blue-600">
-                          {teacher.rating.toFixed(1)}/5.0
+                          {therapist.rating.toFixed(1)}/5.0
                         </p>
                         <p className="text-sm text-gray-600">
-                          {teacher.averageClassScore.toFixed(1)}% avg score
+                          {therapist.averagePatientProgress.toFixed(1)}% avg
+                          progress
                         </p>
                       </div>
                     </div>
@@ -871,7 +1031,7 @@ export default function AnalyticsDashboard() {
                   className="h-20 flex flex-col items-center justify-center"
                 >
                   <Users className="h-6 w-6 mb-2" />
-                  <span>User Report</span>
+                  <span>Patient Report</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -885,14 +1045,14 @@ export default function AnalyticsDashboard() {
                   className="h-20 flex flex-col items-center justify-center"
                 >
                   <GraduationCap className="h-6 w-6 mb-2" />
-                  <span>Academic Report</span>
+                  <span>Clinical Report</span>
                 </Button>
                 <Button
                   variant="outline"
                   className="h-20 flex flex-col items-center justify-center"
                 >
                   <Calendar className="h-6 w-6 mb-2" />
-                  <span>Attendance Report</span>
+                  <span>Participation Report</span>
                 </Button>
                 <Button
                   variant="outline"

@@ -35,27 +35,22 @@ export default function TeacherSidebar({
   const navigationConfig = {
     main: [
       { href: "/teacher", icon: LayoutDashboard, label: t("nav.dashboard") },
-      { href: "/teacher/classes", icon: Calendar, label: t("nav.myClasses") },
-      { href: "/teacher/exams", icon: BookLockIcon, label: t("nav.myExams") },
+      { href: "/teacher/classes", icon: Calendar, label: "My Sessions" },
+
       {
         href: "/teacher/marking",
         icon: FileText,
-        label: t("nav.markingQueue"),
+        label: "Live Progress Tracking",
       },
       {
         href: "/teacher/materials",
         icon: Upload,
-        label: t("nav.courseMaterials"),
+        label: "Educational Materials",
       },
       { href: "/teacher/attendance", icon: Clock, label: t("nav.attendance") },
       { href: "/teacher/recordings", icon: Video, label: t("nav.recordings") },
     ],
     communication: [
-      {
-        href: "/teacher/chat",
-        icon: MessageCircle,
-        label: t("nav.studentChat"),
-      },
       {
         href: "/teacher/notifications",
         icon: Bell,
@@ -68,11 +63,7 @@ export default function TeacherSidebar({
         icon: BarChart3,
         label: t("nav.analytics"),
       },
-      {
-        href: "/teacher/transfers",
-        icon: ArrowLeftRight,
-        label: t("nav.mutualTransfer"),
-      },
+
       { href: "/teacher/profile", icon: UserPlus, label: t("nav.profile") },
       { href: "/teacher/settings", icon: Settings, label: t("nav.settings") },
     ],

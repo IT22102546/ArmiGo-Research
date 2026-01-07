@@ -79,10 +79,14 @@ interface MarkingQueuePageProps {
   examId?: string;
 }
 
-export default function MarkingQueuePage({ examId }: MarkingQueuePageProps = {}) {
+export default function MarkingQueuePage({
+  examId,
+}: MarkingQueuePageProps = {}) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [step, setStep] = useState<"grades" | "exams" | "students">(examId ? "students" : "grades");
+  const [step, setStep] = useState<"grades" | "exams" | "students">(
+    examId ? "students" : "grades"
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,7 +152,7 @@ export default function MarkingQueuePage({ examId }: MarkingQueuePageProps = {})
       if (Array.isArray(gradesData)) {
         setGrades(gradesData);
         if (gradesData.length === 0) {
-          setError("No grades with pending exams found");
+          setError("No live sessions found");
         }
       } else {
         // Try to convert to array if it looks like array-like object
@@ -181,7 +185,8 @@ export default function MarkingQueuePage({ examId }: MarkingQueuePageProps = {})
       setError(null);
 
       // Fetch students for the exam
-      const studentsResponse = await examsApi.getStudentsForExamMarking(examIdToFetch);
+      const studentsResponse =
+        await examsApi.getStudentsForExamMarking(examIdToFetch);
       console.log("Students response:", studentsResponse);
 
       // Handle both response.data and direct array response
@@ -391,7 +396,7 @@ export default function MarkingQueuePage({ examId }: MarkingQueuePageProps = {})
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2 text-yellow-800">
                   <AlertCircle className="h-5 w-5" />
-                  <p>No grades with pending exams found</p>
+                  <p>No patients with live sessions found</p>
                 </div>
               </CardContent>
             </Card>

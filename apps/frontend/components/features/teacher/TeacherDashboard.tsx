@@ -16,9 +16,6 @@ import {
   Clock,
   Users,
   FileText,
-  Video,
-  BookOpen,
-  TrendingUp,
   Bell,
   Plus,
   Play,
@@ -52,7 +49,7 @@ interface QuickStat {
   trend?: string;
 }
 
-interface TodayClass {
+interface TodaySession {
   id: string;
   name: string;
   subject?: { name: string };
@@ -61,7 +58,7 @@ interface TodayClass {
   status: string;
 }
 
-interface UpcomingExam {
+interface UpcomingAssessment {
   id: string;
   title: string;
   startTime: string;
@@ -84,8 +81,10 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
 
   // Data states
-  const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
-  const [upcomingExams, setUpcomingExams] = useState<UpcomingExam[]>([]);
+  const [todaySessions, setTodaySessions] = useState<TodaySession[]>([]);
+  const [upcomingAssessments, setUpcomingAssessments] = useState<
+    UpcomingAssessment[]
+  >([]);
   const [recentNotifications, setRecentNotifications] = useState<
     RecentNotification[]
   >([]);
@@ -99,31 +98,31 @@ export default function TeacherDashboard() {
     try {
       setLoading(true);
 
-      // Fetch today's classes
-      const todayClassesResponse = await classesApi.getTodaysClasses();
-      const teacherClasses = todayClassesResponse.teacherClasses || [];
-      setTodayClasses(teacherClasses);
+      // Fetch today's therapy sessions
+      const todaySessionsResponse = await classesApi.getTodaysClasses();
+      const therapistSessions = todaySessionsResponse.teacherClasses || [];
+      setTodaySessions(therapistSessions);
 
-      // Fetch upcoming exams (next 7 days)
-      const examsResponse = await examsApi.getTeacherExams();
-      const allExams = examsResponse.data || examsResponse;
-      const upcoming = Array.isArray(allExams)
-        ? allExams
-            .filter((exam: any) => {
-              const startTime = new Date(exam.startTime);
+      // Fetch upcoming patient assessments (next 7 days)
+      const assessmentsResponse = await examsApi.getTeacherExams();
+      const allAssessments = assessmentsResponse.data || assessmentsResponse;
+      const upcoming = Array.isArray(allAssessments)
+        ? allAssessments
+            .filter((assessment: UpcomingAssessment) => {
+              const startTime = new Date(assessment.startTime);
               const now = new Date();
               const sevenDaysFromNow = new Date();
               sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
               return startTime >= now && startTime <= sevenDaysFromNow;
             })
             .sort(
-              (a: any, b: any) =>
+              (a: UpcomingAssessment, b: UpcomingAssessment) =>
                 new Date(a.startTime).getTime() -
                 new Date(b.startTime).getTime()
             )
             .slice(0, 5)
         : [];
-      setUpcomingExams(upcoming);
+      setUpcomingAssessments(upcoming);
 
       // Fetch recent notifications
       const notificationsResponse = await notificationsApi.getAll();
@@ -133,25 +132,25 @@ export default function TeacherDashboard() {
       // Calculate quick stats
       const stats: QuickStat[] = [
         {
-          label: "Today's Classes",
-          value: teacherClasses.length,
+          label: "Today's Sessions",
+          value: therapistSessions.length,
           icon: <Calendar className="h-5 w-5" />,
           color: "text-blue-600",
         },
         {
-          label: "Upcoming Exams",
+          label: "Upcoming Assessments",
           value: upcoming.length,
           icon: <FileText className="h-5 w-5" />,
           color: "text-green-600",
         },
         {
-          label: "Pending Marking",
-          value: "-", // Will be calculated if marking API available
+          label: "Pending Evaluations",
+          value: "-", // Will be calculated if evaluation API available
           icon: <CheckCircle className="h-5 w-5" />,
           color: "text-orange-600",
         },
         {
-          label: "Avg Attendance",
+          label: "Patient Attendance",
           value: "-", // Will be calculated if attendance stats available
           icon: <Users className="h-5 w-5" />,
           color: "text-purple-600",
@@ -189,9 +188,12 @@ export default function TeacherDashboard() {
     <div className="space-y-6">
       {/* Welcome Section */}
       <div>
-        <h1 className="text-3xl font-bold">Welcome back, {user?.firstName}!</h1>
+        <h1 className="text-3xl font-bold">
+          Welcome back, Dr. {user?.firstName}!
+        </h1>
         <p className="text-muted-foreground mt-1">
-          Here's what's happening with your classes today.
+          Here's an overview of your therapy sessions and patient assessments
+          today.
         </p>
       </div>
 
@@ -219,126 +221,132 @@ export default function TeacherDashboard() {
 
       {/* Main Content Grid */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Today's Classes */}
+        {/* Today's Therapy Sessions */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Today's Classes
+              Today's Therapy Sessions
             </CardTitle>
             <CardDescription>
-              {todayClasses.length === 0
-                ? "No classes scheduled for today"
-                : `${todayClasses.length} class(es) scheduled`}
+              {todaySessions.length === 0
+                ? "No therapy sessions scheduled for today"
+                : `${todaySessions.length} session(s) scheduled`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {todayClasses.length === 0 ? (
+              {todaySessions.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  You have no classes scheduled for today.
+                  You have no therapy sessions scheduled for today.
                 </p>
               ) : (
-                todayClasses.map((cls) => (
+                todaySessions.map((session) => (
                   <div
-                    key={cls.id}
+                    key={session.id}
                     className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex-1">
-                      <p className="font-medium">{cls.name}</p>
+                      <p className="font-medium">{session.name}</p>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                        <span>{cls.subject?.name}</span>
+                        <span>
+                          {session.subject?.name || "General Therapy"}
+                        </span>
                         <span>•</span>
-                        <span>{cls.grade?.name}</span>
-                        {cls.startTime && (
+                        <span>{session.grade?.name || "All Patients"}</span>
+                        {session.startTime && (
                           <>
                             <span>•</span>
-                            <span>{safeFormatDate(cls.startTime, "p")}</span>
+                            <span>
+                              {safeFormatDate(session.startTime, "p")}
+                            </span>
                           </>
                         )}
                       </div>
                     </div>
                     <Button
                       size="sm"
-                      onClick={() => handleStartClass(cls.id)}
+                      onClick={() => handleStartClass(session.id)}
                       className="ml-2"
                     >
                       <Play className="h-4 w-4 mr-1" />
-                      Start
+                      Begin
                     </Button>
                   </div>
                 ))
               )}
             </div>
-            {todayClasses.length > 0 && (
+            {todaySessions.length > 0 && (
               <Button
                 variant="outline"
                 className="w-full mt-4"
                 onClick={() => router.push("/teacher/classes")}
               >
-                View All Classes
+                View All Sessions
               </Button>
             )}
           </CardContent>
         </Card>
 
-        {/* Upcoming Exams */}
+        {/* Upcoming Patient Assessments */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Upcoming Exams
+              Upcoming Patient Assessments
             </CardTitle>
             <CardDescription>
-              {upcomingExams.length === 0
-                ? "No exams in the next 7 days"
-                : `${upcomingExams.length} exam(s) coming up`}
+              {upcomingAssessments.length === 0
+                ? "No assessments in the next 7 days"
+                : `${upcomingAssessments.length} assessment(s) coming up`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {upcomingExams.length === 0 ? (
+              {upcomingAssessments.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  No exams scheduled in the next 7 days.
+                  No patient assessments scheduled in the next 7 days.
                 </p>
               ) : (
-                upcomingExams.map((exam) => (
+                upcomingAssessments.map((assessment) => (
                   <div
-                    key={exam.id}
+                    key={assessment.id}
                     className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => router.push(`/teacher/exams/${exam.id}`)}
+                    onClick={() =>
+                      router.push(`/teacher/exams/${assessment.id}`)
+                    }
                   >
                     <div className="flex-1">
-                      <p className="font-medium">{exam.title}</p>
+                      <p className="font-medium">{assessment.title}</p>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                         <Clock className="h-3 w-3" />
-                        <span>{safeFormatDate(exam.startTime)}</span>
+                        <span>{safeFormatDate(assessment.startTime)}</span>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <Badge
                         variant={
-                          exam.status === "ACTIVE"
+                          assessment.status === "ACTIVE"
                             ? "default"
-                            : exam.status === "COMPLETED"
+                            : assessment.status === "COMPLETED"
                               ? "secondary"
                               : "outline"
                         }
                       >
-                        {exam.status}
+                        {assessment.status}
                       </Badge>
-                      {exam.approvalStatus && (
+                      {assessment.approvalStatus && (
                         <Badge
                           variant={
-                            exam.approvalStatus === "APPROVED"
+                            assessment.approvalStatus === "APPROVED"
                               ? "default"
-                              : exam.approvalStatus === "PENDING_APPROVAL"
+                              : assessment.approvalStatus === "PENDING_APPROVAL"
                                 ? "outline"
                                 : "destructive"
                           }
                           className="text-xs"
                         >
-                          {exam.approvalStatus}
+                          {assessment.approvalStatus}
                         </Badge>
                       )}
                     </div>
@@ -346,13 +354,13 @@ export default function TeacherDashboard() {
                 ))
               )}
             </div>
-            {upcomingExams.length > 0 && (
+            {upcomingAssessments.length > 0 && (
               <Button
                 variant="outline"
                 className="w-full mt-4"
                 onClick={() => router.push("/teacher/exams")}
               >
-                View All Exams
+                View All Assessments
               </Button>
             )}
           </CardContent>
@@ -365,7 +373,9 @@ export default function TeacherDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common tasks and shortcuts</CardDescription>
+            <CardDescription>
+              Common medical tasks and shortcuts
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
@@ -375,23 +385,16 @@ export default function TeacherDashboard() {
                 onClick={() => router.push("/teacher/classes/create")}
               >
                 <Plus className="h-6 w-6" />
-                <span className="text-sm">Create Class</span>
+                <span className="text-sm">Schedule Session</span>
               </Button>
-              <Button
-                variant="outline"
-                className="h-auto flex flex-col items-center justify-center p-4 gap-2"
-                onClick={() => router.push("/teacher/exams/create")}
-              >
-                <FileText className="h-6 w-6" />
-                <span className="text-sm">Create Exam</span>
-              </Button>
+
               <Button
                 variant="outline"
                 className="h-auto flex flex-col items-center justify-center p-4 gap-2"
                 onClick={() => router.push("/teacher/materials")}
               >
                 <Upload className="h-6 w-6" />
-                <span className="text-sm">Upload Material</span>
+                <span className="text-sm">Upload Resources</span>
               </Button>
               <Button
                 variant="outline"
@@ -399,7 +402,7 @@ export default function TeacherDashboard() {
                 onClick={() => router.push("/teacher/marking")}
               >
                 <CheckCircle className="h-6 w-6" />
-                <span className="text-sm">Mark Exams</span>
+                <span className="text-sm">Review Evaluations</span>
               </Button>
             </div>
           </CardContent>

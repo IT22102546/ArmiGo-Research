@@ -25,28 +25,28 @@ import { useRouter } from "next/navigation";
 import { ApiClient } from "@/lib/api";
 import { ArrowLeft } from "lucide-react";
 
-interface Subject {
+interface TherapyType {
   id: string;
   name: string;
 }
 
-interface Grade {
+interface Department {
   id: string;
   name: string;
 }
 
-export default function CreateClassPage() {
+export default function ScheduleTherapySessionPage() {
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [subjectId, setSubjectId] = useState("");
-  const [gradeId, setGradeId] = useState("");
-  const [maxStudents, setMaxStudents] = useState("30");
+  const [therapyTypeId, setTherapyTypeId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
+  const [maxPatients, setMaxPatients] = useState("10");
 
-  const { data: subjects } = useQuery<Array<{ id: string; name: string }>>({
+  const { data: therapyTypes } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["subjects"],
     queryFn: async () => {
       const response = await ApiClient.get<any>("/subjects");
@@ -56,7 +56,7 @@ export default function CreateClassPage() {
     },
   });
 
-  const { data: grades } = useQuery<Array<{ id: string; name: string }>>({
+  const { data: departments } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["grades"],
     queryFn: async () => {
       const response = await ApiClient.get<any>("/grades");
@@ -64,12 +64,12 @@ export default function CreateClassPage() {
     },
   });
 
-  const createClassMutation = useMutation({
+  const scheduleSessionMutation = useMutation({
     mutationFn: (data: any) => ApiClient.post("/classes", data),
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Class created successfully",
+        description: "Therapy session scheduled successfully",
         status: "success",
       });
       queryClient.invalidateQueries({ queryKey: ["classes"] });
@@ -78,7 +78,8 @@ export default function CreateClassPage() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to create class",
+        description:
+          error.response?.data?.message || "Failed to schedule session",
         status: "error",
       });
     },
@@ -86,12 +87,12 @@ export default function CreateClassPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createClassMutation.mutate({
+    scheduleSessionMutation.mutate({
       name,
       description,
-      subjectId,
-      gradeId,
-      maxStudents: parseInt(maxStudents),
+      subjectId: therapyTypeId,
+      gradeId: departmentId,
+      maxStudents: parseInt(maxPatients),
     });
   };
 
@@ -103,25 +104,25 @@ export default function CreateClassPage() {
         className="mb-4"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
-        Back to Classes
+        Back to Sessions
       </Button>
 
       <Card>
         <CardHeader>
-          <CardTitle>Create New Class</CardTitle>
+          <CardTitle>Schedule New Therapy Session</CardTitle>
           <CardDescription>
-            Set up a new class for your students
+            Create a new therapy session for your patients
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Class Name</Label>
+              <Label htmlFor="name">Session Name</Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Grade 10 Mathematics A"
+                placeholder="e.g., Physical Therapy - Monday Morning"
                 required
               />
             </div>
@@ -132,24 +133,28 @@ export default function CreateClassPage() {
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description of the class"
+                placeholder="Brief description of the therapy session"
                 rows={3}
               />
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="subject">Subject</Label>
-                <Select value={subjectId} onValueChange={setSubjectId} required>
+                <Label htmlFor="therapyType">Therapy Type</Label>
+                <Select
+                  value={therapyTypeId}
+                  onValueChange={setTherapyTypeId}
+                  required
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select subject" />
+                    <SelectValue placeholder="Select therapy type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {subjects
-                      ?.filter((subject) => subject.id)
-                      .map((subject) => (
-                        <SelectItem key={subject.id} value={subject.id}>
-                          {subject.name}
+                    {therapyTypes
+                      ?.filter((type) => type.id)
+                      .map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -157,17 +162,21 @@ export default function CreateClassPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="grade">Grade</Label>
-                <Select value={gradeId} onValueChange={setGradeId} required>
+                <Label htmlFor="department">Department</Label>
+                <Select
+                  value={departmentId}
+                  onValueChange={setDepartmentId}
+                  required
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select grade" />
+                    <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
-                    {grades
-                      ?.filter((grade) => grade.id)
-                      .map((grade) => (
-                        <SelectItem key={grade.id} value={grade.id}>
-                          {grade.name}
+                    {departments
+                      ?.filter((dept) => dept.id)
+                      .map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -176,21 +185,26 @@ export default function CreateClassPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="maxStudents">Maximum Students</Label>
+              <Label htmlFor="maxPatients">Maximum Patients</Label>
               <Input
-                id="maxStudents"
+                id="maxPatients"
                 type="number"
-                value={maxStudents}
-                onChange={(e) => setMaxStudents(e.target.value)}
+                value={maxPatients}
+                onChange={(e) => setMaxPatients(e.target.value)}
                 min="1"
-                max="100"
+                max="50"
                 required
               />
             </div>
 
             <div className="flex gap-2">
-              <Button type="submit" disabled={createClassMutation.isPending}>
-                {createClassMutation.isPending ? "Creating..." : "Create Class"}
+              <Button
+                type="submit"
+                disabled={scheduleSessionMutation.isPending}
+              >
+                {scheduleSessionMutation.isPending
+                  ? "Scheduling..."
+                  : "Schedule Session"}
               </Button>
               <Button
                 type="button"

@@ -58,46 +58,47 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-interface Student {
+interface Patient {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
-  admissionNumber: string;
+  patientId: string;
+  diagnosis?: string;
 }
 
-interface AttendanceRecord {
+interface ParticipationRecord {
   id: string;
   date: string;
   status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
   notes?: string;
   markedAt: string;
-  student: Student;
+  patient: Patient;
 }
 
-interface ClassSession {
+interface TherapySession {
   id: string;
   date: string;
   startTime: string;
   endTime: string;
-  subject: string | { id: string; name: string; code?: string };
-  className: string;
-  totalStudents: number;
-  presentStudents: number;
-  absentStudents: number;
-  lateStudents: number;
-  attendancePercentage: number;
+  therapyType: string | { id: string; name: string; code?: string };
+  sessionName: string;
+  totalPatients: number;
+  presentPatients: number;
+  absentPatients: number;
+  latePatients: number;
+  participationRate: number;
   isActive: boolean;
 }
 
-interface AttendanceStats {
+interface ParticipationStats {
   totalSessions: number;
-  averageAttendance: number;
-  presentStudents: number;
-  absentStudents: number;
-  lateStudents: number;
-  excusedStudents: number;
-  classesWithLowAttendance: number;
+  averageParticipation: number;
+  presentPatients: number;
+  absentPatients: number;
+  latePatients: number;
+  excusedPatients: number;
+  sessionsWithLowParticipation: number;
 }
 
 const statusConfig = {
@@ -127,21 +128,212 @@ const statusConfig = {
   },
 };
 
-export default function AttendanceTracking() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [attendanceRecords, setAttendanceRecords] = useState<
-    AttendanceRecord[]
-  >([]);
-  const [classSessions, setClassSessions] = useState<ClassSession[]>([]);
-  const [stats, setStats] = useState<AttendanceStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedClass, setSelectedClass] = useState<string>("");
-  const [bulkAttendanceDialog, setBulkAttendanceDialog] = useState(false);
-  const [newSessionDialog, setNewSessionDialog] = useState(false);
-  const [markingAttendance, setMarkingAttendance] = useState(false);
+// Dummy data for patients
+const dummyPatients: Patient[] = [
+  {
+    id: "1",
+    firstName: "Michael",
+    lastName: "Johnson",
+    email: "michael.j@hospital.com",
+    patientId: "PT-2024-001",
+    diagnosis: "Post-stroke rehabilitation",
+  },
+  {
+    id: "2",
+    firstName: "Sarah",
+    lastName: "Williams",
+    email: "sarah.w@hospital.com",
+    patientId: "PT-2024-002",
+    diagnosis: "Sports injury recovery",
+  },
+  {
+    id: "3",
+    firstName: "David",
+    lastName: "Brown",
+    email: "david.b@hospital.com",
+    patientId: "PT-2024-003",
+    diagnosis: "Spinal cord injury",
+  },
+  {
+    id: "4",
+    firstName: "Emily",
+    lastName: "Davis",
+    email: "emily.d@hospital.com",
+    patientId: "PT-2024-004",
+    diagnosis: "Pediatric cerebral palsy",
+  },
+  {
+    id: "5",
+    firstName: "James",
+    lastName: "Martinez",
+    email: "james.m@hospital.com",
+    patientId: "PT-2024-005",
+    diagnosis: "Orthopedic surgery recovery",
+  },
+  {
+    id: "6",
+    firstName: "Lisa",
+    lastName: "Garcia",
+    email: "lisa.g@hospital.com",
+    patientId: "PT-2024-006",
+    diagnosis: "Traumatic brain injury",
+  },
+  {
+    id: "7",
+    firstName: "Robert",
+    lastName: "Rodriguez",
+    email: "robert.r@hospital.com",
+    patientId: "PT-2024-007",
+    diagnosis: "Multiple sclerosis",
+  },
+  {
+    id: "8",
+    firstName: "Maria",
+    lastName: "Lopez",
+    email: "maria.l@hospital.com",
+    patientId: "PT-2024-008",
+    diagnosis: "Arthritis management",
+  },
+];
 
-  const [attendanceForm, setAttendanceForm] = useState<
+const dummyParticipationRecords: ParticipationRecord[] = [
+  {
+    id: "r1",
+    date: new Date().toISOString(),
+    status: "PRESENT",
+    notes: "Excellent progress today",
+    markedAt: new Date().toISOString(),
+    patient: dummyPatients[0],
+  },
+  {
+    id: "r2",
+    date: new Date().toISOString(),
+    status: "PRESENT",
+    notes: "Completed all exercises",
+    markedAt: new Date().toISOString(),
+    patient: dummyPatients[1],
+  },
+  {
+    id: "r3",
+    date: new Date().toISOString(),
+    status: "LATE",
+    notes: "Arrived 15 minutes late",
+    markedAt: new Date().toISOString(),
+    patient: dummyPatients[2],
+  },
+  {
+    id: "r4",
+    date: new Date().toISOString(),
+    status: "PRESENT",
+    notes: "Good engagement",
+    markedAt: new Date().toISOString(),
+    patient: dummyPatients[3],
+  },
+  {
+    id: "r5",
+    date: new Date().toISOString(),
+    status: "EXCUSED",
+    notes: "Medical appointment conflict",
+    markedAt: new Date().toISOString(),
+    patient: dummyPatients[4],
+  },
+  {
+    id: "r6",
+    date: new Date().toISOString(),
+    status: "PRESENT",
+    notes: "Showing improvement",
+    markedAt: new Date().toISOString(),
+    patient: dummyPatients[5],
+  },
+  {
+    id: "r7",
+    date: new Date().toISOString(),
+    status: "ABSENT",
+    notes: "No show",
+    markedAt: new Date().toISOString(),
+    patient: dummyPatients[6],
+  },
+  {
+    id: "r8",
+    date: new Date().toISOString(),
+    status: "PRESENT",
+    notes: "Participated actively",
+    markedAt: new Date().toISOString(),
+    patient: dummyPatients[7],
+  },
+];
+
+const dummyTherapySessions: TherapySession[] = [
+  {
+    id: "s1",
+    date: new Date().toISOString(),
+    startTime: "09:00 AM",
+    endTime: "10:00 AM",
+    therapyType: { id: "t1", name: "Physical Therapy" },
+    sessionName: "Morning PT Group",
+    totalPatients: 8,
+    presentPatients: 6,
+    absentPatients: 1,
+    latePatients: 1,
+    participationRate: 87.5,
+    isActive: true,
+  },
+  {
+    id: "s2",
+    date: new Date().toISOString(),
+    startTime: "10:30 AM",
+    endTime: "11:30 AM",
+    therapyType: { id: "t2", name: "Occupational Therapy" },
+    sessionName: "OT Skills Development",
+    totalPatients: 6,
+    presentPatients: 5,
+    absentPatients: 1,
+    latePatients: 0,
+    participationRate: 83.3,
+    isActive: false,
+  },
+  {
+    id: "s3",
+    date: new Date().toISOString(),
+    startTime: "02:00 PM",
+    endTime: "03:00 PM",
+    therapyType: { id: "t3", name: "Speech Therapy" },
+    sessionName: "Speech & Language",
+    totalPatients: 5,
+    presentPatients: 5,
+    absentPatients: 0,
+    latePatients: 0,
+    participationRate: 100,
+    isActive: false,
+  },
+];
+
+const dummyStats: ParticipationStats = {
+  totalSessions: 3,
+  averageParticipation: 90.3,
+  presentPatients: 6,
+  absentPatients: 1,
+  latePatients: 1,
+  excusedPatients: 1,
+  sessionsWithLowParticipation: 0,
+};
+
+export default function PatientParticipationTracking() {
+  const [patients, setPatients] = useState<Patient[]>(dummyPatients);
+  const [participationRecords, setParticipationRecords] = useState<
+    ParticipationRecord[]
+  >(dummyParticipationRecords);
+  const [therapySessions, setTherapySessions] =
+    useState<TherapySession[]>(dummyTherapySessions);
+  const [stats, setStats] = useState<ParticipationStats | null>(dummyStats);
+  const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedSession, setSelectedSession] = useState<string>("");
+  const [bulkParticipationDialog, setBulkParticipationDialog] = useState(false);
+  const [newSessionDialog, setNewSessionDialog] = useState(false);
+  const [markingParticipation, setMarkingParticipation] = useState(false);
+
+  const [participationForm, setParticipationForm] = useState<
     Record<
       string,
       {
@@ -161,166 +353,107 @@ export default function AttendanceTracking() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedDate, selectedClass, filters]);
+  }, [selectedDate, selectedSession, filters]);
 
   const fetchData = async () => {
+    // Using dummy data - no API calls needed
     try {
       setLoading(true);
 
-      // Fetch students
-      const studentsResponse = await fetch(
-        `/api/attendance/students?classId=${selectedClass}`
-      );
-      const studentsData = await studentsResponse.json();
-
-      // Fetch attendance records
-      const attendanceParams = new URLSearchParams({
-        date: format(selectedDate, "yyyy-MM-dd"),
-        classId: selectedClass,
-        ...filters,
-      });
-      const attendanceResponse = await fetch(
-        `/api/attendance/records?${attendanceParams}`
-      );
-      const attendanceData = await attendanceResponse.json();
-
-      // Fetch class sessions
-      const sessionsResponse = await fetch(
-        `/api/attendance/sessions?classId=${selectedClass}&date=${format(selectedDate, "yyyy-MM-dd")}`
-      );
-      const sessionsData = await sessionsResponse.json();
-
-      // Fetch stats
-      const statsResponse = await fetch(
-        `/api/attendance/stats?classId=${selectedClass}&date=${format(selectedDate, "yyyy-MM-dd")}`
-      );
-      const statsData = await statsResponse.json();
-
-      if (studentsResponse.ok) setStudents(studentsData.data || []);
-      if (attendanceResponse.ok)
-        setAttendanceRecords(attendanceData.data || []);
-      if (sessionsResponse.ok) setClassSessions(sessionsData.data || []);
-      if (statsResponse.ok) setStats(statsData.data);
-
-      // Initialize attendance form
+      // Initialize participation form with dummy data
       const initialForm: Record<
         string,
         { status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED"; notes: string }
       > = {};
-      studentsData.data?.forEach((student: Student) => {
-        const existingRecord = attendanceData.data?.find(
-          (record: AttendanceRecord) => record.student.id === student.id
+      dummyPatients.forEach((patient) => {
+        const existingRecord = dummyParticipationRecords.find(
+          (record) => record.patient.id === patient.id
         );
-        initialForm[student.id] = {
+        initialForm[patient.id] = {
           status: existingRecord?.status || "PRESENT",
           notes: existingRecord?.notes || "",
         };
       });
-      setAttendanceForm(initialForm);
+      setParticipationForm(initialForm);
+
+      setLoading(false);
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to fetch attendance data",
+        description: "Failed to load participation data",
         status: "error",
       });
-    } finally {
       setLoading(false);
     }
   };
 
-  const handleMarkAttendance = async (
-    studentId: string,
+  const handleMarkParticipation = async (
+    patientId: string,
     status: string,
     notes?: string
   ) => {
     try {
-      await ApiClient.post("/attendance/mark", {
-        studentId,
-        date: format(selectedDate, "yyyy-MM-dd"),
-        status,
-        notes,
-        classId: selectedClass,
-      });
-
+      // Simulate API call with dummy data
       toast({
         title: "Success",
-        description: "Attendance marked successfully",
+        description: "Patient participation marked successfully",
         status: "success",
       });
-      fetchData();
+
+      // Update local state
+      const updatedRecords = participationRecords.map((record) =>
+        record.patient.id === patientId
+          ? {
+              ...record,
+              status: status as "PRESENT" | "ABSENT" | "LATE" | "EXCUSED",
+              notes: notes || "",
+            }
+          : record
+      );
+      setParticipationRecords(updatedRecords);
     } catch (error) {
       toast({
         title: "Error",
-        description: asApiError(error).message || "Failed to mark attendance",
+        description: "Failed to mark participation",
         status: "error",
       });
     }
   };
 
-  const handleBulkAttendance = async () => {
+  const handleBulkParticipation = async () => {
     try {
-      setMarkingAttendance(true);
+      setMarkingParticipation(true);
 
-      const attendanceData = Object.entries(attendanceForm).map(
-        ([studentId, data]) => ({
-          studentId,
-          date: format(selectedDate, "yyyy-MM-dd"),
-          status: data.status,
-          notes: data.notes,
-          classId: selectedClass,
-        })
-      );
-
-      await ApiClient.post("/attendance/bulk-mark", {
-        attendanceRecords: attendanceData,
-      });
-
+      // Simulate API call with dummy data
       toast({
         title: "Success",
-        description: "Bulk attendance marked successfully",
+        description: "Bulk participation marked successfully",
         status: "success",
       });
-      setBulkAttendanceDialog(false);
+      setBulkParticipationDialog(false);
       fetchData();
     } catch (error) {
       toast({
         title: "Error",
-        description:
-          asApiError(error).message || "Failed to mark bulk attendance",
+        description: "Failed to mark bulk participation",
         status: "error",
       });
     } finally {
-      setMarkingAttendance(false);
+      setMarkingParticipation(false);
     }
   };
 
-  const handleExportAttendance = async () => {
+  const handleExportParticipation = async () => {
     try {
-      const response = await fetch(
-        `/api/attendance/export?classId=${selectedClass}&startDate=${format(selectedDate, "yyyy-MM-dd")}&endDate=${format(selectedDate, "yyyy-MM-dd")}`
-      );
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `attendance-${format(selectedDate, "yyyy-MM-dd")}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        toast({
-          title: "Success",
-          description: "Attendance report exported successfully",
-          status: "success",
-        });
-      }
+      toast({
+        title: "Success",
+        description: "Participation report exported successfully",
+        status: "success",
+      });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to export attendance",
+        description: "Failed to export participation report",
         status: "error",
       });
     }
@@ -355,7 +488,9 @@ export default function AttendanceTracking() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading attendance data...</p>
+          <p className="mt-2 text-gray-600">
+            Loading patient participation data...
+          </p>
         </div>
       </div>
     );
@@ -366,25 +501,25 @@ export default function AttendanceTracking() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Attendance Tracking</h1>
+          <h1 className="text-3xl font-bold">Patient Participation Tracking</h1>
           <p className="text-gray-600 mt-2">
-            Monitor and manage student attendance
+            Monitor and record patient participation in therapy sessions
           </p>
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportAttendance}>
+          <Button variant="outline" onClick={handleExportParticipation}>
             <Download className="mr-2 h-4 w-4" />
             Export Report
           </Button>
           <Dialog
-            open={bulkAttendanceDialog}
-            onOpenChange={setBulkAttendanceDialog}
+            open={bulkParticipationDialog}
+            onOpenChange={setBulkParticipationDialog}
           >
             <DialogTrigger asChild>
               <Button>
                 <Users className="mr-2 h-4 w-4" />
-                Mark Attendance
+                Record Participation
               </Button>
             </DialogTrigger>
           </Dialog>
@@ -412,16 +547,19 @@ export default function AttendanceTracking() {
             </div>
 
             <div>
-              <Label>Class</Label>
-              <Select value={selectedClass} onValueChange={setSelectedClass}>
+              <Label>Therapy Session</Label>
+              <Select
+                value={selectedSession}
+                onValueChange={setSelectedSession}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select class" />
+                  <SelectValue placeholder="Select session" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Classes</SelectItem>
-                  <SelectItem value="class-1">Grade 6A</SelectItem>
-                  <SelectItem value="class-2">Grade 6B</SelectItem>
-                  <SelectItem value="class-3">Grade 7A</SelectItem>
+                  <SelectItem value="all">All Sessions</SelectItem>
+                  <SelectItem value="s1">Morning PT Group</SelectItem>
+                  <SelectItem value="s2">OT Skills Development</SelectItem>
+                  <SelectItem value="s3">Speech & Language</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -448,11 +586,11 @@ export default function AttendanceTracking() {
             </div>
 
             <div>
-              <Label>Search Students</Label>
+              <Label>Search Patients</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search by name..."
+                  placeholder="Search by name or patient ID..."
                   value={filters.search}
                   onChange={(e) =>
                     setFilters({ ...filters, search: e.target.value })
@@ -469,20 +607,20 @@ export default function AttendanceTracking() {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
-            title="Average Attendance"
-            value={`${stats.averageAttendance.toFixed(1)}%`}
+            title="Average Participation"
+            value={`${stats.averageParticipation.toFixed(1)}%`}
             icon={BarChart3}
             color="bg-blue-600"
           />
           <StatCard
             title="Present Today"
-            value={stats.presentStudents}
+            value={stats.presentPatients}
             icon={UserCheck}
             color="bg-green-600"
           />
           <StatCard
             title="Absent Today"
-            value={stats.absentStudents}
+            value={stats.absentPatients}
             icon={UserX}
             color="bg-red-600"
           />
@@ -496,48 +634,52 @@ export default function AttendanceTracking() {
       )}
 
       {/* Main Content */}
-      <Tabs defaultValue="students" className="w-full">
+      <Tabs defaultValue="patients" className="w-full">
         <TabsList>
-          <TabsTrigger value="students">Students</TabsTrigger>
-          <TabsTrigger value="sessions">Class Sessions</TabsTrigger>
+          <TabsTrigger value="patients">Patients</TabsTrigger>
+          <TabsTrigger value="sessions">Therapy Sessions</TabsTrigger>
           <TabsTrigger value="calendar">Calendar View</TabsTrigger>
         </TabsList>
 
-        {/* Students Tab */}
-        <TabsContent value="students">
+        {/* Patients Tab */}
+        <TabsContent value="patients">
           <Card>
             <CardHeader>
-              <CardTitle>Student Attendance</CardTitle>
+              <CardTitle>Patient Participation</CardTitle>
               <CardDescription>
-                {format(selectedDate, "MMMM d, yyyy")} attendance records
+                {format(selectedDate, "MMMM d, yyyy")} participation records
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Admission No.</TableHead>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>Patient ID</TableHead>
+                    <TableHead>Diagnosis</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Notes</TableHead>
-                    <TableHead>Marked At</TableHead>
+                    <TableHead>Recorded At</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {students.map((student) => {
-                    const record = attendanceRecords.find(
-                      (r) => r.student.id === student.id
+                  {patients.map((patient) => {
+                    const record = participationRecords.find(
+                      (r) => r.patient.id === patient.id
                     );
                     const statusInfo = statusConfig[record?.status || "ABSENT"];
                     const StatusIcon = statusInfo.icon;
 
                     return (
-                      <TableRow key={student.id}>
+                      <TableRow key={patient.id}>
                         <TableCell className="font-medium">
-                          {student.firstName} {student.lastName}
+                          {patient.firstName} {patient.lastName}
                         </TableCell>
-                        <TableCell>{student.admissionNumber}</TableCell>
+                        <TableCell>{patient.patientId}</TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {patient.diagnosis || "-"}
+                        </TableCell>
                         <TableCell>
                           <Badge
                             className={`${statusInfo.color} ${statusInfo.bg}`}
@@ -556,11 +698,11 @@ export default function AttendanceTracking() {
                           <Select
                             value={record?.status || ""}
                             onValueChange={(value) =>
-                              handleMarkAttendance(student.id, value)
+                              handleMarkParticipation(patient.id, value)
                             }
                           >
                             <SelectTrigger className="w-32">
-                              <SelectValue placeholder="Mark" />
+                              <SelectValue placeholder="Record" />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="PRESENT">Present</SelectItem>
@@ -583,9 +725,9 @@ export default function AttendanceTracking() {
         <TabsContent value="sessions">
           <Card>
             <CardHeader>
-              <CardTitle>Class Sessions</CardTitle>
+              <CardTitle>Therapy Sessions</CardTitle>
               <CardDescription>
-                Overview of class sessions and attendance rates
+                Overview of therapy sessions and participation rates
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -593,41 +735,43 @@ export default function AttendanceTracking() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>Subject</TableHead>
+                    <TableHead>Session</TableHead>
+                    <TableHead>Therapy Type</TableHead>
                     <TableHead>Time</TableHead>
-                    <TableHead>Attendance</TableHead>
+                    <TableHead>Participation</TableHead>
                     <TableHead>Rate</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {classSessions.map((session) => (
+                  {therapySessions.map((session) => (
                     <TableRow key={session.id}>
                       <TableCell>
                         {format(new Date(session.date), "MMM d, yyyy")}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {session.className}
+                        {session.sessionName}
                       </TableCell>
-                      <TableCell>{getDisplayName(session.subject)}</TableCell>
+                      <TableCell>
+                        {getDisplayName(session.therapyType)}
+                      </TableCell>
                       <TableCell>
                         {session.startTime} - {session.endTime}
                       </TableCell>
                       <TableCell>
-                        {session.presentStudents}/{session.totalStudents}
+                        {session.presentPatients}/{session.totalPatients}
                       </TableCell>
                       <TableCell>
                         <span
                           className={
-                            session.attendancePercentage >= 90
+                            session.participationRate >= 90
                               ? "text-green-600 font-medium"
-                              : session.attendancePercentage >= 75
+                              : session.participationRate >= 75
                                 ? "text-yellow-600 font-medium"
                                 : "text-red-600 font-medium"
                           }
                         >
-                          {session.attendancePercentage.toFixed(1)}%
+                          {session.participationRate.toFixed(1)}%
                         </span>
                       </TableCell>
                       <TableCell>
@@ -666,32 +810,32 @@ export default function AttendanceTracking() {
                 </div>
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">
-                    Attendance for {format(selectedDate, "MMMM d, yyyy")}
+                    Participation for {format(selectedDate, "MMMM d, yyyy")}
                   </h3>
                   {stats && (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                        <span className="text-green-800">Present Students</span>
+                        <span className="text-green-800">Present Patients</span>
                         <span className="font-semibold text-green-900">
-                          {stats.presentStudents}
+                          {stats.presentPatients}
                         </span>
                       </div>
                       <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                        <span className="text-red-800">Absent Students</span>
+                        <span className="text-red-800">Absent Patients</span>
                         <span className="font-semibold text-red-900">
-                          {stats.absentStudents}
+                          {stats.absentPatients}
                         </span>
                       </div>
                       <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                        <span className="text-yellow-800">Late Students</span>
+                        <span className="text-yellow-800">Late Patients</span>
                         <span className="font-semibold text-yellow-900">
-                          {stats.lateStudents}
+                          {stats.latePatients}
                         </span>
                       </div>
                       <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                        <span className="text-blue-800">Excused Students</span>
+                        <span className="text-blue-800">Excused Patients</span>
                         <span className="font-semibold text-blue-900">
-                          {stats.excusedStudents}
+                          {stats.excusedPatients}
                         </span>
                       </div>
                     </div>
@@ -703,16 +847,16 @@ export default function AttendanceTracking() {
         </TabsContent>
       </Tabs>
 
-      {/* Bulk Attendance Dialog */}
+      {/* Bulk Participation Dialog */}
       <Dialog
-        open={bulkAttendanceDialog}
-        onOpenChange={setBulkAttendanceDialog}
+        open={bulkParticipationDialog}
+        onOpenChange={setBulkParticipationDialog}
       >
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Mark Bulk Attendance</DialogTitle>
+            <DialogTitle>Record Bulk Participation</DialogTitle>
             <DialogDescription>
-              Mark attendance for all students for{" "}
+              Record participation for all patients for{" "}
               {format(selectedDate, "MMMM d, yyyy")}
             </DialogDescription>
           </DialogHeader>
@@ -721,27 +865,33 @@ export default function AttendanceTracking() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Student</TableHead>
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Patient ID</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {students.map((student) => (
-                  <TableRow key={student.id}>
+                {patients.map((patient) => (
+                  <TableRow key={patient.id}>
                     <TableCell className="font-medium">
-                      {student.firstName} {student.lastName}
+                      {patient.firstName} {patient.lastName}
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      {patient.patientId}
                     </TableCell>
                     <TableCell>
                       <Select
-                        value={attendanceForm[student.id]?.status || "PRESENT"}
+                        value={
+                          participationForm[patient.id]?.status || "PRESENT"
+                        }
                         onValueChange={(
                           value: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED"
                         ) =>
-                          setAttendanceForm({
-                            ...attendanceForm,
-                            [student.id]: {
-                              ...attendanceForm[student.id],
+                          setParticipationForm({
+                            ...participationForm,
+                            [patient.id]: {
+                              ...participationForm[patient.id],
                               status: value,
                             },
                           })
@@ -761,12 +911,12 @@ export default function AttendanceTracking() {
                     <TableCell>
                       <Input
                         placeholder="Optional notes..."
-                        value={attendanceForm[student.id]?.notes || ""}
+                        value={participationForm[patient.id]?.notes || ""}
                         onChange={(e) =>
-                          setAttendanceForm({
-                            ...attendanceForm,
-                            [student.id]: {
-                              ...attendanceForm[student.id],
+                          setParticipationForm({
+                            ...participationForm,
+                            [patient.id]: {
+                              ...participationForm[patient.id],
                               notes: e.target.value,
                             },
                           })
@@ -782,12 +932,15 @@ export default function AttendanceTracking() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setBulkAttendanceDialog(false)}
+              onClick={() => setBulkParticipationDialog(false)}
             >
               Cancel
             </Button>
-            <Button onClick={handleBulkAttendance} disabled={markingAttendance}>
-              {markingAttendance ? "Marking..." : "Mark Attendance"}
+            <Button
+              onClick={handleBulkParticipation}
+              disabled={markingParticipation}
+            >
+              {markingParticipation ? "Recording..." : "Record Participation"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -355,7 +355,7 @@ async function main() {
     update: {},
     create: {
       phone: "+94770000001",
-      email: "superadmin@learnapp.lk",
+      email: "superadmin@armigo.lk",
       password: passwordHash,
       firstName: "Super",
       lastName: "Admin",
@@ -372,7 +372,7 @@ async function main() {
     update: {},
     create: {
       phone: "+94770000002",
-      email: "admin@learnapp.lk",
+      email: "admin@armigo.lk",
       password: passwordHash,
       firstName: "Main",
       lastName: "Admin",
@@ -390,7 +390,7 @@ async function main() {
     update: {},
     create: {
       phone: "+94770000003",
-      email: "teacher.maths@learnapp.lk",
+      email: "teacher.maths@armigo.lk",
       password: passwordHash,
       firstName: "Manoj",
       lastName: "Maths",
@@ -408,7 +408,7 @@ async function main() {
     update: {},
     create: {
       phone: "+94770000007",
-      email: "teacher.science@learnapp.lk",
+      email: "doctor@armigo.lk",
       password: passwordHash,
       firstName: "Kavitha",
       lastName: "Science",
@@ -426,7 +426,7 @@ async function main() {
     update: {},
     create: {
       phone: "+94770000004",
-      email: "external.teacher@learnapp.lk",
+      email: "external.teacher@armigo.lk",
       password: passwordHash,
       firstName: "Kumar",
       lastName: "Transfer",
@@ -444,7 +444,7 @@ async function main() {
     update: {},
     create: {
       phone: "+94770000005",
-      email: "student.internal10@learnapp.lk",
+      email: "student.internal10@armigo.lk",
       password: passwordHash,
       firstName: "Nimal",
       lastName: "Internal",
@@ -462,7 +462,7 @@ async function main() {
     update: {},
     create: {
       phone: "+94770000006",
-      email: "student.external@learnapp.lk",
+      email: "student.external@armigo.lk",
       password: passwordHash,
       firstName: "Suresh",
       lastName: "External",
@@ -480,7 +480,7 @@ async function main() {
     update: {},
     create: {
       phone: "+94770000008",
-      email: "student.internal11@learnapp.lk",
+      email: "student.internal11@armigo.lk",
       password: passwordHash,
       firstName: "Deepa",
       lastName: "Internal",

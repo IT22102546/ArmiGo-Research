@@ -76,7 +76,7 @@ export default function AdminSidebar({
       {
         href: "/admin/institutions",
         icon: Building,
-        label: t("nav.institutions"),
+        label: "Clinics Management",
       },
     ],
     academics: [
@@ -103,35 +103,8 @@ export default function AdminSidebar({
         icon: Calendar,
         label: "Doctor Assignments",
       },
-      {
-        href: "/admin/teachers/availability",
-        icon: CalendarClock,
-        label: "Doctor Availability",
-      },
     ],
-    exams: [
-      {
-        href: "/admin/exam-management",
-        icon: BookLockIcon,
-        label: t("nav.exams"),
-      },
-      {
-        href: "/admin/exam-approvals",
-        icon: FileText,
-        label: t("nav.examApprovals"),
-      },
-      { href: "/admin/marking", icon: FileText, label: t("nav.marking") },
-      {
-        href: "/admin/rankings",
-        icon: BarChart3,
-        label: t("nav.rankingsResults"),
-      },
-      {
-        href: "/admin/live-proctoring",
-        icon: Video,
-        label: t("nav.liveProctoring"),
-      },
-    ],
+
     payments: [
       { href: "/admin/payments", icon: CreditCard, label: t("nav.payments") },
       { href: "/admin/invoices", icon: Receipt, label: t("nav.invoices") },

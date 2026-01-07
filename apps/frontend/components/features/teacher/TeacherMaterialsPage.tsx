@@ -248,9 +248,9 @@ export default function TeacherMaterialsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Course Materials</h1>
+          <h1 className="text-3xl font-bold">Educational Materials</h1>
           <p className="text-muted-foreground mt-1">
-            Upload and manage your course materials
+            Upload and manage your educational materials
           </p>
         </div>
         <Button onClick={() => setUploadDialogOpen(true)}>
@@ -383,7 +383,7 @@ export default function TeacherMaterialsPage() {
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No materials found</h3>
               <p className="text-muted-foreground mb-4">
-                Upload your first course material to get started
+                Upload your first educationla material to get started
               </p>
               <Button onClick={() => setUploadDialogOpen(true)}>
                 <Upload className="h-4 w-4 mr-2" />
@@ -462,10 +462,8 @@ export default function TeacherMaterialsPage() {
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Upload Course Material</DialogTitle>
-            <DialogDescription>
-              Upload a new material for your students
-            </DialogDescription>
+            <DialogTitle>Upload Educational Material</DialogTitle>
+            <DialogDescription>Upload a new material</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">

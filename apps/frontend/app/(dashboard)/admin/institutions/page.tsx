@@ -177,14 +177,14 @@ export default function InstitutionsPage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Institution Management</h1>
+          <h1 className="text-3xl font-bold">Clinics Management</h1>
           <p className="text-muted-foreground">
-            Manage schools and educational institutions
+            Manage clinics and healthcare institutions
           </p>
         </div>
         <Button onClick={() => handleOpenDialog()}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Institution
+          Add
         </Button>
       </div>
 
@@ -272,12 +272,12 @@ export default function InstitutionsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {selectedInstitution ? "Edit Institution" : "Add Institution"}
+              {selectedInstitution ? "Edit Clinic" : "Add Clinic"}
             </DialogTitle>
             <DialogDescription>
               {selectedInstitution
-                ? "Update the institution details"
-                : "Create a new institution"}
+                ? "Update the clinic details"
+                : "Create a new clinic"}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -292,7 +292,7 @@ export default function InstitutionsPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  placeholder="Institution name"
+                  placeholder="Clinic name"
                 />
               </div>
               <div className="space-y-2">
@@ -303,7 +303,7 @@ export default function InstitutionsPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, code: e.target.value })
                   }
-                  placeholder="Institution code"
+                  placeholder="Clinic code"
                 />
               </div>
             </div>
@@ -322,10 +322,10 @@ export default function InstitutionsPage() {
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="SCHOOL">School</SelectItem>
-                    <SelectItem value="COLLEGE">College</SelectItem>
-                    <SelectItem value="UNIVERSITY">University</SelectItem>
-                    <SelectItem value="INSTITUTE">Institute</SelectItem>
+                    <SelectItem value="SCHOOL">Clinic</SelectItem>
+                    <SelectItem value="COLLEGE">Hospital OPD</SelectItem>
+                    <SelectItem value="UNIVERSITY">PVT Clinic</SelectItem>
+                    <SelectItem value="INSTITUTE">Rehab Centre</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -362,7 +362,7 @@ export default function InstitutionsPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, address: e.target.value })
                 }
-                placeholder="Institution address"
+                placeholder="Clinic address"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
