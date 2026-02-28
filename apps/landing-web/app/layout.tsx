@@ -55,9 +55,19 @@ export const metadata: Metadata = {
     images: ["/assets/logo.png"],
   },
   icons: {
-    icon: "/assets/logo.png",
-    shortcut: "/assets/logo.png",
-    apple: "/assets/logo.png",
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/assets/logo.png', type: 'image/png', sizes: '32x32' },
+      { url: '/assets/logo.png', type: 'image/png', sizes: '16x16' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/assets/logo.png',
+    other: [
+      {
+        rel: 'apple-touch-icon-precomposed',
+        url: '/assets/logo.png',
+      },
+    ],
   },
   manifest: "/manifest.json",
   themeColor: "#6366f1",
@@ -78,6 +88,13 @@ export default function RootLayout({
         <meta name="theme-color" content="#6366f1" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        
+        {/* Favicon - Multiple formats for better compatibility */}
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/assets/logo.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/assets/logo.png" />
+        <link rel="apple-touch-icon" href="/assets/logo.png" />
+        <link rel="shortcut icon" href="/favicon.ico" />
         
         {/* Structured data for better SEO */}
         <script
@@ -115,7 +132,7 @@ export default function RootLayout({
       <body className="antialiased font-sans">
         {children}
         
-        {/* Optional: Add a simple script to handle service worker registration for PWA */}
+        {/* Service worker registration */}
         <script
           dangerouslySetInnerHTML={{
             __html: `

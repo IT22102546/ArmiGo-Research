@@ -1373,32 +1373,323 @@ const HomeSection = () => {
         </motion.div>
       </section>
 
-      {/* Testimonials Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="container-custom">
-          <h2 className="text-4xl font-bold text-center mb-12">What Parents Say</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, i) => (
-              <motion.div 
-                key={i}
-                className="bg-white p-6 rounded-2xl shadow-lg"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <p className="text-gray-600 mb-4">"{testimonial.content}"</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
-                  <div>
-                    <p className="font-bold">{testimonial.name}</p>
-                    <p className="text-sm text-gray-500">{testimonial.role}</p>
-                  </div>
+   {/* Testimonials Section - Enhanced */}
+<section className="py-20 bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 relative overflow-hidden">
+  {/* Decorative Background Elements */}
+  <div className="absolute inset-0 pointer-events-none">
+    <div className="absolute top-0 left-0 w-64 h-64 bg-yellow-200/30 rounded-full blur-3xl"></div>
+    <div className="absolute bottom-0 right-0 w-80 h-80 bg-pink-200/30 rounded-full blur-3xl"></div>
+  </div>
+
+  <div className="container-custom relative z-10">
+    {/* Section Header */}
+    <motion.div 
+      className="text-center mb-16"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+      variants={fadeInUp}
+    >
+      <span className="inline-block px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-bold mb-6 shadow-lg">
+        <Heart className="inline w-4 h-4 mr-2 fill-current animate-pulse" />
+        REAL STORIES, REAL HEROES
+        <Heart className="inline w-4 h-4 ml-2 fill-current animate-pulse" />
+      </span>
+      
+      <h2 className="text-5xl md:text-6xl font-black mb-4">
+        <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          What Parents Say
+        </span>
+      </h2>
+      
+      <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+        Hear from families who've watched their little heroes transform through play
+      </p>
+
+      {/* Decorative Quote Marks */}
+      <motion.div 
+        className="flex justify-center gap-4 mt-4"
+        animate={{ y: [0, -5, 0] }}
+        transition={{ duration: 2, repeat: Infinity }}
+      >
+        <span className="text-4xl text-purple-300">"</span>
+        <span className="text-4xl text-pink-300">"</span>
+      </motion.div>
+    </motion.div>
+
+    {/* Testimonials Grid */}
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {/* Testimonial 1 */}
+      <motion.div
+        className="relative group"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+        variants={bounceAnimation}
+        whileHover={{ y: -10 }}
+      >
+        <div className="bg-gradient-to-br from-blue-400 to-purple-400 p-1 rounded-[40px]">
+          <div className="bg-white rounded-[40px] p-8 relative overflow-hidden">
+            {/* Decorative Elements */}
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-yellow-200 to-orange-200 rounded-bl-[100px] opacity-30"></div>
+            
+            {/* Quote Icon */}
+            <motion.div 
+              className="absolute top-4 left-4 text-6xl text-purple-200"
+              animate={{ rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 3, repeat: Infinity }}
+            >
+              "
+            </motion.div>
+
+            {/* Rating Stars */}
+            <div className="flex gap-1 mb-4 relative z-10">
+              {[1,2,3,4,5].map((star) => (
+                <motion.div
+                  key={star}
+                  initial={{ scale: 0 }}
+                  whileInView={{ scale: 1 }}
+                  transition={{ delay: star * 0.1 }}
+                >
+                  <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Testimonial Content */}
+            <p className="text-gray-700 mb-6 relative z-10 text-lg leading-relaxed">
+              "ArmiGo has been a game-changer for our daughter. The VR games make her forget she's doing therapy. We've seen amazing progress in just 3 months!"
+            </p>
+
+            {/* Parent Info */}
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="relative">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center text-white text-2xl">
+                  👩
                 </div>
-              </motion.div>
-            ))}
+                <motion.div 
+                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-400 rounded-full border-2 border-white"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                />
+              </div>
+              <div>
+                <h4 className="font-bold text-lg">Sarah's Mom</h4>
+                <p className="text-sm text-gray-500">Parent of 7-year-old</p>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+                    ✓ Verified Parent
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Floating Emoji */}
+            <motion.div 
+              className="absolute bottom-4 right-4 text-3xl opacity-30"
+              animate={{ rotate: [0, 360] }}
+              transition={{ duration: 10, repeat: Infinity }}
+            >
+              🦸‍♀️
+            </motion.div>
           </div>
         </div>
-      </section>
+      </motion.div>
+
+      {/* Testimonial 2 */}
+      <motion.div
+        className="relative group"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+        variants={bounceAnimation}
+        whileHover={{ y: -10 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="bg-gradient-to-br from-green-400 to-teal-400 p-1 rounded-[40px]">
+          <div className="bg-white rounded-[40px] p-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-green-200 to-teal-200 rounded-bl-[100px] opacity-30"></div>
+            
+            <motion.div 
+              className="absolute top-4 left-4 text-6xl text-green-200"
+              animate={{ rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 3, repeat: Infinity }}
+            >
+              "
+            </motion.div>
+
+            <div className="flex gap-1 mb-4 relative z-10">
+              {[1,2,3,4,5].map((star) => (
+                <motion.div
+                  key={star}
+                  initial={{ scale: 0 }}
+                  whileInView={{ scale: 1 }}
+                  transition={{ delay: star * 0.1 }}
+                >
+                  <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                </motion.div>
+              ))}
+            </div>
+
+            <p className="text-gray-700 mb-6 relative z-10 text-lg leading-relaxed">
+              "The smart glove device is incredible! Our son loves the finger exercises, and we can actually see his grip strength improving. Thank you ArmiGo!"
+            </p>
+
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="relative">
+                <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-teal-400 rounded-full flex items-center justify-center text-white text-2xl">
+                  👨
+                </div>
+                <motion.div 
+                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-400 rounded-full border-2 border-white"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                />
+              </div>
+              <div>
+                <h4 className="font-bold text-lg">Michael's Dad</h4>
+                <p className="text-sm text-gray-500">Parent of 9-year-old</p>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+                    ✓ Verified Parent
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <motion.div 
+              className="absolute bottom-4 right-4 text-3xl opacity-30"
+              animate={{ rotate: [0, 360] }}
+              transition={{ duration: 10, repeat: Infinity }}
+            >
+              🦸‍♂️
+            </motion.div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Testimonial 3 */}
+      <motion.div
+        className="relative group"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+        variants={bounceAnimation}
+        whileHover={{ y: -10 }}
+        transition={{ delay: 0.4 }}
+      >
+        <div className="bg-gradient-to-br from-orange-400 to-red-400 p-1 rounded-[40px]">
+          <div className="bg-white rounded-[40px] p-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-200 to-red-200 rounded-bl-[100px] opacity-30"></div>
+            
+            <motion.div 
+              className="absolute top-4 left-4 text-6xl text-orange-200"
+              animate={{ rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 3, repeat: Infinity }}
+            >
+              "
+            </motion.div>
+
+            <div className="flex gap-1 mb-4 relative z-10">
+              {[1,2,3,4,5].map((star) => (
+                <motion.div
+                  key={star}
+                  initial={{ scale: 0 }}
+                  whileInView={{ scale: 1 }}
+                  transition={{ delay: star * 0.1 }}
+                >
+                  <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                </motion.div>
+              ))}
+            </div>
+
+            <p className="text-gray-700 mb-6 relative z-10 text-lg leading-relaxed">
+              "As a therapist, I've recommended ArmiGo to all my families. The progress tracking is amazing, and the kids actually look forward to their sessions!"
+            </p>
+
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="relative">
+                <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-2xl">
+                  👩‍⚕️
+                </div>
+                <motion.div 
+                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-400 rounded-full border-2 border-white"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                />
+              </div>
+              <div>
+                <h4 className="font-bold text-lg">Dr. Jennifer Lee</h4>
+                <p className="text-sm text-gray-500">Pediatric Therapist</p>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
+                    ⚕️ Medical Professional
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <motion.div 
+              className="absolute bottom-4 right-4 text-3xl opacity-30"
+              animate={{ rotate: [0, 360] }}
+              transition={{ duration: 10, repeat: Infinity }}
+            >
+              🏥
+            </motion.div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+
+    {/* Stats Row */}
+    <motion.div 
+      className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16 max-w-4xl mx-auto"
+      variants={staggerContainer}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+    >
+      {[
+        { number: "500+", label: "Happy Families", icon: "👨‍👩‍👧" },
+        { number: "98%", label: "Would Recommend", icon: "⭐" },
+        { number: "4.9/5", label: "Average Rating", icon: "🌟" },
+        { number: "50+", label: "Therapist Approved", icon: "👩‍⚕️" },
+      ].map((stat, i) => (
+        <motion.div 
+          key={i}
+          className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl text-center shadow-lg"
+          variants={bounceAnimation}
+          whileHover={{ scale: 1.05 }}
+        >
+          <span className="text-3xl mb-2 block">{stat.icon}</span>
+          <p className="text-2xl font-bold text-gray-800">{stat.number}</p>
+          <p className="text-xs text-gray-600">{stat.label}</p>
+        </motion.div>
+      ))}
+    </motion.div>
+
+    {/* Call to Action */}
+    <motion.div 
+      className="text-center mt-16"
+      variants={fadeInUp}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+    >
+      <Link
+        href="/stories"
+        className="group inline-flex items-center gap-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-10 py-4 rounded-full font-bold text-lg hover:shadow-xl transition-all"
+      >
+        <Heart className="w-5 h-5 group-hover:scale-110 transition-transform" />
+        Read More Hero Stories
+        <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+      </Link>
+      <p className="text-sm text-gray-500 mt-4">
+        ✨ Join 500+ families sharing their superhero journeys ✨
+      </p>
+    </motion.div>
+  </div>
+</section>
 
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 text-white relative overflow-hidden">

@@ -15,7 +15,6 @@ const Navbar = () => {
     { name: "Programs", href: "/programs" },
     { name: "Success Stories", href: "/stories" },
     { name: "For Parents", href: "/parents" },
-    { name: "Contact", href: "/contact" },
   ];
 
   return (
@@ -67,26 +66,20 @@ const Navbar = () => {
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center md:gap-3 lg:gap-4">
             <Link
-              href="/resources"
-              className="text-gray-600 hover:text-blue-600 font-medium transition-colors md:text-sm lg:text-base whitespace-nowrap"
-            >
-              Resources
-            </Link>
-            <Link
-              href="/assessment"
+              href="/contact"
               className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 lg:px-6 py-2 rounded-full text-sm font-medium hover:shadow-lg hover:scale-105 transition-all duration-300 whitespace-nowrap"
             >
-              Free Assessment
+              Contact Us
             </Link>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center gap-2 sm:gap-3">
             <Link
-              href="/assessment"
+              href="/contact"
               className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 sm:px-4 py-1.5 rounded-full text-xs font-medium hover:shadow-md transition-all whitespace-nowrap"
             >
-              Assessment
+              Contact Us
             </Link>
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -117,24 +110,6 @@ const Navbar = () => {
                 {link.name}
               </Link>
             ))}
-            
-            {/* Additional mobile menu items */}
-            <div className="pt-4 border-t border-blue-100 flex flex-col gap-3">
-              <Link
-                href="/resources"
-                onClick={() => setIsOpen(false)}
-                className="block py-3 px-4 text-center text-gray-600 font-medium hover:bg-blue-50 rounded-xl"
-              >
-                Resources
-              </Link>
-              <Link
-                href="/support"
-                onClick={() => setIsOpen(false)}
-                className="block py-3 px-4 text-center text-gray-600 font-medium hover:bg-blue-50 rounded-xl"
-              >
-                Support Groups
-              </Link>
-            </div>
             
             {/* Kid-friendly decorative elements */}
             <div className="flex justify-center gap-2 pt-4">

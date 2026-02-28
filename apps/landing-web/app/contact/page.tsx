@@ -28,7 +28,10 @@ import {
   Sun,
   Cloud,
   Rainbow,
-  Gem
+  Gem,
+  MessageSquare,
+  MessageCircleHeart,
+  MessagesSquare
 } from "lucide-react";
 
 const fadeInUp = {
@@ -250,15 +253,152 @@ export default function ContactPage() {
               ))}
             </motion.div>
 
-            <motion.p 
-              className="text-xl text-gray-700 max-w-2xl mx-auto bg-white/50 backdrop-blur-sm p-6 rounded-3xl shadow-lg"
+            {/* REDESIGNED MESSAGE SECTION - More attractive */}
+            <motion.div 
+              className="relative max-w-3xl mx-auto"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
             >
-              Got a question? Want to share your superhero story? 
-              <br />We're all ears and can't wait to chat with you!
-            </motion.p>
+              {/* Main Message Card */}
+              <div className="relative bg-white/80 backdrop-blur-sm p-8 rounded-[50px] shadow-2xl border-4 border-white overflow-hidden">
+                {/* Decorative Elements */}
+                <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-yellow-200 to-orange-200 rounded-br-[100px] opacity-50"></div>
+                <div className="absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-tl from-blue-200 to-purple-200 rounded-tl-[100px] opacity-50"></div>
+                
+                {/* Floating Hearts */}
+                {[...Array(4)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute"
+                    style={{
+                      left: `${[5, 90, 10, 85][i]}%`,
+                      top: `${[10, 15, 80, 85][i]}%`,
+                    }}
+                    animate={{
+                      y: [0, -10, 0],
+                      rotate: [0, 10, -10, 0],
+                      scale: [1, 1.1, 1],
+                    }}
+                    transition={{
+                      duration: 3,
+                      repeat: Infinity,
+                      delay: i * 0.3,
+                    }}
+                  >
+                    <Heart className="w-5 h-5 text-pink-300 fill-pink-300/30" />
+                  </motion.div>
+                ))}
+
+                {/* Content */}
+                <div className="relative z-10">
+                  {/* Quote Icon */}
+                  <motion.div 
+                    className="text-6xl text-purple-300 mb-2"
+                    animate={{ 
+                      rotate: [0, 5, -5, 0],
+                      scale: [1, 1.1, 1]
+                    }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                  >
+                    "
+                  </motion.div>
+
+                  {/* Main Text with Emojis */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <motion.div
+                        animate={{ rotate: [0, 10, -10, 0] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <MessageCircleHeart className="w-8 h-8 text-purple-500" />
+                      </motion.div>
+                      <motion.div
+                        animate={{ rotate: [0, -10, 10, 0] }}
+                        transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
+                      >
+                        <MessagesSquare className="w-8 h-8 text-pink-500" />
+                      </motion.div>
+                      <motion.div
+                        animate={{ rotate: [0, 10, -10, 0] }}
+                        transition={{ duration: 2, repeat: Infinity, delay: 0.6 }}
+                      >
+                        <MessageSquare className="w-8 h-8 text-blue-500" />
+                      </motion.div>
+                    </div>
+
+                    <p className="text-2xl md:text-3xl font-bold text-gray-800 leading-relaxed">
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
+                        Got a question?
+                      </span>
+                    </p>
+
+                    <p className="text-2xl md:text-3xl font-bold text-gray-800">
+                      Want to share your 
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-orange-500 mx-2">
+                        superhero story
+                      </span>
+                      ?
+                    </p>
+
+                    <div className="flex items-center justify-center gap-3 my-4">
+                      <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-purple-400 to-transparent"></div>
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <Sparkles className="w-6 h-6 text-yellow-500" />
+                      </motion.div>
+                      <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent"></div>
+                    </div>
+
+                    <p className="text-xl text-gray-700">
+                      <span className="font-bold text-purple-600">We're all ears</span> 
+                      <span className="mx-2">👂</span>
+                      and
+                    </p>
+
+                    <p className="text-2xl md:text-3xl font-black bg-gradient-to-r from-green-500 to-blue-500 bg-clip-text text-transparent">
+                      can't wait to chat with you!
+                    </p>
+
+                    {/* Fun Emoji Row */}
+                    <div className="flex justify-center gap-3 mt-4">
+                      {['😊', '🎉', '💬', '💭', '✨'].map((emoji, i) => (
+                        <motion.span
+                          key={i}
+                          className="text-2xl"
+                          animate={{ 
+                            y: [0, -8, 0],
+                            rotate: [0, 10, -10, 0]
+                          }}
+                          transition={{ 
+                            duration: 2, 
+                            repeat: Infinity, 
+                            delay: i * 0.2 
+                          }}
+                        >
+                          {emoji}
+                        </motion.span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Decorative Dots */}
+                  <div className="flex justify-center gap-1 mt-6">
+                    {[...Array(5)].map((_, i) => (
+                      <motion.div
+                        key={i}
+                        className="w-2 h-2 rounded-full"
+                        style={{ background: `hsl(${i * 72}, 70%, 60%)` }}
+                        animate={{ scale: [1, 1.5, 1] }}
+                        transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
 
             {/* Fun Decorative Line */}
             <motion.div 

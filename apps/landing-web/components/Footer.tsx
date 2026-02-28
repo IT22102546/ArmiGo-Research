@@ -4,6 +4,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { Heart, Activity, Shield, Phone, Mail, MapPin } from "lucide-react";
 
+// Predefined positions for floating hearts to avoid hydration mismatch
+const floatingHearts = [
+  { left: 10, top: 15, duration: 5, scale: 0.5, delay: 0 },
+  { left: 25, top: 60, duration: 7, scale: 0.7, delay: 0.5 },
+  { left: 45, top: 80, duration: 9, scale: 0.9, delay: 1 },
+  { left: 65, top: 30, duration: 11, scale: 1.1, delay: 1.5 },
+  { left: 80, top: 70, duration: 13, scale: 1.3, delay: 2 },
+  { left: 90, top: 20, duration: 15, scale: 1.5, delay: 2.5 },
+];
+
 const Footer = () => {
   return (
     <footer className="bg-gradient-to-br from-[#0a1128] via-[#1a1f3a] to-[#2a1f4a] text-white pt-16 pb-8 relative overflow-hidden">
@@ -11,16 +21,18 @@ const Footer = () => {
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
-        {/* Floating Hearts */}
-        {[...Array(6)].map((_, i) => (
+        
+        {/* Floating Hearts - Using deterministic values */}
+        {floatingHearts.map((heart, i) => (
           <div
             key={i}
-            className="absolute text-pink-500/20 animate-float"
+            className="absolute text-pink-500/20"
             style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `float ${5 + i * 2}s infinite`,
-              transform: `scale(${0.5 + i * 0.2})`,
+              left: `${heart.left}%`,
+              top: `${heart.top}%`,
+              animation: `float ${heart.duration}s ease-in-out infinite`,
+              animationDelay: `${heart.delay}s`,
+              transform: `scale(${heart.scale})`,
             }}
           >
             <Heart size={24} />
@@ -30,11 +42,20 @@ const Footer = () => {
 
       <div className="container-custom relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-12 md:gap-8 mb-10">
-          {/* Brand Column - Enhanced */}
+          {/* Brand Column - With Logo */}
           <div className="md:col-span-4 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3 mb-6 lg:mb-8 group">
-              <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl group-hover:scale-110 transition-transform">
-                <Activity className="w-6 h-6 text-white" strokeWidth={2.5} />
+              {/* Logo Image */}
+              <div className="relative w-12 h-12">
+                <Image
+                  src="/assets/logo.png"
+                  alt="ArmiGo Logo"
+                  width={48}
+                  height={48}
+                  className="object-contain group-hover:scale-110 transition-transform duration-300"
+                />
+                {/* Glow effect on hover */}
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full opacity-0 group-hover:opacity-20 blur-md transition-opacity duration-300"></div>
               </div>
               <span className="text-2xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                 ArmiGo
@@ -95,7 +116,7 @@ const Footer = () => {
             </div>
           </div>
 
-          {/* For Families Column - New */}
+          {/* For Families Column */}
           <div className="md:col-span-2 md:col-start-6 text-center md:text-left">
             <h4 className="text-lg font-bold mb-6 flex items-center justify-center md:justify-start gap-2">
               <Heart className="w-5 h-5 text-pink-400" />
@@ -130,7 +151,7 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* For Hospitals Column - New */}
+          {/* For Hospitals Column */}
           <div className="md:col-span-2 md:col-start-9 text-center md:text-left">
             <h4 className="text-lg font-bold mb-6 flex items-center justify-center md:justify-start gap-2">
               <Activity className="w-5 h-5 text-blue-400" />
@@ -165,7 +186,7 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Support Column - New */}
+          {/* Support Column */}
           <div className="md:col-span-2 md:col-start-11 text-center md:text-left">
             <h4 className="text-lg font-bold mb-6 flex items-center justify-center md:justify-start gap-2">
               <Shield className="w-5 h-5 text-green-400" />
@@ -284,9 +305,6 @@ const Footer = () => {
         @keyframes float {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
           50% { transform: translateY(-20px) rotate(10deg); }
-        }
-        .animate-float {
-          animation: float 3s ease-in-out infinite;
         }
       `}</style>
     </footer>
