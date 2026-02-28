@@ -1,0 +1,32 @@
+[
+  {
+    "id": "1",
+    "name": "Dr. Michael Chen",
+    "role": "Principal, Lincoln High School",
+    "content": "This platform has revolutionized how we manage our institution. The mutual transfer system alone saved us countless hours of paperwork. Highly recommended!",
+    "rating": 5,
+    "image": "/assets/testimonial-1.png",
+    "active": true,
+    "createdAt": "2026-02-24T04:09:57.526Z"
+  },
+  {
+    "id": "2",
+    "name": "Sarah Williams",
+    "role": "Math Teacher, Riverside Academy",
+    "content": "The AI exam monitoring is a game-changer. I can now focus on creating better assessments instead of worrying about academic integrity. The auto-grading feature saves me hours every week.",
+    "rating": 5,
+    "image": "/assets/testimonial-2.png",
+    "active": true,
+    "createdAt": "2026-02-24T04:09:57.526Z"
+  },
+  {
+    "id": "3",
+    "name": "Alex Thompson",
+    "role": "Student, Grade 11",
+    "content": "I love the leaderboard feature! It motivates me to study harder and compete with my friends in a healthy way. The live classes are super interactive and easy to follow.",
+    "rating": 5,
+    "image": "/assets/testimonial-3.png",
+    "active": true,
+    "createdAt": "2026-02-24T04:09:57.526Z"
+  }
+]
