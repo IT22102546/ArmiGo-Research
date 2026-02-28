@@ -79,8 +79,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${comicNeue.variable}`}>
-      <head>
+    <html lang="en" className={`${inter.variable} ${comicNeue.variable}`} suppressHydrationWarning>
+      <head suppressHydrationWarning>
         {/* Preload logo for better performance */}
         <link rel="preload" as="image" href="/assets/logo.png" />
         
@@ -129,7 +129,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="antialiased font-sans">
+      <body className="antialiased font-sans" suppressHydrationWarning>
         {children}
         
         {/* Service worker registration */}

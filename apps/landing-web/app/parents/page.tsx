@@ -257,45 +257,144 @@ export default function ParentsPage() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative pt-24 pb-16 px-4 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-200 via-purple-200 to-pink-200 opacity-30"></div>
+  {/* Hero Section - Fixed */}
+<section className="relative pt-24 pb-20 px-4 overflow-hidden">
+  {/* Colorful Gradient Background */}
+  <div className="absolute inset-0 bg-gradient-to-br from-blue-400 via-purple-400 to-pink-400"></div>
+  
+  {/* Animated Shapes */}
+  <div className="absolute inset-0 opacity-30">
+    {[...Array(6)].map((_, i) => (
+      <motion.div
+        key={i}
+        className="absolute w-32 h-32 md:w-48 md:h-48 bg-white rounded-full"
+        style={{
+          left: `${[5, 70, 85, 10, 90, 30][i]}%`,
+          top: `${[10, 15, 60, 80, 30, 70][i]}%`,
+        }}
+        animate={{
+          scale: [1, 1.2, 1],
+          x: [0, (i % 2 === 0 ? 20 : -20), 0],
+          y: [0, (i % 3 === 0 ? 20 : -20), 0],
+        }}
+        transition={{
+          duration: 8 + i,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+      />
+    ))}
+  </div>
+
+  {/* Floating Icons */}
+  <div className="absolute inset-0 pointer-events-none">
+    {['🦸', '🦸‍♀️', '💪', '🎮', '❤️', '⭐','👩‍👧'].map((emoji, i) => (
+      <motion.div
+        key={i}
+        className="absolute text-4xl md:text-5xl"
+        style={{
+          left: `${[15, 80, 25, 70, 40, 60][i]}%`,
+          top: `${[20, 30, 70, 80, 40, 60][i]}%`,
+        }}
+        animate={{
+          y: [0, -30, 0],
+          rotate: [0, 10, -10, 0],
+          scale: [1, 1.2, 1],
+        }}
+        transition={{
+          duration: 5 + i,
+          repeat: Infinity,
+          delay: i * 0.3,
+        }}
+      >
+        {emoji}
+      </motion.div>
+    ))}
+  </div>
+
+  {/* Hero Content */}
+  <div className="container-custom max-w-5xl mx-auto text-center relative z-10">
+    {/* Welcome Badge */}
+    <motion.div
+      initial={{ scale: 0, rotate: -180 }}
+      animate={{ scale: 1, rotate: 0 }}
+      transition={{ type: "spring", stiffness: 260, damping: 20 }}
+      className="inline-block mb-6"
+    >
+      <span className="inline-flex items-center gap-3 bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-full text-lg font-bold border-2 border-white/30 shadow-xl">
+        <Heart className="w-5 h-5 animate-pulse fill-current" />
+        For Parents & Heroes
+        <Heart className="w-5 h-5 animate-pulse fill-current" />
+      </span>
+    </motion.div>
+
+    {/* Main Title */}
+    <motion.h1 
+      className="text-5xl md:text-7xl font-black mb-6"
+      initial={{ opacity: 0, y: 50 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay: 0.2 }}
+    >
+      <span className="text-white drop-shadow-lg">
+        Your Guide to ArmiGo
+      </span>
+    </motion.h1>
+
+    {/* Emoji Row */}
+   
+
+    {/* Description Card - Fixed the white background issue */}
+    <motion.div 
+      className="max-w-3xl mx-auto"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.3 }}
+    >
+      <div className="relative">
+        {/* Decorative Elements */}
+        <div className="absolute -top-4 -left-4 w-20 h-20 bg-yellow-300 rounded-full opacity-60 blur-xl"></div>
+        <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-pink-300 rounded-full opacity-60 blur-xl"></div>
         
-        <div className="container-custom max-w-5xl mx-auto text-center relative z-10">
-          <motion.div
-            initial={{ scale: 0, rotate: -180 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: "spring", stiffness: 260, damping: 20 }}
-            className="inline-block mb-6"
-          >
-            <span className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-full text-lg font-bold shadow-xl">
-              <Heart className="w-5 h-5 animate-pulse fill-current" />
-              For Parents & Heroes
-              <Heart className="w-5 h-5 animate-pulse fill-current" />
-            </span>
-          </motion.div>
+      
+      </div>
+    </motion.div>
 
-          <motion.h1 
-            className="text-5xl md:text-7xl font-black mb-6"
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <span className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-              Your Guide to ArmiGo
-            </span>
-          </motion.h1>
+    {/* Quick Stats Row */}
+    <motion.div 
+      className="flex flex-wrap justify-center gap-4 mt-8"
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+    >
+      {[
+        { icon: '🎮', text: '4 Fun Games' },
+        { icon: '🖐️', text: '4 Smart Devices' },
+        { icon: '⚡', text: 'Plug & Play' },
+        { icon: '📈', text: 'Track Progress' },
+      ].map((stat, i) => (
+        <motion.div
+          key={i}
+          variants={fadeInUp}
+          className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full border border-white/30 text-white flex items-center gap-2"
+        >
+          <span>{stat.icon}</span>
+          <span className="text-sm font-medium">{stat.text}</span>
+        </motion.div>
+      ))}
+    </motion.div>
+  </div>
 
-          <motion.p 
-            className="text-xl text-gray-700 max-w-3xl mx-auto bg-white/50 backdrop-blur-sm p-6 rounded-3xl shadow-lg"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            Everything you need to know about our devices, how they work, 
-            and how to help your little hero on their rehabilitation journey.
-          </motion.p>
-        </div>
-      </section>
+  {/* Bottom Wave Decoration */}
+  <div className="absolute bottom-0 left-0 right-0">
+    <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <motion.path
+        d="M0 120L60 105C120 90 240 60 360 45C480 30 600 30 720 37.5C840 45 960 60 1080 67.5C1200 75 1320 75 1380 75L1440 75V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z"
+        fill="white"
+        fillOpacity="0.1"
+      />
+    </svg>
+  </div>
+</section>
 
       {/* Quick Setup Guide */}
       <section className="py-16 px-4">
