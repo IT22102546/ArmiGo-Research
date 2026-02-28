@@ -100,10 +100,49 @@ const staggerContainer = {
   },
 };
 
+// Predefined values for floating elements to avoid hydration mismatch
+const floatingElements = Array.from({ length: 20 }, (_, i) => ({
+  id: i,
+  width: 80 + (i * 7) % 100,
+  height: 70 + (i * 9) % 100,
+  left: (i * 23) % 90 + 5,
+  top: (i * 17) % 90 + 5,
+  yOffset: (i * 3) % 50,
+  xOffset: (i * 5) % 50,
+  scale1: 1,
+  scale2: 1.2,
+}));
+
+const starElements = Array.from({ length: 30 }, (_, i) => ({
+  id: i,
+  left: (i * 31) % 95 + 2,
+  top: (i * 27) % 95 + 2,
+  scale1: 1,
+  scale2: 1.5,
+  size: 10 + (i * 3) % 20,
+  delay: (i * 0.1) % 3,
+}));
+
+const cloudElements = Array.from({ length: 5 }, (_, i) => ({
+  id: i,
+  left: i * 20,
+  top: (i * 13) % 70 + 10,
+  width: 70 + (i * 15) % 50,
+  height: 40 + (i * 12) % 40,
+}));
+
+const gameCharacters = ['🦸', '🧙', '🦄', '🐉'];
+const confettiEmojis = ['🎈', '✨', '⭐', '🦸', '🌈', '🎮'];
+
 const HomeSection = () => {
   const [testimonials, setTestimonials] = useState([]);
   const [activeVideo, setActiveVideo] = useState(false);
   const [hoveredDevice, setHoveredDevice] = useState(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const fetchTestimonials = async () => {
@@ -118,27 +157,31 @@ const HomeSection = () => {
     fetchTestimonials();
   }, []);
 
+  if (!mounted) {
+    return null; // or a loading skeleton
+  }
+
   return (
     <main className="overflow-x-hidden bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50">
-      {/* Floating Background Elements */}
+      {/* Floating Background Elements - Using deterministic values */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        {[...Array(20)].map((_, i) => (
+        {floatingElements.map((el) => (
           <motion.div
-            key={i}
+            key={el.id}
             className="absolute rounded-full bg-gradient-to-r from-blue-300/20 to-purple-300/20"
             style={{
-              width: Math.random() * 100 + 50,
-              height: Math.random() * 100 + 50,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              width: el.width,
+              height: el.height,
+              left: `${el.left}%`,
+              top: `${el.top}%`,
             }}
             animate={{
-              y: [0, Math.random() * 100 - 50],
-              x: [0, Math.random() * 100 - 50],
-              scale: [1, 1.2, 1],
+              y: [0, el.yOffset - 25, 0],
+              x: [0, el.xOffset - 25, 0],
+              scale: [el.scale1, el.scale2, el.scale1],
             }}
             transition={{
-              duration: Math.random() * 10 + 10,
+              duration: 10 + (el.id % 10),
               repeat: Infinity,
               repeatType: "reverse",
             }}
@@ -148,30 +191,31 @@ const HomeSection = () => {
 
       {/* Hero Section - Focus on Rehabilitation */}
       <section className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 pt-20 pb-12 lg:pt-28 lg:pb-20">
-        {/* Animated Stars */}
+        {/* Animated Stars - Using deterministic values */}
         <motion.div 
           className="absolute inset-0"
           animate={{ rotate: 360 }}
           transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
         >
-          {[...Array(30)].map((_, i) => (
+          {starElements.map((star) => (
             <motion.div
-              key={i}
+              key={star.id}
               className="absolute text-white/20"
               style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
+                left: `${star.left}%`,
+                top: `${star.top}%`,
               }}
               animate={{
-                scale: [1, 1.5, 1],
+                scale: [star.scale1, star.scale2, star.scale1],
                 opacity: [0.2, 0.5, 0.2],
               }}
               transition={{
-                duration: Math.random() * 3 + 2,
+                duration: 3,
                 repeat: Infinity,
+                delay: star.delay,
               }}
             >
-              <StarIcon size={Math.random() * 20 + 10} />
+              <StarIcon size={star.size} />
             </motion.div>
           ))}
         </motion.div>
@@ -193,7 +237,7 @@ const HomeSection = () => {
               >
                 <Heart className="w-4 h-4 fill-current animate-pulse" />
                 <span>Specialized Care for Hemiplegic Heroes (Ages 6-14)</span>
-                <Sparkles className="w-4 h-4 animate-spin-slow" />
+                <Sparkles className="w-4 h-4 animate-spin" />
               </motion.div>
 
               <motion.h1
@@ -285,736 +329,407 @@ const HomeSection = () => {
               </motion.div>
             </motion.div>
 
-{/* Hero Image - All 4 IoT Devices - FIXED VERSION */}
-<motion.div
-  className="relative hidden lg:block"
-  initial={{ opacity: 0, x: 50 }}
-  animate={{ opacity: 1, x: 0 }}
-  transition={{ duration: 0.7, delay: 0.3 }}
->
-  <div className="relative flex items-center justify-center min-h-[600px]">
-    {/* Main Device Image with Glow */}
-    <motion.div
-      animate={{ 
-        y: [0, -15, 0],
-        scale: [1, 1.02, 1]
-      }}
-      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-      className="relative z-20"
-    >
-      {/* Glow Effect */}
-      <div className="absolute inset-0 bg-gradient-to-r from-blue-400/30 via-purple-400/30 to-pink-400/30 rounded-full blur-3xl scale-150"></div>
-      <Image
-        src="/assets/armigo-hero.png"
-        width={550}
-        height={550}
-        alt="ArmiGo Rehabilitation Devices"
-        className="relative z-20 drop-shadow-2xl"
-        priority
-      />
-    </motion.div>
-    
-    {/* Device Cards - Fixed Positioning */}
-    <div className="absolute inset-0">
-      {/* Finger Glove Card - Top Left */}
-      <motion.div 
-        className="absolute -top-16 -left-16 z-30"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.2 }}
-      >
-        <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-4 border-2 border-blue-200 w-44"
-          animate={{ 
-            y: [0, -8, 0],
-            boxShadow: [
-              "0 20px 25px -5px rgba(0,0,0,0.1)",
-              "0 25px 30px -5px rgba(59,130,246,0.3)",
-              "0 20px 25px -5px rgba(0,0,0,0.1)"
-            ]
-          }}
-          transition={{ duration: 3, repeat: Infinity, delay: 0 }}
-          whileHover={{ scale: 1.1, zIndex: 50 }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Hand className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Device 01</p>
-              <p className="font-bold text-base">Finger Hero</p>
-            </div>
-          </div>
-          <div className="mt-3 flex gap-1.5">
-            {[1,2,3,4,5].map((_, i) => (
-              <motion.div 
-                key={i} 
-                className="w-1.5 h-1.5 bg-blue-400 rounded-full"
-                animate={{ scale: [1, 1.8, 1] }}
-                transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
-              />
-            ))}
-          </div>
-        </motion.div>
-        {/* Curved Connecting Line - Fixed */}
-        <svg className="absolute -bottom-16 -right-12 w-24 h-24" viewBox="0 0 100 100">
-          <motion.path 
-            d="M20,60 C40,40 60,30 80,20" 
-            stroke="#3B82F6" 
-            strokeWidth="3" 
-            strokeDasharray="6,6"
-            fill="none"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 2, delay: 0.5 }}
-          />
-          <motion.circle
-            cx="80"
-            cy="20"
-            r="4"
-            fill="#3B82F6"
-            animate={{ 
-              cx: [80, 40, 80],
-              cy: [20, 40, 20],
-              scale: [1, 1.5, 1]
-            }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-          />
-        </svg>
-      </motion.div>
+            {/* Hero Image - All 4 IoT Devices */}
+            <motion.div
+              className="relative hidden lg:block"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.7, delay: 0.3 }}
+            >
+              <div className="relative flex items-center justify-center min-h-[600px]">
+                {/* Main Device Image with Glow */}
+                <motion.div
+                  animate={{ 
+                    y: [0, -15, 0],
+                    scale: [1, 1.02, 1]
+                  }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  className="relative z-20"
+                >
+                  {/* Glow Effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400/30 via-purple-400/30 to-pink-400/30 rounded-full blur-3xl scale-150"></div>
+                  <Image
+                    src="/assets/logo.png"
+                    width={550}
+                    height={550}
+                    alt="ArmiGo Rehabilitation Devices"
+                    className="relative z-20 drop-shadow-2xl"
+                    priority
+                  />
+                </motion.div>
+                
+                {/* Device Cards */}
+                <div className="absolute inset-0">
+                  {/* Finger Glove Card - Top Left */}
+                  <motion.div 
+                    className="absolute -top-10 -left-16 z-30"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <motion.div 
+                      className="bg-white rounded-2xl shadow-2xl p-4 border-2 border-blue-200 w-44"
+                      animate={{ 
+                        y: [0, -8, 0],
+                        boxShadow: [
+                          "0 20px 25px -5px rgba(0,0,0,0.1)",
+                          "0 25px 30px -5px rgba(59,130,246,0.3)",
+                          "0 20px 25px -5px rgba(0,0,0,0.1)"
+                        ]
+                      }}
+                      transition={{ duration: 3, repeat: Infinity, delay: 0 }}
+                      whileHover={{ scale: 1.1, zIndex: 50 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                          <Hand className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Device 01</p>
+                          <p className="font-bold text-base">Finger Hero</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex gap-1.5">
+                        {[1,2,3,4,5].map((_, i) => (
+                          <motion.div 
+                            key={i} 
+                            className="w-1.5 h-1.5 bg-blue-400 rounded-full"
+                            animate={{ scale: [1, 1.8, 1] }}
+                            transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
+                          />
+                        ))}
+                      </div>
+                    </motion.div>
+                    {/* Connecting Line */}
+                    <svg className="absolute -bottom-16 -right-12 w-24 h-24" viewBox="0 0 100 100">
+                      <motion.path 
+                        d="M20,60 C40,40 60,30 80,20" 
+                        stroke="#3B82F6" 
+                        strokeWidth="3" 
+                        strokeDasharray="6,6"
+                        fill="none"
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 1 }}
+                        transition={{ duration: 2, delay: 0.5 }}
+                      />
+                      <motion.circle
+                        cx="80"
+                        cy="20"
+                        r="4"
+                        fill="#3B82F6"
+                        animate={{ 
+                          cx: [80, 40, 80],
+                          cy: [20, 40, 20],
+                          scale: [1, 1.5, 1]
+                        }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                      />
+                    </svg>
+                  </motion.div>
 
-      {/* Wrist Band Card - Top Right */}
-      <motion.div 
-        className="absolute -top-16 -right-16 z-30"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.4 }}
-      >
-        <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-4 border-2 border-purple-200 w-44"
-          animate={{ 
-            y: [0, -8, 0],
-            boxShadow: [
-              "0 20px 25px -5px rgba(0,0,0,0.1)",
-              "0 25px 30px -5px rgba(168,85,247,0.3)",
-              "0 20px 25px -5px rgba(0,0,0,0.1)"
-            ]
-          }}
-          transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
-          whileHover={{ scale: 1.1, zIndex: 50 }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Activity className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Device 02</p>
-              <p className="font-bold text-base">Wrist Wizard</p>
-            </div>
-          </div>
-          <div className="mt-3 flex gap-2 justify-center">
-            <motion.div 
-              className="w-2 h-2 bg-purple-400 rounded-full"
-              animate={{ scale: [1, 1.8, 1] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
-            <motion.div 
-              className="w-2 h-2 bg-purple-400 rounded-full"
-              animate={{ scale: [1, 1.8, 1] }}
-              transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
-            />
-            <motion.div 
-              className="w-2 h-2 bg-purple-400 rounded-full"
-              animate={{ scale: [1, 1.8, 1] }}
-              transition={{ duration: 1, repeat: Infinity, delay: 0.6 }}
-            />
-          </div>
-        </motion.div>
-        {/* Curved Connecting Line - Fixed */}
-        <svg className="absolute -bottom-16 -left-12 w-24 h-24 rotate-45" viewBox="0 0 100 100">
-          <motion.path 
-            d="M80,20 C60,30 40,40 20,60" 
-            stroke="#A855F7" 
-            strokeWidth="3" 
-            strokeDasharray="6,6"
-            fill="none"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 2, delay: 0.7 }}
-          />
-          <motion.circle
-            cx="20"
-            cy="60"
-            r="4"
-            fill="#A855F7"
-            animate={{ 
-              cx: [20, 50, 20],
-              cy: [60, 40, 60],
-              scale: [1, 1.5, 1]
-            }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-          />
-        </svg>
-      </motion.div>
+                  {/* Wrist Band Card - Top Right */}
+                  <motion.div 
+                    className="absolute -top-10 -right-16 z-30"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <motion.div 
+                      className="bg-white rounded-2xl shadow-2xl p-4 border-2 border-purple-200 w-44"
+                      animate={{ 
+                        y: [0, -8, 0],
+                        boxShadow: [
+                          "0 20px 25px -5px rgba(0,0,0,0.1)",
+                          "0 25px 30px -5px rgba(168,85,247,0.3)",
+                          "0 20px 25px -5px rgba(0,0,0,0.1)"
+                        ]
+                      }}
+                      transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
+                      whileHover={{ scale: 1.1, zIndex: 50 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                          <Activity className="w-6 h-6 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Device 02</p>
+                          <p className="font-bold text-base">Wrist Wizard</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex gap-2 justify-center">
+                        <motion.div 
+                          className="w-2 h-2 bg-purple-400 rounded-full"
+                          animate={{ scale: [1, 1.8, 1] }}
+                          transition={{ duration: 1, repeat: Infinity }}
+                        />
+                        <motion.div 
+                          className="w-2 h-2 bg-purple-400 rounded-full"
+                          animate={{ scale: [1, 1.8, 1] }}
+                          transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
+                        />
+                        <motion.div 
+                          className="w-2 h-2 bg-purple-400 rounded-full"
+                          animate={{ scale: [1, 1.8, 1] }}
+                          transition={{ duration: 1, repeat: Infinity, delay: 0.6 }}
+                        />
+                      </div>
+                    </motion.div>
+                    {/* Connecting Line */}
+                    <svg className="absolute -bottom-16 -left-12 w-24 h-24 rotate-45" viewBox="0 0 100 100">
+                      <motion.path 
+                        d="M80,20 C60,30 40,40 20,60" 
+                        stroke="#A855F7" 
+                        strokeWidth="3" 
+                        strokeDasharray="6,6"
+                        fill="none"
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 1 }}
+                        transition={{ duration: 2, delay: 0.7 }}
+                      />
+                      <motion.circle
+                        cx="20"
+                        cy="60"
+                        r="4"
+                        fill="#A855F7"
+                        animate={{ 
+                          cx: [20, 50, 20],
+                          cy: [60, 40, 60],
+                          scale: [1, 1.5, 1]
+                        }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+                      />
+                    </svg>
+                  </motion.div>
 
-      {/* Elbow Brace Card - Bottom Left */}
-      <motion.div 
-        className="absolute -bottom-16 -left-16 z-30"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.6 }}
-      >
-        <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-4 border-2 border-green-200 w-44"
-          animate={{ 
-            y: [0, 8, 0],
-            boxShadow: [
-              "0 20px 25px -5px rgba(0,0,0,0.1)",
-              "0 25px 30px -5px rgba(34,197,94,0.3)",
-              "0 20px 25px -5px rgba(0,0,0,0.1)"
-            ]
-          }}
-          transition={{ duration: 3, repeat: Infinity, delay: 1 }}
-          whileHover={{ scale: 1.1, zIndex: 50 }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <Target className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Device 03</p>
-              <p className="font-bold text-base">Elbow Knight</p>
-            </div>
-          </div>
-          <div className="mt-3">
-            <motion.div 
-              className="h-1.5 bg-green-400 rounded-full"
-              animate={{ width: ["60%", "90%", "60%"] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-          </div>
-        </motion.div>
-        {/* Curved Connecting Line - Fixed */}
-        <svg className="absolute -top-16 -right-12 w-24 h-24 -rotate-45" viewBox="0 0 100 100">
-          <motion.path 
-            d="M20,80 C40,70 60,60 80,40" 
-            stroke="#22C55E" 
-            strokeWidth="3" 
-            strokeDasharray="6,6"
-            fill="none"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 2, delay: 0.9 }}
-          />
-          <motion.circle
-            cx="80"
-            cy="40"
-            r="4"
-            fill="#22C55E"
-            animate={{ 
-              cx: [80, 50, 80],
-              cy: [40, 60, 40],
-              scale: [1, 1.5, 1]
-            }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-          />
-        </svg>
-      </motion.div>
+                  {/* Elbow Brace Card - Bottom Left */}
+                  <motion.div 
+                    className="absolute -bottom-16 -left-16 z-30"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.6 }}
+                  >
+                    <motion.div 
+                      className="bg-white rounded-2xl shadow-2xl p-4 border-2 border-green-200 w-44"
+                      animate={{ 
+                        y: [0, 8, 0],
+                        boxShadow: [
+                          "0 20px 25px -5px rgba(0,0,0,0.1)",
+                          "0 25px 30px -5px rgba(34,197,94,0.3)",
+                          "0 20px 25px -5px rgba(0,0,0,0.1)"
+                        ]
+                      }}
+                      transition={{ duration: 3, repeat: Infinity, delay: 1 }}
+                      whileHover={{ scale: 1.1, zIndex: 50 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                          <Target className="w-6 h-6 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Device 03</p>
+                          <p className="font-bold text-base">Elbow Knight</p>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <motion.div 
+                          className="h-1.5 bg-green-400 rounded-full"
+                          animate={{ width: ["60%", "90%", "60%"] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                        />
+                      </div>
+                    </motion.div>
+                    {/* Connecting Line */}
+                    <svg className="absolute -top-16 -right-12 w-24 h-24 -rotate-45" viewBox="0 0 100 100">
+                      <motion.path 
+                        d="M20,80 C40,70 60,60 80,40" 
+                        stroke="#22C55E" 
+                        strokeWidth="3" 
+                        strokeDasharray="6,6"
+                        fill="none"
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 1 }}
+                        transition={{ duration: 2, delay: 0.9 }}
+                      />
+                      <motion.circle
+                        cx="80"
+                        cy="40"
+                        r="4"
+                        fill="#22C55E"
+                        animate={{ 
+                          cx: [80, 50, 80],
+                          cy: [40, 60, 40],
+                          scale: [1, 1.5, 1]
+                        }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                      />
+                    </svg>
+                  </motion.div>
 
-      {/* Shoulder Support Card - Bottom Right */}
-      <motion.div 
-        className="absolute -bottom-16 -right-16 z-30"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.8 }}
-      >
-        <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-4 border-2 border-orange-200 w-44"
-          animate={{ 
-            y: [0, 8, 0],
-            boxShadow: [
-              "0 20px 25px -5px rgba(0,0,0,0.1)",
-              "0 25px 30px -5px rgba(249,115,22,0.3)",
-              "0 20px 25px -5px rgba(0,0,0,0.1)"
-            ]
-          }}
-          transition={{ duration: 3, repeat: Infinity, delay: 1.5 }}
-          whileHover={{ scale: 1.1, zIndex: 50 }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-              <Footprints className="w-6 h-6 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Device 04</p>
-              <p className="font-bold text-base">Shoulder Titan</p>
-            </div>
-          </div>
-          <div className="mt-3 flex justify-around">
-            <motion.div 
-              className="w-2.5 h-2.5 bg-orange-400 rounded-full"
-              animate={{ scale: [1, 1.8, 1] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
-            <motion.div 
-              className="w-2.5 h-2.5 bg-orange-400 rounded-full"
-              animate={{ scale: [1, 1.8, 1] }}
-              transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
-            />
-            <motion.div 
-              className="w-2.5 h-2.5 bg-orange-400 rounded-full"
-              animate={{ scale: [1, 1.8, 1] }}
-              transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
-            />
-            <motion.div 
-              className="w-2.5 h-2.5 bg-orange-400 rounded-full"
-              animate={{ scale: [1, 1.8, 1] }}
-              transition={{ duration: 1, repeat: Infinity, delay: 0.6 }}
-            />
-          </div>
-        </motion.div>
-        {/* Curved Connecting Line - Fixed */}
-        <svg className="absolute -top-16 -left-12 w-24 h-24 rotate-180" viewBox="0 0 100 100">
-          <motion.path 
-            d="M80,80 C60,70 40,60 20,40" 
-            stroke="#F97316" 
-            strokeWidth="3" 
-            strokeDasharray="6,6"
-            fill="none"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 2, delay: 1.1 }}
-          />
-          <motion.circle
-            cx="20"
-            cy="40"
-            r="4"
-            fill="#F97316"
-            animate={{ 
-              cx: [20, 50, 20],
-              cy: [40, 60, 40],
-              scale: [1, 1.5, 1]
-            }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
-          />
-        </svg>
-      </motion.div>
-    </div>
+                  {/* Shoulder Support Card - Bottom Right */}
+                  <motion.div 
+                    className="absolute -bottom-16 -right-16 z-30"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.8 }}
+                  >
+                    <motion.div 
+                      className="bg-white rounded-2xl shadow-2xl p-4 border-2 border-orange-200 w-44"
+                      animate={{ 
+                        y: [0, 8, 0],
+                        boxShadow: [
+                          "0 20px 25px -5px rgba(0,0,0,0.1)",
+                          "0 25px 30px -5px rgba(249,115,22,0.3)",
+                          "0 20px 25px -5px rgba(0,0,0,0.1)"
+                        ]
+                      }}
+                      transition={{ duration: 3, repeat: Infinity, delay: 1.5 }}
+                      whileHover={{ scale: 1.1, zIndex: 50 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                          <Footprints className="w-6 h-6 text-orange-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Device 04</p>
+                          <p className="font-bold text-base">Shoulder Titan</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex justify-around">
+                        <motion.div 
+                          className="w-2.5 h-2.5 bg-orange-400 rounded-full"
+                          animate={{ scale: [1, 1.8, 1] }}
+                          transition={{ duration: 1, repeat: Infinity }}
+                        />
+                        <motion.div 
+                          className="w-2.5 h-2.5 bg-orange-400 rounded-full"
+                          animate={{ scale: [1, 1.8, 1] }}
+                          transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+                        />
+                        <motion.div 
+                          className="w-2.5 h-2.5 bg-orange-400 rounded-full"
+                          animate={{ scale: [1, 1.8, 1] }}
+                          transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+                        />
+                        <motion.div 
+                          className="w-2.5 h-2.5 bg-orange-400 rounded-full"
+                          animate={{ scale: [1, 1.8, 1] }}
+                          transition={{ duration: 1, repeat: Infinity, delay: 0.6 }}
+                        />
+                      </div>
+                    </motion.div>
+                    {/* Connecting Line */}
+                    <svg className="absolute -top-16 -left-12 w-24 h-24 rotate-180" viewBox="0 0 100 100">
+                      <motion.path 
+                        d="M80,80 C60,70 40,60 20,40" 
+                        stroke="#F97316" 
+                        strokeWidth="3" 
+                        strokeDasharray="6,6"
+                        fill="none"
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 1 }}
+                        transition={{ duration: 2, delay: 1.1 }}
+                      />
+                      <motion.circle
+                        cx="20"
+                        cy="40"
+                        r="4"
+                        fill="#F97316"
+                        animate={{ 
+                          cx: [20, 50, 20],
+                          cy: [40, 60, 40],
+                          scale: [1, 1.5, 1]
+                        }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
+                      />
+                    </svg>
+                  </motion.div>
+                </div>
 
-    {/* Floating Character Friends - Repositioned */}
-    <motion.div 
-      className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-5xl"
-      animate={{ 
-        y: [0, -15, 0],
-        rotate: [0, 8, -8, 0]
-      }}
-      transition={{ duration: 4, repeat: Infinity }}
-    >
-      🦸‍♂️
-    </motion.div>
+                {/* Floating Character Friends - Fixed positions */}
+                <motion.div 
+                  className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-5xl"
+                  animate={{ 
+                    y: [0, -15, 0],
+                    rotate: [0, 8, -8, 0]
+                  }}
+                  transition={{ duration: 4, repeat: Infinity }}
+                >
+                  🦸‍♂️
+                </motion.div>
 
-    <motion.div 
-      className="absolute -bottom-8 left-8 text-4xl"
-      animate={{ 
-        y: [0, 15, 0],
-        x: [0, 10, 0]
-      }}
-      transition={{ duration: 5, repeat: Infinity, delay: 1 }}
-    >
-      🧙‍♀️
-    </motion.div>
+                <motion.div 
+                  className="absolute -bottom-8 left-8 text-4xl"
+                  animate={{ 
+                    y: [0, 15, 0],
+                    x: [0, 10, 0]
+                  }}
+                  transition={{ duration: 5, repeat: Infinity, delay: 1 }}
+                >
+                  🧙‍♀️
+                </motion.div>
 
-    <motion.div 
-      className="absolute top-1/3 -right-10 text-4xl"
-      animate={{ 
-        scale: [1, 1.3, 1],
-        rotate: [0, 360]
-      }}
-      transition={{ duration: 6, repeat: Infinity }}
-    >
-      ⭐
-    </motion.div>
+                <motion.div 
+                  className="absolute top-1/3 -right-10 text-4xl"
+                  animate={{ 
+                    scale: [1, 1.3, 1],
+                    rotate: [0, 360]
+                  }}
+                  transition={{ duration: 6, repeat: Infinity }}
+                >
+                  ⭐
+                </motion.div>
 
-    <motion.div 
-      className="absolute bottom-1/3 -left-10 text-4xl"
-      animate={{ 
-        y: [0, -20, 0],
-        rotate: [0, -15, 15, 0]
-      }}
-      transition={{ duration: 4.5, repeat: Infinity, delay: 2 }}
-    >
-      🦄
-    </motion.div>
+                <motion.div 
+                  className="absolute bottom-1/3 -left-10 text-4xl"
+                  animate={{ 
+                    y: [0, -20, 0],
+                    rotate: [0, -15, 15, 0]
+                  }}
+                  transition={{ duration: 4.5, repeat: Infinity, delay: 2 }}
+                >
+                  🦄
+                </motion.div>
 
-    {/* Achievement Badge - Repositioned */}
-    <motion.div 
-      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-500 text-white px-6 py-3 rounded-full font-bold text-base z-40 shadow-xl"
-      animate={{ 
-        scale: [1, 1.15, 1],
-        rotate: [0, 3, -3, 0]
-      }}
-      transition={{ duration: 3, repeat: Infinity }}
-    >
-      <span className="flex items-center gap-2">
-        <Trophy className="w-5 h-5" />
-        Complete Rehabilitation System
-        <Sparkles className="w-4 h-4" />
-      </span>
-    </motion.div>
+                {/* Achievement Badge */}
+                <motion.div 
+                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-500 text-white px-6 py-3 rounded-full font-bold text-base z-40 shadow-xl"
+                  animate={{ 
+                    scale: [1, 1.15, 1],
+                    rotate: [0, 3, -3, 0]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <span className="flex items-center gap-2">
+                    <Trophy className="w-5 h-5" />
+                    Complete Rehabilitation System
+                    <Sparkles className="w-4 h-4" />
+                  </span>
+                </motion.div>
 
-    {/* Animated Sparkles around main image - Enhanced */}
-    {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-      <motion.div
-        key={i}
-        className="absolute w-3 h-3 bg-gradient-to-r from-yellow-300 to-orange-300 rounded-full"
-        style={{
-          left: `${15 + (i % 4) * 25}%`,
-          top: `${20 + Math.floor(i / 4) * 50}%`,
-        }}
-        animate={{
-          scale: [0, 1.5, 0],
-          opacity: [0, 1, 0],
-          rotate: [0, 180, 360],
-        }}
-        transition={{
-          duration: 2.5,
-          repeat: Infinity,
-          delay: i * 0.2,
-          ease: "easeInOut",
-        }}
-      />
-    ))}
-
-    {/* Floating particles for magical effect */}
-    {[...Array(12)].map((_, i) => (
-      <motion.div
-        key={`particle-${i}`}
-        className="absolute w-1 h-1 bg-white rounded-full"
-        style={{
-          left: `${Math.random() * 100}%`,
-          top: `${Math.random() * 100}%`,
-        }}
-        animate={{
-          y: [0, -30, 0],
-          x: [0, (i % 2 === 0 ? 15 : -15), 0],
-          opacity: [0, 1, 0],
-          scale: [0, 1, 0],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Infinity,
-          delay: i * 0.3,
-          ease: "easeInOut",
-        }}
-      />
-    ))}
-  </div>
-</motion.div>
-    
-    {/* Device Cards - Better Organized */}
-    <div className="absolute inset-0">
-      {/* Finger Glove Card - Top Left */}
-      <motion.div 
-        className="absolute -top-10 -left-10 z-30"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.2 }}
-      >
-        <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-3 border-2 border-blue-200 w-40"
-          animate={{ 
-            y: [0, -8, 0],
-            boxShadow: [
-              "0 20px 25px -5px rgba(0,0,0,0.1)",
-              "0 25px 30px -5px rgba(59,130,246,0.3)",
-              "0 20px 25px -5px rgba(0,0,0,0.1)"
-            ]
-          }}
-          transition={{ duration: 3, repeat: Infinity, delay: 0 }}
-          whileHover={{ scale: 1.1, zIndex: 50 }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Hand className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Device 1</p>
-              <p className="font-bold text-sm">Finger Hero</p>
-            </div>
-          </div>
-          <div className="mt-2 flex gap-1">
-            {[1,2,3,4,5].map((_, i) => (
-              <motion.div 
-                key={i} 
-                className="w-1 h-1 bg-blue-400 rounded-full"
-                animate={{ scale: [1, 1.5, 1] }}
-                transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-              />
-            ))}
-          </div>
-        </motion.div>
-        {/* Connecting Line */}
-        <svg className="absolute -bottom-8 -right-8 w-16 h-16" viewBox="0 0 50 50">
-          <motion.path 
-            d="M0,30 Q20,20 40,10" 
-            stroke="#3B82F6" 
-            strokeWidth="2" 
-            strokeDasharray="5,5"
-            fill="none"
-            animate={{ strokeDashoffset: [0, 50] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          />
-        </svg>
-      </motion.div>
-
-      {/* Wrist Band Card - Top Right */}
-      <motion.div 
-        className="absolute -top-10 -right-10 z-30"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.4 }}
-      >
-        <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-3 border-2 border-purple-200 w-40"
-          animate={{ 
-            y: [0, -8, 0],
-            boxShadow: [
-              "0 20px 25px -5px rgba(0,0,0,0.1)",
-              "0 25px 30px -5px rgba(168,85,247,0.3)",
-              "0 20px 25px -5px rgba(0,0,0,0.1)"
-            ]
-          }}
-          transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
-          whileHover={{ scale: 1.1, zIndex: 50 }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Activity className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Device 2</p>
-              <p className="font-bold text-sm">Wrist Wizard</p>
-            </div>
-          </div>
-          <div className="mt-2 flex gap-1">
-            <motion.div 
-              className="w-2 h-2 bg-purple-400 rounded-full"
-              animate={{ scale: [1, 1.5, 1] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
-            <motion.div 
-              className="w-2 h-2 bg-purple-400 rounded-full"
-              animate={{ scale: [1, 1.5, 1] }}
-              transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
-            />
-          </div>
-        </motion.div>
-        <svg className="absolute -bottom-8 -left-8 w-16 h-16 rotate-45" viewBox="0 0 50 50">
-          <motion.path 
-            d="M40,30 Q20,20 0,10" 
-            stroke="#A855F7" 
-            strokeWidth="2" 
-            strokeDasharray="5,5"
-            fill="none"
-            animate={{ strokeDashoffset: [0, 50] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear", delay: 0.5 }}
-          />
-        </svg>
-      </motion.div>
-
-      {/* Elbow Brace Card - Bottom Left */}
-      <motion.div 
-        className="absolute -bottom-10 -left-10 z-30"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.6 }}
-      >
-        <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-3 border-2 border-green-200 w-40"
-          animate={{ 
-            y: [0, 8, 0],
-            boxShadow: [
-              "0 20px 25px -5px rgba(0,0,0,0.1)",
-              "0 25px 30px -5px rgba(34,197,94,0.3)",
-              "0 20px 25px -5px rgba(0,0,0,0.1)"
-            ]
-          }}
-          transition={{ duration: 3, repeat: Infinity, delay: 1 }}
-          whileHover={{ scale: 1.1, zIndex: 50 }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <Target className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Device 3</p>
-              <p className="font-bold text-sm">Elbow Knight</p>
-            </div>
-          </div>
-          <div className="mt-2 flex justify-center">
-            <motion.div 
-              className="w-8 h-1 bg-green-400 rounded-full"
-              animate={{ width: ["2rem", "3rem", "2rem"] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-          </div>
-        </motion.div>
-        <svg className="absolute -top-8 -right-8 w-16 h-16 -rotate-45" viewBox="0 0 50 50">
-          <motion.path 
-            d="M0,30 Q20,20 40,10" 
-            stroke="#22C55E" 
-            strokeWidth="2" 
-            strokeDasharray="5,5"
-            fill="none"
-            animate={{ strokeDashoffset: [0, 50] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear", delay: 1 }}
-          />
-        </svg>
-      </motion.div>
-
-      {/* Shoulder Support Card - Bottom Right */}
-      <motion.div 
-        className="absolute -bottom-10 -right-10 z-30"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.8 }}
-      >
-        <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-3 border-2 border-orange-200 w-40"
-          animate={{ 
-            y: [0, 8, 0],
-            boxShadow: [
-              "0 20px 25px -5px rgba(0,0,0,0.1)",
-              "0 25px 30px -5px rgba(249,115,22,0.3)",
-              "0 20px 25px -5px rgba(0,0,0,0.1)"
-            ]
-          }}
-          transition={{ duration: 3, repeat: Infinity, delay: 1.5 }}
-          whileHover={{ scale: 1.1, zIndex: 50 }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-              <Footprints className="w-5 h-5 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Device 4</p>
-              <p className="font-bold text-sm">Shoulder Titan</p>
-            </div>
-          </div>
-          <div className="mt-2 flex justify-around">
-            <motion.div 
-              className="w-2 h-2 bg-orange-400 rounded-full"
-              animate={{ scale: [1, 1.5, 1] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
-            <motion.div 
-              className="w-2 h-2 bg-orange-400 rounded-full"
-              animate={{ scale: [1, 1.5, 1] }}
-              transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
-            />
-            <motion.div 
-              className="w-2 h-2 bg-orange-400 rounded-full"
-              animate={{ scale: [1, 1.5, 1] }}
-              transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
-            />
-          </div>
-        </motion.div>
-        <svg className="absolute -top-8 -left-8 w-16 h-16 rotate-180" viewBox="0 0 50 50">
-          <motion.path 
-            d="M40,30 Q20,20 0,10" 
-            stroke="#F97316" 
-            strokeWidth="2" 
-            strokeDasharray="5,5"
-            fill="none"
-            animate={{ strokeDashoffset: [0, 50] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear", delay: 1.5 }}
-          />
-        </svg>
-      </motion.div>
-    </div>
-
-    {/* Floating Character Friends */}
-    <motion.div 
-      className="absolute -top-5 left-1/2 transform -translate-x-1/2 text-4xl"
-      animate={{ 
-        y: [0, -10, 0],
-        rotate: [0, 5, -5, 0]
-      }}
-      transition={{ duration: 3, repeat: Infinity }}
-    >
-      🦸
-    </motion.div>
-
-    <motion.div 
-      className="absolute -bottom-5 left-1/4 text-3xl"
-      animate={{ 
-        y: [0, 10, 0],
-        x: [0, 10, 0]
-      }}
-      transition={{ duration: 4, repeat: Infinity, delay: 1 }}
-    >
-      🧙
-    </motion.div>
-
-    <motion.div 
-      className="absolute top-1/2 -right-5 text-3xl"
-      animate={{ 
-        scale: [1, 1.2, 1],
-        rotate: [0, 360]
-      }}
-      transition={{ duration: 5, repeat: Infinity }}
-    >
-      ⭐
-    </motion.div>
-
-    <motion.div 
-      className="absolute top-1/3 -left-5 text-3xl"
-      animate={{ 
-        y: [0, -15, 0],
-        rotate: [0, -10, 10, 0]
-      }}
-      transition={{ duration: 3.5, repeat: Infinity, delay: 2 }}
-    >
-      🦄
-    </motion.div>
-
-    {/* Animated Sparkles around main image */}
-    {[0, 1, 2, 3, 4].map((i) => (
-      <motion.div
-        key={i}
-        className="absolute w-2 h-2 bg-yellow-300 rounded-full"
-        style={{
-          left: `${20 + i * 15}%`,
-          top: `${30 + (i % 2) * 40}%`,
-        }}
-        animate={{
-          scale: [0, 1, 0],
-          opacity: [0, 1, 0],
-        }}
-        transition={{
-          duration: 2,
-          repeat: Infinity,
-          delay: i * 0.3,
-        }}
-      />
-    ))}
-
-    {/* Achievement Badge */}
-    <motion.div 
-      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-4 py-2 rounded-full font-bold text-sm z-40"
-      animate={{ 
-        scale: [1, 1.1, 1],
-        rotate: [0, 2, -2, 0]
-      }}
-      transition={{ duration: 2, repeat: Infinity }}
-    >
-      <span className="flex items-center gap-1">
-        <Trophy className="w-4 h-4" />
-        4-in-1 System
-      </span>
-    </motion.div>
-  </div>
-</motion.div>
+                {/* Animated Sparkles around main image - Fixed positions */}
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute w-3 h-3 bg-gradient-to-r from-yellow-300 to-orange-300 rounded-full"
+                    style={{
+                      left: `${15 + (i % 4) * 25}%`,
+                      top: `${20 + Math.floor(i / 4) * 50}%`,
+                    }}
+                    animate={{
+                      scale: [0, 1.5, 0],
+                      opacity: [0, 1, 0],
+                      rotate: [0, 180, 360],
+                    }}
+                    transition={{
+                      duration: 2.5,
+                      repeat: Infinity,
+                      delay: i * 0.2,
+                      ease: "easeInOut",
+                    }}
+                  />
+                ))}
+              </div>
+            </motion.div>
           </div>
         </div>
 
@@ -1293,23 +1008,23 @@ const HomeSection = () => {
         </motion.div>
       </section>
 
-      {/* VR Gaming Section - More Playful */}
+      {/* VR Gaming Section */}
       <section className="py-20 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white relative overflow-hidden">
-        {/* Animated Clouds */}
+        {/* Animated Clouds - Using deterministic values */}
         <motion.div 
           className="absolute inset-0 pointer-events-none"
           animate={{ x: [0, 100, 0] }}
           transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
         >
-          {[...Array(5)].map((_, i) => (
+          {cloudElements.map((cloud) => (
             <Cloud 
-              key={i}
+              key={cloud.id}
               className="absolute text-white/10"
               style={{
-                left: `${i * 20}%`,
-                top: `${Math.random() * 80}%`,
-                width: Math.random() * 100 + 50,
-                height: Math.random() * 60 + 30,
+                left: `${cloud.left}%`,
+                top: `${cloud.top}%`,
+                width: cloud.width,
+                height: cloud.height,
               }}
             />
           ))}
@@ -1404,18 +1119,18 @@ const HomeSection = () => {
                   className="w-full"
                 />
                 
-                {/* Game Characters floating around */}
-                {["🦸", "🧙", "🦄", "🐉"].map((emoji, i) => (
+                {/* Game Characters floating around - Fixed positions */}
+                {gameCharacters.map((emoji, i) => (
                   <motion.div
                     key={i}
                     className="absolute text-4xl"
                     style={{
-                      top: `${Math.random() * 80}%`,
-                      left: `${Math.random() * 80}%`,
+                      top: `${20 + i * 15}%`,
+                      left: `${10 + i * 20}%`,
                     }}
                     animate={{
                       y: [0, -20, 0],
-                      x: [0, 10, -10, 0],
+                      x: [0, i % 2 === 0 ? 10 : -10, 0],
                       rotate: [0, 360],
                     }}
                     transition={{
@@ -1433,7 +1148,7 @@ const HomeSection = () => {
         </div>
       </section>
 
-      {/* Parent & Hospital Dashboard Section - Removed Booking Calendar */}
+      {/* Parent & Hospital Dashboard Section */}
       <section className="py-20 bg-white">
         <motion.div
           className="container-custom"
@@ -1658,37 +1373,68 @@ const HomeSection = () => {
         </motion.div>
       </section>
 
-      {/* Rest of the sections (Testimonials, CTA) remain similar but with more playful elements */}
-      {/* ... */}
+      {/* Testimonials Section */}
+      <section className="py-20 bg-gray-50">
+        <div className="container-custom">
+          <h2 className="text-4xl font-bold text-center mb-12">What Parents Say</h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            {testimonials.map((testimonial, i) => (
+              <motion.div 
+                key={i}
+                className="bg-white p-6 rounded-2xl shadow-lg"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <p className="text-gray-600 mb-4">"{testimonial.content}"</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                  <div>
+                    <p className="font-bold">{testimonial.name}</p>
+                    <p className="text-sm text-gray-500">{testimonial.role}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 text-white relative overflow-hidden">
-        {/* Animated Confetti */}
+        {/* Animated Confetti - Fixed positions */}
         <motion.div 
           className="absolute inset-0"
           animate={{ rotate: 360 }}
           transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
         >
-          {[...Array(50)].map((_, i) => (
+          {Array.from({ length: 30 }, (_, i) => ({
+            id: i,
+            left: (i * 17) % 95 + 2,
+            top: (i * 23) % 95 + 2,
+            emoji: confettiEmojis[i % confettiEmojis.length],
+            delay: (i * 0.1) % 2,
+            duration: 4 + (i % 4),
+          })).map((item) => (
             <motion.div
-              key={i}
+              key={item.id}
               className="absolute text-2xl"
               style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
+                left: `${item.left}%`,
+                top: `${item.top}%`,
               }}
               animate={{
-                y: [0, -100, 0],
+                y: [0, -80, 0],
                 rotate: [0, 360],
                 opacity: [0, 1, 0],
               }}
               transition={{
-                duration: Math.random() * 5 + 3,
+                duration: item.duration,
                 repeat: Infinity,
-                delay: Math.random() * 2,
+                delay: item.delay,
               }}
             >
-              {["🎈", "✨", "⭐", "🦸", "🌈", "🎮"][Math.floor(Math.random() * 6)]}
+              {item.emoji}
             </motion.div>
           ))}
         </motion.div>

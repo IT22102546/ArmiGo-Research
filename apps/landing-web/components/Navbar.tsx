@@ -22,10 +22,19 @@ const Navbar = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50 to-purple-50 backdrop-blur-md border-b border-blue-100 shadow-sm">
       <div className="w-full px-4 sm:px-6 md:px-8 lg:px-15">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo */}
+          {/* Logo with actual image */}
           <Link href="/" className="flex items-center gap-2 shrink-0 group">
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-all">
-              <Activity className="w-5 h-5 md:w-6 md:h-6 text-white" strokeWidth={2.5} />
+            <div className="relative w-10 h-10 md:w-12 md:h-12">
+              <Image
+                src="/assets/logo.png"
+                alt="ArmiGo Logo"
+                width={48}
+                height={48}
+                className="object-contain group-hover:scale-110 transition-transform duration-300"
+                priority
+              />
+              {/* Optional: Add a subtle glow effect on hover */}
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full opacity-0 group-hover:opacity-20 blur-md transition-opacity duration-300"></div>
             </div>
             <div className="flex items-center gap-1">
               <span className="text-lg sm:text-xl md:text-lg lg:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
@@ -140,7 +149,7 @@ const Navbar = () => {
       {/* Accessibility feature: font size indicator for kids */}
       <div className="absolute bottom-1 right-4 text-xs text-gray-400 hidden md:block">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
           Kid-Friendly Mode
         </span>
       </div>
