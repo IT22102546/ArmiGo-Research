@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Comic_Neue } from "next/font/google";
 import "./globals.css";
 
@@ -16,6 +16,14 @@ const comicNeue = Comic_Neue({
   weight: ["300", "400", "700"],
   display: "swap",
 });
+
+export const viewport: Viewport = {
+  themeColor: "#6366f1",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+};
 
 export const metadata: Metadata = {
   title: "ArmiGo - Rehabilitation Through Play for Hemiplegic Children",
@@ -70,7 +78,7 @@ export const metadata: Metadata = {
     ],
   },
   manifest: "/manifest.json",
-  themeColor: "#6366f1",
+  // themeColor removed from metadata
 };
 
 export default function RootLayout({
@@ -84,8 +92,7 @@ export default function RootLayout({
         {/* Preload logo for better performance */}
         <link rel="preload" as="image" href="/assets/logo.png" />
         
-        {/* Add theme color for mobile browsers */}
-        <meta name="theme-color" content="#6366f1" />
+        {/* Add theme color for mobile browsers - now handled by viewport export */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         
@@ -132,7 +139,7 @@ export default function RootLayout({
       <body className="antialiased font-sans" suppressHydrationWarning>
         {children}
         
-        {/* Service worker registration */}
+        {/* Service worker registration - Optional: Remove if not needed */}
         <script
           dangerouslySetInnerHTML={{
             __html: `

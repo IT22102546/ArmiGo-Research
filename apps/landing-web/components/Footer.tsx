@@ -18,9 +18,9 @@ const Footer = () => {
   return (
     <footer className="bg-gradient-to-br from-[#0a1128] via-[#1a1f3a] to-[#2a1f4a] text-white pt-16 pb-8 relative overflow-hidden">
       {/* Decorative Elements */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
+      <div className="absolute inset-0 pointer-events-none" suppressHydrationWarning>
+        <div className="absolute top-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" suppressHydrationWarning></div>
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" suppressHydrationWarning></div>
         
         {/* Floating Hearts - Using deterministic values */}
         {floatingHearts.map((heart, i) => (
@@ -34,6 +34,7 @@ const Footer = () => {
               animationDelay: `${heart.delay}s`,
               transform: `scale(${heart.scale})`,
             }}
+            suppressHydrationWarning
           >
             <Heart size={24} />
           </div>
