@@ -157,8 +157,12 @@ const initialForm: PatientForm = {
 export default function StudentManagement() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [hospitalFilter, setHospitalFilter] = useState("all");
+  const [physiotherapistFilter, setPhysiotherapistFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [viewingPatient, setViewingPatient] = useState<Patient | null>(null);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
@@ -344,11 +348,38 @@ export default function StudentManagement() {
     );
   }, [physiotherapists, formData.hospitalId]);
 
+  const physiotherapistFilterOptions = useMemo(() => {
+    if (hospitalFilter === "all") {
+      return physiotherapists;
+    }
+    return physiotherapists.filter(
+      (item: Physiotherapist) => item.hospitalId === hospitalFilter
+    );
+  }, [physiotherapists, hospitalFilter]);
+
   const filteredPatients = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return patients;
+    let list = patients;
 
-    return patients.filter((patient: Patient) =>
+    if (hospitalFilter !== "all") {
+      list = list.filter((patient: Patient) => patient.hospitalId === hospitalFilter);
+    }
+
+    if (physiotherapistFilter !== "all") {
+      const selectedPhysio = physiotherapists.find(
+        (item: Physiotherapist) => item.id === physiotherapistFilter
+      );
+
+      if (selectedPhysio) {
+        list = list.filter(
+          (patient: Patient) => patient.assignedDoctor === selectedPhysio.name
+        );
+      }
+    }
+
+    if (!term) return list;
+
+    return list.filter((patient: Patient) =>
       [
         patient.firstName,
         patient.lastName,
@@ -363,7 +394,7 @@ export default function StudentManagement() {
         .toLowerCase()
         .includes(term)
     );
-  }, [patients, search]);
+  }, [patients, search, hospitalFilter, physiotherapistFilter, physiotherapists]);
 
   const stats = useMemo(() => {
     const total = patients.length;
@@ -377,6 +408,16 @@ export default function StudentManagement() {
     setFormData(initialForm);
     setShowParentPassword(false);
     setDialogOpen(true);
+  };
+
+  const handleOpenViewDialog = (patient: Patient) => {
+    setViewingPatient(patient);
+    setViewDialogOpen(true);
+  };
+
+  const handleCloseViewDialog = () => {
+    setViewDialogOpen(false);
+    setViewingPatient(null);
   };
 
   const handleOpenEditDialog = (patient: Patient) => {
@@ -540,14 +581,53 @@ export default function StudentManagement() {
           <CardTitle className="text-base">Children List</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by child, parent, hospital, physiotherapist..."
-              className="pl-9"
-            />
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by child, parent, hospital, physiotherapist..."
+                className="pl-9"
+              />
+            </div>
+
+            <Select
+              value={hospitalFilter}
+              onValueChange={(value) => {
+                setHospitalFilter(value);
+                setPhysiotherapistFilter("all");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by hospital" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Hospitals</SelectItem>
+                {hospitals.map((hospital: Hospital) => (
+                  <SelectItem key={hospital.id} value={hospital.id}>
+                    {hospital.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={physiotherapistFilter}
+              onValueChange={setPhysiotherapistFilter}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by physiotherapist" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Physiotherapists</SelectItem>
+                {physiotherapistFilterOptions.map((item: Physiotherapist) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="rounded-md border overflow-x-auto">
@@ -637,6 +717,14 @@ export default function StudentManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenViewDialog(patient)}
+                            title="View details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1028,6 +1116,108 @@ export default function StudentManagement() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-3xl h-[90dvh] max-h-[90dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>Child Details</DialogTitle>
+          </DialogHeader>
+
+          {viewingPatient ? (
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain overflow-x-hidden space-y-4 px-6 pb-6 pt-4">
+              <div className="rounded-lg border p-4 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold">
+                      {viewingPatient.firstName} {viewingPatient.lastName}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Age: {viewingPatient.age ?? "-"} • Gender: {viewingPatient.gender}
+                    </p>
+                  </div>
+                  <Badge variant={viewingPatient.isActive ? "default" : "secondary"}>
+                    {viewingPatient.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Parent</p>
+                    <p className="font-medium">{viewingPatient.parentName || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Parent Mobile</p>
+                    <p className="font-medium">{viewingPatient.parentPhone || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Hospital</p>
+                    <p className="font-medium">{viewingPatient.hospital?.name || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Physiotherapist</p>
+                    <p className="font-medium">{viewingPatient.assignedDoctor || "-"}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-muted-foreground">Address</p>
+                    <p className="font-medium">{viewingPatient.address || "-"}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4 space-y-4">
+                <h4 className="text-sm font-medium">Progress Tracker</h4>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Start Progress</span>
+                    <span className="font-medium">
+                      {viewingPatient.progressTracker?.startProgress ?? 0}%
+                    </span>
+                  </div>
+                  <Progress
+                    value={toProgressValue(viewingPatient.progressTracker?.startProgress)}
+                    className="h-2"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Current Progress</span>
+                    <span className="font-medium">
+                      {viewingPatient.progressTracker?.currentProgress ?? 0}%
+                    </span>
+                  </div>
+                  <Progress
+                    value={toProgressValue(viewingPatient.progressTracker?.currentProgress)}
+                    className="h-2"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Play Time</p>
+                    <p className="font-semibold">
+                      {viewingPatient.progressTracker?.playTimeMinutes ?? 0} min
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Played Days</p>
+                    <p className="font-semibold">
+                      {viewingPatient.progressTracker?.playedDays ?? 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter className="px-6 py-3 border-t bg-background">
+            <Button type="button" variant="outline" onClick={handleCloseViewDialog}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
