@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -28,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, Search } from "lucide-react";
+import { Plus, Trash2, Search, Pencil } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 
@@ -50,28 +60,46 @@ type Hospital = {
 type Physiotherapist = {
   id: string;
   name: string;
-  email: string;
-  contactNumber: string;
-  zoneId: string;
-  zoneName: string;
+  email?: string;
+  phone: string;
+  specialization?: string;
   hospitalId: string;
-  hospitalName: string;
+  hospital?: {
+    id: string;
+    name: string;
+    zoneId?: string | null;
+    zone?: {
+      id: string;
+      name: string;
+    } | null;
+  };
+};
+
+type FormData = {
+  name: string;
+  email: string;
+  phone: string;
+  specialization: string;
+  zoneId: string;
+  hospitalId: string;
+};
+
+const initialForm: FormData = {
+  name: "",
+  email: "",
+  phone: "",
+  specialization: "",
+  zoneId: "",
+  hospitalId: "",
 };
 
 export default function TeacherManagement() {
+  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selected, setSelected] = useState<Physiotherapist | null>(null);
   const [search, setSearch] = useState("");
-  const [physiotherapists, setPhysiotherapists] = useState<Physiotherapist[]>(
-    []
-  );
-
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    contactNumber: "",
-    zoneId: "",
-    hospitalId: "",
-  });
+  const [formData, setFormData] = useState<FormData>(initialForm);
 
   const {
     data: zones = [],
@@ -95,14 +123,59 @@ export default function TeacherManagement() {
       const response = await ApiClient.get<any>("/hospitals");
       const payload = response?.data ?? response ?? {};
       const list = payload?.data || payload?.hospitals || payload || [];
-      if (!Array.isArray(list)) return [];
+      return Array.isArray(list)
+        ? list.filter((h: any) => h?.id && h?.name)
+        : [];
+    },
+  });
 
-      return list.filter((h: any) => {
-        const hospitalId = h?.id;
-        const hospitalName = h?.name;
-        const zoneId = h?.zoneId || h?.zone?.id;
-        return hospitalId && hospitalName && zoneId;
-      });
+  const { data: physiotherapists = [], isLoading: physioLoading } = useQuery({
+    queryKey: ["physio-management", "physiotherapists"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients/locations/physiotherapists");
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) =>
+      ApiClient.post("/patients/locations/physiotherapists", data),
+    onSuccess: () => {
+      toast.success("Physiotherapist added successfully");
+      queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to add physiotherapist");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      ApiClient.put(`/patients/locations/physiotherapists/${id}`, data),
+    onSuccess: () => {
+      toast.success("Physiotherapist updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update physiotherapist");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      ApiClient.delete(`/patients/locations/physiotherapists/${id}`),
+    onSuccess: () => {
+      toast.success("Physiotherapist deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      setDeleteDialogOpen(false);
+      setSelected(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to delete physiotherapist");
     },
   });
 
@@ -118,73 +191,75 @@ export default function TeacherManagement() {
     const term = search.trim().toLowerCase();
     if (!term) return physiotherapists;
 
-    return physiotherapists.filter((item) =>
-      [item.name, item.email, item.contactNumber, item.hospitalName, item.zoneName]
+    return physiotherapists.filter((item: Physiotherapist) =>
+      [
+        item.name,
+        item.email,
+        item.phone,
+        item.specialization,
+        item.hospital?.name,
+        item.hospital?.zone?.name,
+      ]
+        .filter(Boolean)
         .join(" ")
         .toLowerCase()
         .includes(term)
     );
   }, [physiotherapists, search]);
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      email: "",
-      contactNumber: "",
-      zoneId: "",
-      hospitalId: "",
-    });
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setSelected(null);
+    setFormData(initialForm);
   };
 
-  const handleOpenAddDialog = () => {
-    resetForm();
+  const handleOpenAdd = () => {
+    setSelected(null);
+    setFormData(initialForm);
     setDialogOpen(true);
   };
 
-  const handleAddPhysiotherapist = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleOpenEdit = (item: Physiotherapist) => {
+    setSelected(item);
+    const zoneId = item.hospital?.zone?.id || item.hospital?.zoneId || "";
+    setFormData({
+      name: item.name || "",
+      email: item.email || "",
+      phone: item.phone || "",
+      specialization: item.specialization || "",
+      zoneId,
+      hospitalId: item.hospitalId || "",
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (
       !formData.name.trim() ||
-      !formData.email.trim() ||
-      !formData.contactNumber.trim() ||
-      !formData.zoneId ||
-      !formData.hospitalId
+      !formData.phone.trim() ||
+      !formData.hospitalId ||
+      !formData.zoneId
     ) {
       toast.error("Please fill all required fields");
       return;
     }
 
-    const selectedZone = zones.find((zone: Zone) => zone.id === formData.zoneId);
-    const selectedHospital = filteredHospitals.find(
-      (hospital: Hospital) => hospital.id === formData.hospitalId
-    );
+    const payload = {
+      name: formData.name.trim(),
+      email: formData.email.trim() || undefined,
+      phone: formData.phone.trim(),
+      hospitalId: formData.hospitalId,
+      specialization: formData.specialization.trim() || undefined,
+    };
 
-    if (!selectedZone || !selectedHospital) {
-      toast.error("Please select a valid zone and hospital");
+    if (selected) {
+      updateMutation.mutate({ id: selected.id, data: payload });
       return;
     }
 
-    const newPhysiotherapist: Physiotherapist = {
-      id: `physio-${Date.now()}`,
-      name: formData.name.trim(),
-      email: formData.email.trim(),
-      contactNumber: formData.contactNumber.trim(),
-      zoneId: selectedZone.id,
-      zoneName: selectedZone.name,
-      hospitalId: selectedHospital.id,
-      hospitalName: selectedHospital.name,
-    };
-
-    setPhysiotherapists((prev) => [newPhysiotherapist, ...prev]);
-    setDialogOpen(false);
-    resetForm();
-    toast.success("Physiotherapist added successfully");
-  };
-
-  const handleDelete = (id: string) => {
-    setPhysiotherapists((prev) => prev.filter((item) => item.id !== id));
-    toast.success("Physiotherapist removed");
+    createMutation.mutate(payload);
   };
 
   return (
@@ -194,7 +269,7 @@ export default function TeacherManagement() {
           <p className="text-sm text-muted-foreground">Hospital Workforce</p>
           <h1 className="text-2xl font-semibold">Physiotherapy Management</h1>
         </div>
-        <Button onClick={handleOpenAddDialog}>
+        <Button onClick={handleOpenAdd}>
           <Plus className="h-4 w-4 mr-2" /> Add Physiotherapist
         </Button>
       </div>
@@ -209,7 +284,7 @@ export default function TeacherManagement() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, hospital, email..."
+              placeholder="Search by name, hospital, phone..."
               className="pl-9"
             />
           </div>
@@ -227,28 +302,46 @@ export default function TeacherManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPhysiotherapists.length === 0 ? (
+                {physioLoading ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No physiotherapists added yet.
+                      Loading physiotherapists...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredPhysiotherapists.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      No physiotherapists found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredPhysiotherapists.map((item) => (
+                  filteredPhysiotherapists.map((item: Physiotherapist) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{item.hospitalName}</TableCell>
-                      <TableCell>{item.zoneName}</TableCell>
-                      <TableCell>{item.contactNumber}</TableCell>
-                      <TableCell>{item.email}</TableCell>
+                      <TableCell>{item.hospital?.name || "-"}</TableCell>
+                      <TableCell>{item.hospital?.zone?.name || "-"}</TableCell>
+                      <TableCell>{item.phone || "-"}</TableCell>
+                      <TableCell>{item.email || "-"}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(item)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSelected(item);
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -260,12 +353,17 @@ export default function TeacherManagement() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Physiotherapist</DialogTitle>
+        <DialogContent className="w-[95vw] sm:max-w-2xl h-[90dvh] max-h-[90dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>
+              {selected ? "Update Physiotherapist" : "Add Physiotherapist"}
+            </DialogTitle>
           </DialogHeader>
 
-          <form className="space-y-4" onSubmit={handleAddPhysiotherapist}>
+          <form
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-6 pb-6 pt-4"
+            onSubmit={handleSubmit}
+          >
             <div className="space-y-2">
               <Label htmlFor="physio-name">Physiotherapist Name</Label>
               <Input
@@ -295,14 +393,29 @@ export default function TeacherManagement() {
               <Label htmlFor="physio-contact">Contact Number</Label>
               <Input
                 id="physio-contact"
-                value={formData.contactNumber}
+                value={formData.phone}
                 onChange={(e) =>
                   setFormData((prev) => ({
                     ...prev,
-                    contactNumber: e.target.value,
+                    phone: e.target.value,
                   }))
                 }
                 placeholder="Enter contact number"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="physio-specialization">Specialization</Label>
+              <Input
+                id="physio-specialization"
+                value={formData.specialization}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    specialization: e.target.value,
+                  }))
+                }
+                placeholder="Optional"
               />
             </div>
 
@@ -365,6 +478,11 @@ export default function TeacherManagement() {
                   />
                 </SelectTrigger>
                 <SelectContent>
+                  {filteredHospitals.length === 0 && formData.zoneId ? (
+                    <SelectItem value="__NO_HOSPITALS__" disabled>
+                      No hospitals available in this zone
+                    </SelectItem>
+                  ) : null}
                   {filteredHospitals.map((hospital: Hospital) => (
                     <SelectItem key={hospital.id} value={hospital.id}>
                       {hospital.name}
@@ -374,15 +492,43 @@ export default function TeacherManagement() {
               </Select>
             </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+            <DialogFooter className="pt-3 border-t bg-background">
+              <Button type="button" variant="outline" onClick={handleCloseDialog}>
                 Cancel
               </Button>
-              <Button type="submit">Add Physiotherapist</Button>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                {selected ? "Update Physiotherapist" : "Add Physiotherapist"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete physiotherapist</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will deactivate the physiotherapist record.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!selected) return;
+                deleteMutation.mutate(selected.id);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

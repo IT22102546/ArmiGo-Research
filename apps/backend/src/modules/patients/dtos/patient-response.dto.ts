@@ -10,11 +10,20 @@ export class PatientResponseDto {
   @ApiProperty()
   lastName: string;
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
   email?: string;
 
-  @ApiProperty()
-  phone: string;
+  @ApiProperty({ required: false })
+  phone?: string;
+
+  @ApiProperty({ required: false })
+  parentName?: string;
+
+  @ApiProperty({ required: false })
+  parentEmail?: string;
+
+  @ApiProperty({ required: false })
+  parentPhone?: string;
 
   @ApiProperty()
   dateOfBirth: string;
@@ -33,6 +42,9 @@ export class PatientResponseDto {
 
   @ApiProperty()
   diagnosis?: string;
+
+  @ApiProperty({ required: false })
+  address?: string;
 
   @ApiProperty()
   assignedDoctor?: string;
@@ -86,6 +98,35 @@ export class PatientResponseDto {
     id: string;
     name: string;
     code?: string;
+  };
+
+  @ApiProperty({ description: 'Province information' })
+  province?: {
+    id: string;
+    name: string;
+    code?: string;
+  };
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Computed tracker summary for child progress and gameplay engagement',
+  })
+  progressTracker?: {
+    startProgress: number;
+    currentProgress: number;
+    playTimeMinutes: number;
+    playedDays: number;
+  };
+
+  @ApiProperty({
+    required: false,
+    description: 'Parent credentials to hand over after child registration',
+  })
+  parentCredentials?: {
+    email: string;
+    phone: string;
+    password: string;
   };
 
   @ApiProperty()

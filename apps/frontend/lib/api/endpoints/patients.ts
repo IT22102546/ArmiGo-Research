@@ -4,8 +4,12 @@ export interface Patient {
   id: string;
   firstName: string;
   lastName: string;
+  address?: string;
   email?: string;
-  phone: string;
+  phone?: string;
+  parentName?: string;
+  parentEmail?: string;
+  parentPhone?: string;
   dateOfBirth: string;
   age: number;
   gender: string;
@@ -16,6 +20,8 @@ export interface Patient {
   medicalHistory?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
+  districtId?: string;
+  zoneId?: string;
   hospitalId?: string;
   isActive: boolean;
   enrolledAt: string;

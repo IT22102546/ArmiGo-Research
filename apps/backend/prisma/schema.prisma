@@ -372,6 +372,9 @@ model Child {
   parentId        String
   hospitalId      String?
   subHospitalId   String?
+  districtId      String?
+  zoneId          String?
+  address         String?
   
   // Personal
   firstName       String
@@ -395,6 +398,8 @@ model Child {
   parentProfile   ParentProfile?  @relation("ParentProfileChildren", fields: [parentId], references: [userId], map: "child_parent_profile_fkey")
   hospital        Hospital?       @relation("HospitalChildren", fields: [hospitalId], references: [id], map: "child_hospital_fkey")
   subHospital     SubHospital?    @relation("SubHospitalChildren", fields: [subHospitalId], references: [id], map: "child_subhospital_fkey")
+  district        District?       @relation("ChildDistrict", fields: [districtId], references: [id])
+  zone            Zone?           @relation("ChildZone", fields: [zoneId], references: [id])
   
   // Therapy related
   therapyPrograms TherapyProgram[]
@@ -406,6 +411,8 @@ model Child {
   @@index([parentId])
   @@index([hospitalId])
   @@index([subHospitalId])
+  @@index([districtId])
+  @@index([zoneId])
   @@index([isActive])
   @@map("children")
 }
@@ -669,6 +676,7 @@ model District {
   users           User[]          @relation("UserDistrict")
   hospitals       Hospital[]      @relation("HospitalDistrict")
   subHospitals    SubHospital[]   @relation("SubHospitalDistrict")
+  children        Child[]         @relation("ChildDistrict")
   
   @@map("districts")
 }
@@ -686,6 +694,7 @@ model Zone {
   users           User[]          @relation("UserZone")
   hospitals       Hospital[]      @relation("HospitalZone")
   subHospitals    SubHospital[]   @relation("SubHospitalZone")
+  children        Child[]         @relation("ChildZone")
   
   @@map("zones")
 }

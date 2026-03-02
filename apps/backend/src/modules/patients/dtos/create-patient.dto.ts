@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsPhoneNumber, IsOptional, IsDateString, IsNotEmpty, MinLength } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsDateString, IsNotEmpty, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePatientDto {
@@ -17,10 +17,44 @@ export class CreatePatientDto {
   @IsOptional()
   email?: string;
 
-  @ApiProperty({ example: '+94701234567' })
+  @ApiProperty({ example: '+94701234567', required: false })
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @ApiProperty({
+    example: 'Kandy Silva',
+    description: 'Parent full name',
+  })
   @IsString()
   @IsNotEmpty()
-  phone: string;
+  parentName: string;
+
+  @ApiProperty({
+    example: 'kandy.silva@example.com',
+    description: 'Parent email',
+  })
+  @IsEmail()
+  @IsNotEmpty()
+  parentEmail: string;
+
+  @ApiProperty({
+    example: '+94701234568',
+    description: 'Parent mobile number',
+  })
+  @IsString()
+  @IsNotEmpty()
+  parentPhone: string;
+
+  @ApiProperty({
+    example: 'Parent@1234',
+    description: 'Parent account password',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @MinLength(6)
+  parentPassword?: string;
 
   @ApiProperty({ example: '2016-03-15' })
   @IsDateString()
@@ -83,6 +117,15 @@ export class CreatePatientDto {
   @IsString()
   @IsOptional()
   zoneId?: string;
+
+  @ApiProperty({
+    example: 'No. 42, Main Street',
+    description: 'Child home address',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  address?: string;
 
   @ApiProperty({ 
     example: 'uuid-hospital-id', 

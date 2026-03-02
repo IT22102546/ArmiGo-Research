@@ -16,7 +16,12 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { PatientService } from './patient.service';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { UpdatePatientDto } from './dtos/update-patient.dto';
+import { UpdatePatientStatusDto } from './dtos/update-patient-status.dto';
 import { PatientResponseDto, PatientStatsDto } from './dtos/patient-response.dto';
+import {
+  CreatePhysiotherapistDto,
+  UpdatePhysiotherapistDto,
+} from './dtos/physiotherapist.dto';
 
 @ApiTags('Patients')
 @Controller('patients')
@@ -70,7 +75,10 @@ export class PatientController {
   ) {
     const filters = {
       hospitalId,
-      isActive: isActive === 'true',
+      isActive:
+        isActive !== undefined && isActive !== null && isActive !== ''
+          ? isActive === 'true'
+          : undefined,
       gender,
       diagnosis,
       searchTerm,
@@ -151,6 +159,30 @@ export class PatientController {
   }
 
   /**
+   * Update patient active/inactive status
+   */
+  @Put(':id/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update patient active/inactive status' })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient status updated successfully',
+    type: PatientResponseDto,
+  })
+  async updatePatientStatus(
+    @Param('id') id: string,
+    @Body() body: UpdatePatientStatusDto
+  ) {
+    this.logger.log(`Updating patient status: ${id} -> ${body.isActive}`);
+    const patient = await this.patientService.setPatientStatus(id, body.isActive);
+    return {
+      success: true,
+      data: patient,
+      message: 'Patient status updated successfully',
+    };
+  }
+
+  /**
    * Delete patient
    */
   @Delete(':id')
@@ -160,9 +192,13 @@ export class PatientController {
     status: 200,
     description: 'Patient deleted successfully',
   })
-  async deletePatient(@Param('id') id: string) {
-    this.logger.log(`Deleting patient: ${id}`);
-    const result = await this.patientService.deletePatient(id);
+  async deletePatient(
+    @Param('id') id: string,
+    @Query('mode') mode?: 'inactive' | 'permanent'
+  ) {
+    const normalizedMode = mode === 'inactive' ? 'inactive' : 'permanent';
+    this.logger.log(`Deleting patient: ${id} with mode ${normalizedMode}`);
+    const result = await this.patientService.deletePatient(id, normalizedMode);
     return {
       success: true,
       message: result.message,
@@ -242,6 +278,111 @@ export class PatientController {
     return {
       success: true,
       data: subHospitals,
+    };
+  }
+
+  /**
+   * Get doctors/therapists for patient assignment
+   */
+  @Get('locations/doctors')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get active doctors/therapists for patient assignment' })
+  @ApiResponse({
+    status: 200,
+    description: 'Doctors retrieved successfully',
+  })
+  async getDoctors(@Query('hospitalId') hospitalId?: string) {
+    this.logger.log(
+      `Getting doctors${hospitalId ? ` for hospital: ${hospitalId}` : ''}`
+    );
+    const doctors = await this.patientService.getDoctors(hospitalId);
+    return {
+      success: true,
+      data: doctors,
+    };
+  }
+
+  /**
+   * Get physiotherapists
+   */
+  @Get('locations/physiotherapists')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get active physiotherapists' })
+  @ApiResponse({
+    status: 200,
+    description: 'Physiotherapists retrieved successfully',
+  })
+  async getPhysiotherapists(@Query('hospitalId') hospitalId?: string) {
+    this.logger.log(
+      `Getting physiotherapists${hospitalId ? ` for hospital: ${hospitalId}` : ''}`
+    );
+    const physiotherapists =
+      await this.patientService.getPhysiotherapists(hospitalId);
+    return {
+      success: true,
+      data: physiotherapists,
+    };
+  }
+
+  /**
+   * Create physiotherapist
+   */
+  @Post('locations/physiotherapists')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create physiotherapist' })
+  @ApiResponse({
+    status: 201,
+    description: 'Physiotherapist created successfully',
+  })
+  async createPhysiotherapist(@Body() body: CreatePhysiotherapistDto) {
+    this.logger.log(`Creating physiotherapist: ${body.name}`);
+    const physiotherapist = await this.patientService.createPhysiotherapist(body);
+    return {
+      success: true,
+      data: physiotherapist,
+      message: 'Physiotherapist created successfully',
+    };
+  }
+
+  /**
+   * Update physiotherapist
+   */
+  @Put('locations/physiotherapists/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update physiotherapist' })
+  @ApiResponse({
+    status: 200,
+    description: 'Physiotherapist updated successfully',
+  })
+  async updatePhysiotherapist(
+    @Param('id') id: string,
+    @Body() body: UpdatePhysiotherapistDto
+  ) {
+    this.logger.log(`Updating physiotherapist: ${id}`);
+    const physiotherapist = await this.patientService.updatePhysiotherapist(id, body);
+    return {
+      success: true,
+      data: physiotherapist,
+      message: 'Physiotherapist updated successfully',
+    };
+  }
+
+  /**
+   * Delete physiotherapist
+   */
+  @Delete('locations/physiotherapists/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete physiotherapist' })
+  @ApiResponse({
+    status: 200,
+    description: 'Physiotherapist deleted successfully',
+  })
+  async deletePhysiotherapist(@Param('id') id: string) {
+    this.logger.log(`Deleting physiotherapist: ${id}`);
+    const result = await this.patientService.deletePhysiotherapist(id);
+    return {
+      success: true,
+      message: result.message,
     };
   }
 }

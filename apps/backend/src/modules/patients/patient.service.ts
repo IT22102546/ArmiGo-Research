@@ -4,6 +4,8 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { randomInt } from 'crypto';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '@database/prisma.service';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { UpdatePatientDto } from './dtos/update-patient.dto';
@@ -33,39 +35,96 @@ export class PatientService {
         throw new BadRequestException(`Hospital with ID ${data.hospitalId} not found`);
       }
 
+      if (data.districtId || data.zoneId) {
+        await this.validateChildLocation(data.districtId, data.zoneId);
+      }
+
       // Calculate age from dateOfBirth
-      const birthDate = new Date(data.dateOfBirth);
+      const birthDate = this.parseDateOnly(data.dateOfBirth);
       const age = this.calculateAge(birthDate);
 
-      // Create a temporary user for the patient if no parent exists
+      const parentFullName = (data.parentName || '').trim();
+      const [parentFirstName, ...parentLastNameParts] = parentFullName.split(' ');
+      const normalizedParentFirstName = parentFirstName || 'Parent';
+      const normalizedParentLastName = parentLastNameParts.join(' ') || 'User';
+
+      if (!data.parentPhone?.trim()) {
+        throw new BadRequestException('Parent mobile number is required');
+      }
+
+      if (!data.parentEmail?.trim()) {
+        throw new BadRequestException('Parent email is required');
+      }
+
+      const isProvidedPassword = !!data.parentPassword?.trim();
+      const plainParentPassword =
+        data.parentPassword?.trim() || this.generateTemporaryPassword();
+      const hashedParentPassword = await bcrypt.hash(plainParentPassword, 12);
+      let shouldReturnCredentials = false;
+
       const user = await this.prisma.user.findFirst({
-        where: { email: data.email },
+        where: {
+          OR: [
+            { email: data.parentEmail },
+            { phone: data.parentPhone },
+          ],
+        },
       });
 
       let parentId: string;
       if (user && user.role === 'PARENT') {
         parentId = user.id;
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            firstName: normalizedParentFirstName,
+            lastName: normalizedParentLastName,
+            email: data.parentEmail,
+            phone: data.parentPhone,
+            ...(isProvidedPassword ? { password: hashedParentPassword } : {}),
+          },
+        });
+
+        if (isProvidedPassword) {
+          shouldReturnCredentials = true;
+        }
+      } else if (user && user.role !== 'PARENT') {
+        throw new BadRequestException(
+          'Provided parent email or phone already belongs to another user role'
+        );
       } else {
-        // Create a placeholder parent record if needed
         const placeholderParent = await this.prisma.user.create({
           data: {
-            email: data.email || `patient-${Date.now()}@armigo-health.local`,
-            phone: data.phone,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            password: 'placeholder', // Will be set properly by admin
+            email: data.parentEmail,
+            phone: data.parentPhone,
+            firstName: normalizedParentFirstName,
+            lastName: normalizedParentLastName,
+            password: hashedParentPassword,
             role: 'PARENT',
             status: 'ACTIVE',
           },
         });
         parentId = placeholderParent.id;
+        shouldReturnCredentials = true;
       }
+
+      await this.prisma.parentProfile.upsert({
+        where: { userId: parentId },
+        update: {},
+        create: {
+          userId: parentId,
+        },
+      });
 
       const patient = await this.prisma.child.create({
         data: {
           parentId,
           hospitalId: data.hospitalId,
           subHospitalId: data.subHospitalId,
+          districtId: data.districtId,
+          zoneId: data.zoneId,
+          address: data.address,
           firstName: data.firstName,
           lastName: data.lastName,
           dateOfBirth: birthDate,
@@ -77,12 +136,52 @@ export class PatientService {
           isActive: true,
         },
         include: {
-          hospital: true,
+          hospital: {
+            include: {
+              district: {
+                include: {
+                  province: true,
+                },
+              },
+              zone: true,
+            },
+          },
+          district: {
+            include: {
+              province: true,
+            },
+          },
+          zone: true,
           subHospital: true,
+          parent: true,
+          progressRecords: {
+            select: {
+              recordDate: true,
+              baselineValue: true,
+              currentValue: true,
+            },
+            orderBy: { recordDate: 'asc' },
+          },
+          therapySessions: {
+            select: {
+              sessionDate: true,
+              duration: true,
+            },
+          },
         },
       });
 
-      return this.mapChildToPatientResponse(patient);
+      const response = this.mapChildToPatientResponse(patient);
+
+      if (shouldReturnCredentials) {
+        response.parentCredentials = {
+          email: data.parentEmail,
+          phone: data.parentPhone,
+          password: plainParentPassword,
+        };
+      }
+
+      return response;
     } catch (error) {
       this.logger.error('Error creating patient:', error);
       throw error;
@@ -96,8 +195,38 @@ export class PatientService {
     const patient = await this.prisma.child.findUnique({
       where: { id },
       include: {
-        hospital: true,
+        hospital: {
+          include: {
+            district: {
+              include: {
+                province: true,
+              },
+            },
+            zone: true,
+          },
+        },
+        district: {
+          include: {
+            province: true,
+          },
+        },
+        zone: true,
         subHospital: true,
+        parent: true,
+        progressRecords: {
+          select: {
+            recordDate: true,
+            baselineValue: true,
+            currentValue: true,
+          },
+          orderBy: { recordDate: 'asc' },
+        },
+        therapySessions: {
+          select: {
+            sessionDate: true,
+            duration: true,
+          },
+        },
       },
     });
 
@@ -161,8 +290,38 @@ export class PatientService {
         take: limit,
         orderBy: { enrolledAt: 'desc' },
         include: {
-          hospital: true,
+          hospital: {
+            include: {
+              district: {
+                include: {
+                  province: true,
+                },
+              },
+              zone: true,
+            },
+          },
+          district: {
+            include: {
+              province: true,
+            },
+          },
+          zone: true,
           subHospital: true,
+          parent: true,
+          progressRecords: {
+            select: {
+              recordDate: true,
+              baselineValue: true,
+              currentValue: true,
+            },
+            orderBy: { recordDate: 'asc' },
+          },
+          therapySessions: {
+            select: {
+              sessionDate: true,
+              duration: true,
+            },
+          },
         },
       }),
       this.prisma.child.count({ where: whereClause }),
@@ -188,6 +347,9 @@ export class PatientService {
   ): Promise<PatientResponseDto> {
     const patient = await this.prisma.child.findUnique({
       where: { id },
+      include: {
+        parent: true,
+      },
     });
 
     if (!patient) {
@@ -204,19 +366,82 @@ export class PatientService {
       }
     }
 
+    if (data.districtId !== undefined || data.zoneId !== undefined) {
+      await this.validateChildLocation(data.districtId, data.zoneId);
+    }
+
     const updateData: any = { ...data };
+    delete updateData.parentName;
+    delete updateData.parentEmail;
+    delete updateData.parentPhone;
+    delete updateData.parentPassword;
+    delete updateData.phone;
+    delete updateData.email;
+
     if (data.dateOfBirth) {
-      const birthDate = new Date(data.dateOfBirth);
+      const birthDate = this.parseDateOnly(data.dateOfBirth);
       updateData.dateOfBirth = birthDate;
       updateData.age = this.calculateAge(birthDate);
+    }
+
+    const parentFullName = (data.parentName || '').trim();
+    if (patient.parentId && (parentFullName || data.parentEmail || data.parentPhone)) {
+      const [parentFirstName, ...parentLastNameParts] = parentFullName.split(' ');
+
+      await this.prisma.user.update({
+        where: { id: patient.parentId },
+        data: {
+          ...(parentFullName
+            ? {
+                firstName: parentFirstName || 'Parent',
+                lastName: parentLastNameParts.join(' ') || 'User',
+              }
+            : {}),
+          ...(data.parentEmail !== undefined ? { email: data.parentEmail } : {}),
+          ...(data.parentPhone !== undefined ? { phone: data.parentPhone } : {}),
+          ...(data.parentPassword
+            ? { password: await bcrypt.hash(data.parentPassword, 12) }
+            : {}),
+        },
+      });
     }
 
     const updated = await this.prisma.child.update({
       where: { id },
       data: updateData,
       include: {
-        hospital: true,
+        hospital: {
+          include: {
+            district: {
+              include: {
+                province: true,
+              },
+            },
+            zone: true,
+          },
+        },
+        district: {
+          include: {
+            province: true,
+          },
+        },
+        zone: true,
         subHospital: true,
+        parent: true,
+        progressRecords: {
+          select: {
+            recordDate: true,
+            baselineValue: true,
+            currentValue: true,
+          },
+          orderBy: { recordDate: 'asc' },
+        },
+        therapySessions: {
+          select: {
+            sessionDate: true,
+            duration: true,
+          },
+        },
       },
     });
 
@@ -224,9 +449,9 @@ export class PatientService {
   }
 
   /**
-   * Delete patient (soft delete by marking inactive)
+   * Update patient active/inactive status
    */
-  async deletePatient(id: string): Promise<{ message: string }> {
+  async setPatientStatus(id: string, isActive: boolean): Promise<PatientResponseDto> {
     const patient = await this.prisma.child.findUnique({
       where: { id },
     });
@@ -235,12 +460,90 @@ export class PatientService {
       throw new NotFoundException(`Patient with ID ${id} not found`);
     }
 
-    await this.prisma.child.update({
+    const updated = await this.prisma.child.update({
       where: { id },
-      data: { isActive: false },
+      data: { isActive },
+      include: {
+        hospital: {
+          include: {
+            district: {
+              include: {
+                province: true,
+              },
+            },
+            zone: true,
+          },
+        },
+        district: {
+          include: {
+            province: true,
+          },
+        },
+        zone: true,
+        subHospital: true,
+        parent: true,
+        progressRecords: {
+          select: {
+            recordDate: true,
+            baselineValue: true,
+            currentValue: true,
+          },
+          orderBy: { recordDate: 'asc' },
+        },
+        therapySessions: {
+          select: {
+            sessionDate: true,
+            duration: true,
+          },
+        },
+      },
     });
 
-    return { message: `Patient ${id} has been deleted` };
+    return this.mapChildToPatientResponse(updated);
+  }
+
+  /**
+   * Delete patient (inactive mode or permanent mode)
+   */
+  async deletePatient(
+    id: string,
+    mode: 'inactive' | 'permanent' = 'permanent'
+  ): Promise<{ message: string }> {
+    const patient = await this.prisma.child.findUnique({
+      where: { id },
+    });
+
+    if (!patient) {
+      throw new NotFoundException(`Patient with ID ${id} not found`);
+    }
+
+    if (mode === 'inactive') {
+      await this.prisma.child.update({
+        where: { id },
+        data: { isActive: false },
+      });
+
+      return { message: `Patient ${id} has been marked as inactive` };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.movementLog.deleteMany({
+        where: {
+          session: {
+            childId: id,
+          },
+        },
+      });
+
+      await tx.deviceAssignment.deleteMany({ where: { childId: id } });
+      await tx.appointment.deleteMany({ where: { childId: id } });
+      await tx.therapySession.deleteMany({ where: { childId: id } });
+      await tx.progressRecord.deleteMany({ where: { childId: id } });
+      await tx.therapyProgram.deleteMany({ where: { childId: id } });
+      await tx.child.delete({ where: { id } });
+    });
+
+    return { message: `Patient ${id} has been permanently deleted` };
   }
 
   /**
@@ -342,6 +645,70 @@ export class PatientService {
     return age;
   }
 
+  private parseDateOnly(dateValue: string): Date {
+    const [year, month, day] = (dateValue || '').split('-').map(Number);
+
+    if (!year || !month || !day) {
+      throw new BadRequestException('Invalid dateOfBirth format. Use YYYY-MM-DD');
+    }
+
+    return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  }
+
+  private async validateChildLocation(districtId?: string, zoneId?: string) {
+    if (districtId) {
+      const district = await this.prisma.district.findUnique({
+        where: { id: districtId },
+        select: { id: true },
+      });
+
+      if (!district) {
+        throw new BadRequestException(`District with ID ${districtId} not found`);
+      }
+    }
+
+    if (zoneId) {
+      const zone = await this.prisma.zone.findUnique({
+        where: { id: zoneId },
+        select: { id: true, districtId: true },
+      });
+
+      if (!zone) {
+        throw new BadRequestException(`Zone with ID ${zoneId} not found`);
+      }
+
+      if (districtId && zone.districtId && zone.districtId !== districtId) {
+        throw new BadRequestException('Selected zone does not belong to selected district');
+      }
+    }
+  }
+
+  private generateTemporaryPassword(length: number = 12): string {
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const digits = '0123456789';
+    const symbols = '@#$%&*!';
+    const all = `${lower}${upper}${digits}${symbols}`;
+
+    const chars = [
+      lower[randomInt(lower.length)],
+      upper[randomInt(upper.length)],
+      digits[randomInt(digits.length)],
+      symbols[randomInt(symbols.length)],
+    ];
+
+    while (chars.length < length) {
+      chars.push(all[randomInt(all.length)]);
+    }
+
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+
+    return chars.join('');
+  }
+
   /**
    * Get all hospitals with location information
    */
@@ -375,6 +742,13 @@ export class PatientService {
         name: true,
         code: true,
         provinceId: true,
+        province: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
         zones: {
           select: {
             id: true,
@@ -427,15 +801,280 @@ export class PatientService {
   }
 
   /**
+   * Get active doctors/therapists for patient assignment
+   */
+  async getDoctors(hospitalId?: string) {
+    return await this.prisma.hospitalStaff.findMany({
+      where: {
+        isActive: true,
+        ...(hospitalId ? { hospitalId } : {}),
+        role: {
+          in: ['DOCTOR', 'THERAPIST', 'PHYSIOTHERAPIST'],
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        hospitalId: true,
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Get physiotherapists from real hospital staff records
+   */
+  async getPhysiotherapists(hospitalId?: string) {
+    return await this.prisma.hospitalStaff.findMany({
+      where: {
+        isActive: true,
+        ...(hospitalId ? { hospitalId } : {}),
+        role: {
+          in: ['THERAPIST', 'PHYSIOTHERAPIST'],
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        hospitalId: true,
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+            zoneId: true,
+            zone: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Create physiotherapist in hospital staff
+   */
+  async createPhysiotherapist(data: {
+    name: string;
+    email?: string;
+    phone: string;
+    hospitalId: string;
+    specialization?: string;
+  }) {
+    const hospital = await this.prisma.hospital.findUnique({
+      where: { id: data.hospitalId },
+      select: { id: true },
+    });
+
+    if (!hospital) {
+      throw new BadRequestException(
+        `Hospital with ID ${data.hospitalId} not found`
+      );
+    }
+
+    return await this.prisma.hospitalStaff.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        hospitalId: data.hospitalId,
+        role: 'PHYSIOTHERAPIST',
+        specialization: data.specialization,
+        qualifications: [],
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        hospitalId: true,
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+            zoneId: true,
+            zone: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Update physiotherapist details
+   */
+  async updatePhysiotherapist(
+    id: string,
+    data: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      hospitalId?: string;
+      specialization?: string;
+    }
+  ) {
+    const existing = await this.prisma.hospitalStaff.findUnique({
+      where: { id },
+      select: { id: true, role: true, hospitalId: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Physiotherapist with ID ${id} not found`);
+    }
+
+    if (!['THERAPIST', 'PHYSIOTHERAPIST'].includes(existing.role)) {
+      throw new BadRequestException('Selected staff member is not a physiotherapist');
+    }
+
+    if (data.hospitalId && data.hospitalId !== existing.hospitalId) {
+      const hospital = await this.prisma.hospital.findUnique({
+        where: { id: data.hospitalId },
+        select: { id: true },
+      });
+      if (!hospital) {
+        throw new BadRequestException(
+          `Hospital with ID ${data.hospitalId} not found`
+        );
+      }
+    }
+
+    return await this.prisma.hospitalStaff.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.email !== undefined ? { email: data.email } : {}),
+        ...(data.phone !== undefined ? { phone: data.phone } : {}),
+        ...(data.hospitalId !== undefined ? { hospitalId: data.hospitalId } : {}),
+        ...(data.specialization !== undefined
+          ? { specialization: data.specialization }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        hospitalId: true,
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+            zoneId: true,
+            zone: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Soft delete physiotherapist
+   */
+  async deletePhysiotherapist(id: string) {
+    const existing = await this.prisma.hospitalStaff.findUnique({
+      where: { id },
+      select: { id: true, role: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Physiotherapist with ID ${id} not found`);
+    }
+
+    if (!['THERAPIST', 'PHYSIOTHERAPIST'].includes(existing.role)) {
+      throw new BadRequestException('Selected staff member is not a physiotherapist');
+    }
+
+    await this.prisma.hospitalStaff.update({
+      where: { id },
+      data: {
+        isActive: false,
+        leftAt: new Date(),
+      },
+    });
+
+    return { message: 'Physiotherapist deleted successfully' };
+  }
+
+  /**
    * Private helper method to map Child model to PatientResponseDto
    */
   private mapChildToPatientResponse(child: any): PatientResponseDto {
+    const parentName = child.parent
+      ? `${child.parent.firstName || ''} ${child.parent.lastName || ''}`.trim()
+      : undefined;
+
+    const progressRecords = Array.isArray(child.progressRecords)
+      ? [...child.progressRecords]
+      : [];
+
+    const therapySessions = Array.isArray(child.therapySessions)
+      ? child.therapySessions
+      : [];
+
+    const firstProgressRecord = progressRecords[0];
+    const lastProgressRecord = progressRecords[progressRecords.length - 1];
+
+    const startProgress =
+      firstProgressRecord?.baselineValue ?? firstProgressRecord?.currentValue ?? 0;
+    const currentProgress =
+      lastProgressRecord?.currentValue ?? lastProgressRecord?.baselineValue ?? 0;
+
+    const playTimeMinutes = therapySessions.reduce(
+      (sum: number, session: any) => sum + (session?.duration || 0),
+      0
+    );
+
+    const playedDays = new Set(
+      therapySessions
+        .filter((session: any) => session?.sessionDate)
+        .map((session: any) =>
+          new Date(session.sessionDate).toISOString().split('T')[0]
+        )
+    ).size;
+
     return {
       id: child.id,
       firstName: child.firstName,
       lastName: child.lastName,
-      email: child.parentProfile?.user?.email,
-      phone: child.parentProfile?.user?.phone,
+      address: child.address,
+      email: child.parent?.email,
+      phone: child.parent?.phone,
+      parentName,
+      parentEmail: child.parent?.email,
+      parentPhone: child.parent?.phone,
       dateOfBirth: child.dateOfBirth?.toISOString()?.split('T')[0],
       age: child.age,
       gender: child.gender,
@@ -463,6 +1102,30 @@ export class PatientService {
             zoneId: child.hospital.zoneId,
           }
         : undefined,
+      district:
+        child.district || child.hospital?.district
+        ? {
+            id: (child.district || child.hospital?.district).id,
+            name: (child.district || child.hospital?.district).name,
+            code: (child.district || child.hospital?.district).code,
+          }
+        : undefined,
+      zone:
+        child.zone || child.hospital?.zone
+        ? {
+            id: (child.zone || child.hospital?.zone).id,
+            name: (child.zone || child.hospital?.zone).name,
+            code: (child.zone || child.hospital?.zone).code,
+          }
+        : undefined,
+      province:
+        child.district?.province || child.hospital?.district?.province
+        ? {
+            id: (child.district?.province || child.hospital?.district?.province).id,
+            name: (child.district?.province || child.hospital?.district?.province).name,
+            code: (child.district?.province || child.hospital?.district?.province).code,
+          }
+        : undefined,
       subHospitalId: child.subHospitalId,
       subHospital: child.subHospital
         ? {
@@ -475,6 +1138,12 @@ export class PatientService {
           }
         : undefined,
       isActive: child.isActive,
+      progressTracker: {
+        startProgress: Number(startProgress.toFixed(1)),
+        currentProgress: Number(currentProgress.toFixed(1)),
+        playTimeMinutes,
+        playedDays,
+      },
       enrolledAt: child.enrolledAt,
       createdAt: child.enrolledAt,
       updatedAt: child.enrolledAt,
