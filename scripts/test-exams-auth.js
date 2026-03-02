@@ -5,7 +5,7 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.API_URL ||
   "http://localhost:5000";
-const EMAIL = process.env.TEST_EMAIL || "external.teacher@learnapp.lk";
+const EMAIL = process.env.TEST_EMAIL || "admin@armigo.com";
 const PASSWORD = process.env.TEST_PASSWORD || "LearnUp@2025";
 
 (async () => {

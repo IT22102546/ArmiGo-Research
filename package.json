@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "LearnUp Platform - A comprehensive learning management system",
-  "author": "LearnApp Team",
+  "author": "Armigo Team",
   "license": "UNLICENSED",
   "scripts": {
     "postinstall": "pnpm --filter @learnup/backend db:generate && husky install",
