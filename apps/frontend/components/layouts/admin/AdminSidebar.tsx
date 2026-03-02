@@ -61,7 +61,7 @@ export default function AdminSidebar({
       {
         href: "/admin/teachers",
         icon: Users,
-        label: "Doctor Management",
+        label: "Physiotherapy Management",
       },
       {
         href: "/admin/enrollments",
@@ -203,7 +203,7 @@ export default function AdminSidebar({
           ))}
         </NavSection>
 
-        <NavSection title="Patients & Doctors">
+        <NavSection title="Patients & Physiotherapy">
           {navigationConfig.users.map((item) => (
             <NavLink key={item.href} {...item} />
           ))}
