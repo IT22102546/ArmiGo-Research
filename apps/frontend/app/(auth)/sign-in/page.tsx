@@ -37,9 +37,9 @@ export default function SignIn() {
       useAuthStore.setState({ sessionError: null });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Intentionally run once on mount - we only want to display initial session error
+  }, []);
 
-  // Redirect if already authenticated (both for fresh logins and existing sessions)
+  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
       const userRole = user.role;
@@ -47,16 +47,15 @@ export default function SignIn() {
         "✅ User authenticated, redirecting to appropriate dashboard..."
       );
 
-      // Perform redirect based on role
-      if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
-        router.replace("/admin");
-      } else if (
-        userRole === "INTERNAL_TEACHER" ||
-        userRole === "EXTERNAL_TEACHER"
-      ) {
-        router.replace("/teacher");
+      // ARMIGO ROLE REDIRECTS
+      if (userRole === "SUPER_ADMIN") {
+        router.replace("/dashboard");
+      } else if (userRole === "HOSPITAL_ADMIN") {
+        router.replace("/hospital"); // You'll need to create this route
+      } else if (userRole === "PARENT") {
+        router.replace("/parent"); // You'll need to create this route
       } else {
-        // Students don't have web dashboard access - redirect to home
+        // Fallback
         router.replace("/");
       }
     }
@@ -69,12 +68,12 @@ export default function SignIn() {
     logger.log("📝 Form submitted, calling login...");
 
     try {
-      // Send allowedRoles to backend for teacher portal validation
+      // Remove allowedRoles or update it for ArmiGo
       login(
         {
           identifier,
           password,
-          allowedRoles: ["INTERNAL_TEACHER", "EXTERNAL_TEACHER"],
+          // allowedRoles: ["INTERNAL_TEACHER", "EXTERNAL_TEACHER"], // REMOVE THIS
         },
         {
           onSuccess: () => {
@@ -83,17 +82,13 @@ export default function SignIn() {
           },
           onError: (err: any) => {
             logger.error("❌ Login failed:", getErrorMessage(err));
-            // Handle different error types with more specific messages
             if (err.response?.status === 401) {
-              // Do not reveal role-specific details to the client; use a
-              // generic message for failed authentication attempts.
               setError("Invalid credentials");
             } else if (err.response?.status === 429) {
               setError(
                 "Too many login attempts. Please wait a few minutes and try again."
               );
             } else if (err.response?.status === 403) {
-              // Keep this as generic to avoid leaking permission details
               setError("Invalid credentials");
             } else if (err.response?.status >= 500) {
               setError(
@@ -212,12 +207,13 @@ export default function SignIn() {
                 Admin Login
               </Link>
 
+              {/* Update this link for hospital registration */}
               <Link
-                href="/sign-up/external-teacher"
+                href="/sign-up/hospital"
                 className="flex items-center justify-center gap-2 w-full h-10 text-sm font-medium text-muted-foreground hover:text-primary border border-border rounded-lg hover:border-primary transition-colors"
               >
                 <Phone className="h-4 w-4" />
-                New Doctor? Register Here
+                Hospital Registration
               </Link>
             </div>
           </form>
@@ -235,16 +231,16 @@ export default function SignIn() {
 
         <div className="relative z-10 text-center px-12">
           <h2 className="text-4xl font-bold text-white mb-2">
-            Welcome to <span className="block">ArmiGo Doctors Portal</span>
+            Welcome to <span className="block">ArmiGo Portal</span>
           </h2>
           <p className="text-white/90 text-lg mb-8">
-            Inspiring minds starts with you
+            Rehabilitation through play for little heroes
           </p>
 
           <div className="mt-8 flex justify-center">
             <div className="w-full max-w-2xl rounded-lg shadow-2xl bg-white/10 p-8">
               <p className="text-white text-lg">
-                Empowering doctors to inspire and shape every patient’s journey.
+                Empowering children with hemiplegia through innovative IoT devices and engaging VR games.
               </p>
             </div>
           </div>
