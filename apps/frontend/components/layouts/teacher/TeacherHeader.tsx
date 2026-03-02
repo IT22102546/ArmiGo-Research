@@ -51,8 +51,8 @@ export default function TeacherHeader({
   };
 
   return (
-    <header className="h-16 bg-background border-b border-border flex items-center justify-between px-4">
-      <div className="flex items-center gap-4">
+    <header className="h-16 bg-background border-b border-border flex items-center justify-between px-3 sm:px-4 gap-2">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         <Button
           variant="ghost"
           size="icon"
@@ -65,17 +65,17 @@ export default function TeacherHeader({
           )}
         </Button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
             <BookOpen className="w-5 h-5 text-white" />
           </div>
-          <span className="text-lg font-semibold text-foreground">
+          <span className="hidden sm:inline text-base lg:text-lg font-semibold text-foreground truncate">
             {t("auth.teacherPortal")}
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
         {/* Theme Toggle */}
         <Button
           variant="ghost"

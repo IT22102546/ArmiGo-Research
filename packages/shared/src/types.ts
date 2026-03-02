@@ -6,11 +6,8 @@ export type Batch = AllowedBatch;
 // User Types - Aligned with Prisma Schema
 export enum UserRole {
   SUPER_ADMIN = "SUPER_ADMIN",
-  ADMIN = "ADMIN",
-  INTERNAL_TEACHER = "INTERNAL_TEACHER",
-  EXTERNAL_TEACHER = "EXTERNAL_TEACHER",
-  INTERNAL_STUDENT = "INTERNAL_STUDENT",
-  EXTERNAL_STUDENT = "EXTERNAL_STUDENT",
+  HOSPITAL_ADMIN = "HOSPITAL_ADMIN",
+  PARENT = "PARENT",
 }
 
 export enum UserStatus {

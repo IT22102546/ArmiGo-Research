@@ -21,13 +21,14 @@ const NotificationToast = dynamicImport(
   { ssr: false }
 );
 
-const ImpersonationBanner = dynamicImport(
-  () =>
-    import("@/components/features/admin/ImpersonationBanner").then((mod) => ({
-      default: mod.ImpersonationBanner,
-    })),
-  { ssr: false }
-);
+// Comment out the ImpersonationBanner import
+// const ImpersonationBanner = dynamicImport(
+//   () =>
+//     import("@/components/features/admin/ImpersonationBanner").then((mod) => ({
+//       default: mod.ImpersonationBanner,
+//     })),
+//   { ssr: false }
+// );
 
 const Toaster = dynamicImport(
   () =>
@@ -60,7 +61,7 @@ export default async function RootLayout({
         <ErrorBoundary>
           <NextIntlClientProvider messages={messages}>
             <Providers>
-              <ImpersonationBanner />
+              {/* <ImpersonationBanner /> */}
               {children}
               <NotificationToast />
             </Providers>

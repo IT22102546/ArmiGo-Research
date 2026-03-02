@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,29 +14,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -43,857 +37,573 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Search,
-  UserPlus,
-  Edit,
-  Trash2,
-  Eye,
-  Loader2,
-  RefreshCw,
-  Users,
-  UserCog,
-  CheckCircle2,
-  Clock,
-  Ban,
-  AlertTriangle,
-  TrendingUp,
-  ShieldCheck,
-  Mail,
-  Phone,
-  Shield,
-  MoreVertical,
-} from "lucide-react";
+import { Plus, Trash2, Search, Pencil, Power } from "lucide-react";
+import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 
-type Doctor = {
+type Zone = {
   id: string;
-  doctorId: string;
-  firstName: string;
-  lastName: string;
+  name: string;
+};
+
+type Hospital = {
+  id: string;
+  name: string;
+  zoneId?: string | null;
+  zone?: {
+    id: string;
+    name: string;
+  } | null;
+};
+
+type Physiotherapist = {
+  id: string;
+  name: string;
+  email?: string;
+  phone: string;
+  specialization?: string;
+  isActive: boolean;
+  hospitalId: string;
+  hospital?: {
+    id: string;
+    name: string;
+    zoneId?: string | null;
+    zone?: {
+      id: string;
+      name: string;
+    } | null;
+  };
+};
+
+type FormData = {
+  name: string;
   email: string;
   phone: string;
   specialization: string;
-  department: string;
-  licenseNumber: string;
-  experienceYears: number;
-  shift: "Day" | "Night" | "Rotational";
-  type: "INTERNAL" | "VISITING";
-  status: "ACTIVE" | "PENDING";
-  languages: string[];
-  joinedDate: string;
-  emailVerified: boolean;
-  phoneVerified: boolean;
-  twoFactorEnabled: boolean;
+  zoneId: string;
+  hospitalId: string;
 };
 
-type DoctorStats = {
-  total: number;
-  active: number;
-  pending: number;
-  offDuty: number;
-  newToday: number;
-  newThisWeek: number;
-  verified: number;
-  unverified: number;
+const initialForm: FormData = {
+  name: "",
+  email: "",
+  phone: "",
+  specialization: "",
+  zoneId: "",
+  hospitalId: "",
 };
 
-const dummyDoctors: Doctor[] = [
-  {
-    id: "doc-001",
-    doctorId: "DOC-2024-001",
-    firstName: "Malith",
-    lastName: "Fernando",
-    email: "malith.fernando@hospital.lk",
-    phone: "+94 71 123 4567",
-    specialization: "Cardiology",
-    department: "Cardiac Care",
-    licenseNumber: "SLMC-10231",
-    experienceYears: 12,
-    shift: "Day",
-    type: "INTERNAL",
-    status: "ACTIVE",
-    languages: ["English", "Sinhala"],
-    joinedDate: "2022-04-10",
-    emailVerified: true,
-    phoneVerified: true,
-    twoFactorEnabled: true,
-  },
-  {
-    id: "doc-002",
-    doctorId: "DOC-2024-002",
-    firstName: "Ishara",
-    lastName: "Perera",
-    email: "ishara.perera@hospital.lk",
-    phone: "+94 76 555 7788",
-    specialization: "Neurology",
-    department: "Neuro",
-    licenseNumber: "SLMC-20456",
-    experienceYears: 9,
-    shift: "Rotational",
-    type: "VISITING",
-    status: "ACTIVE",
-    languages: ["English", "Sinhala", "Tamil"],
-    joinedDate: "2023-01-18",
-    emailVerified: true,
-    phoneVerified: false,
-    twoFactorEnabled: false,
-  },
-  {
-    id: "doc-003",
-    doctorId: "DOC-2024-003",
-    firstName: "Nipun",
-    lastName: "Jayasinghe",
-    email: "nipun.j@hospital.lk",
-    phone: "+94 77 999 1122",
-    specialization: "Pediatrics",
-    department: "Pediatrics",
-    licenseNumber: "SLMC-33421",
-    experienceYears: 5,
-    shift: "Night",
-    type: "INTERNAL",
-    status: "PENDING",
-    languages: ["English", "Sinhala"],
-    joinedDate: "2024-03-02",
-    emailVerified: false,
-    phoneVerified: false,
-    twoFactorEnabled: false,
-  },
-];
-
-const dummyStats: DoctorStats = {
-  total: 84,
-  active: 68,
-  pending: 10,
-  offDuty: 6,
-  newToday: 3,
-  newThisWeek: 11,
-  verified: 72,
-  unverified: 12,
-};
-
-const DoctorManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"INTERNAL" | "VISITING">(
-    "INTERNAL"
-  );
-  const [doctors, setDoctors] = useState<Doctor[]>(dummyDoctors);
-  const [stats] = useState<DoctorStats>(dummyStats);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterDepartment, setFilterDepartment] = useState<string>("all");
+export default function TeacherManagement() {
+  const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [doctorToDelete, setDoctorToDelete] = useState<string | null>(null);
-  const [quickViewOpen, setQuickViewOpen] = useState(false);
-  const [quickViewDoctor, setQuickViewDoctor] = useState<Doctor | null>(null);
-  const [loadingQuickView, setLoadingQuickView] = useState(false);
-  const [addDoctorOpen, setAddDoctorOpen] = useState(false);
-  const [newDoctorForm, setNewDoctorForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    specialization: "General Medicine",
-    department: "General",
-    licenseNumber: "",
-    experienceYears: 1,
-    shift: "Day" as Doctor["shift"],
-    type: "INTERNAL" as Doctor["type"],
-    languages: "English,Sinhala",
+  const [selected, setSelected] = useState<Physiotherapist | null>(null);
+  const [search, setSearch] = useState("");
+  const [formData, setFormData] = useState<FormData>(initialForm);
+
+  const {
+    data: zones = [],
+    isLoading: zonesLoading,
+    isError: zonesError,
+  } = useQuery({
+    queryKey: ["physio-management", "zones"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/geography/zones");
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload?.zones || payload || [];
+      return Array.isArray(list)
+        ? list.filter((z: any) => z?.id && z?.name)
+        : [];
+    },
   });
 
-  const filteredDoctors = doctors.filter((doctor) => {
-    const matchesTab = doctor.type === activeTab;
-    const matchesStatus =
-      filterStatus === "all" || doctor.status === filterStatus.toUpperCase();
-    const matchesDepartment =
-      filterDepartment === "all" || doctor.department === filterDepartment;
-    const matchesSearch =
-      `${doctor.firstName} ${doctor.lastName} ${doctor.email}`
+  const { data: hospitals = [], isLoading: hospitalsLoading } = useQuery({
+    queryKey: ["physio-management", "hospitals"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/hospitals");
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload?.hospitals || payload || [];
+      return Array.isArray(list)
+        ? list.filter((h: any) => h?.id && h?.name)
+        : [];
+    },
+  });
+
+  const { data: physiotherapists = [], isLoading: physioLoading } = useQuery({
+    queryKey: ["physio-management", "physiotherapists"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>(
+        "/patients/locations/physiotherapists",
+        { params: { includeInactive: true } }
+      );
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) =>
+      ApiClient.post("/patients/locations/physiotherapists", data),
+    onSuccess: () => {
+      toast.success("Physiotherapist added successfully");
+      queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      queryClient.invalidateQueries({
+        queryKey: ["patients-management", "physiotherapists"],
+      });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to add physiotherapist");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      ApiClient.put(`/patients/locations/physiotherapists/${id}`, data),
+    onSuccess: () => {
+      toast.success("Physiotherapist updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      queryClient.invalidateQueries({
+        queryKey: ["patients-management", "physiotherapists"],
+      });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update physiotherapist");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ id, mode }: { id: string; mode: "inactive" | "permanent" }) =>
+      ApiClient.delete(`/patients/locations/physiotherapists/${id}`, {
+        params: { mode },
+      }),
+    onSuccess: () => {
+      toast.success("Physiotherapist permanently deleted");
+      queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      queryClient.invalidateQueries({
+        queryKey: ["patients-management", "physiotherapists"],
+      });
+      setDeleteDialogOpen(false);
+      setSelected(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to delete physiotherapist");
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      ApiClient.put(`/patients/locations/physiotherapists/${id}/status`, {
+        isActive,
+      }),
+    onSuccess: (_response: any, variables) => {
+      toast.success(
+        variables.isActive
+          ? "Physiotherapist marked as active"
+          : "Physiotherapist marked as inactive"
+      );
+      queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      queryClient.invalidateQueries({
+        queryKey: ["patients-management", "physiotherapists"],
+      });
+      setDeleteDialogOpen(false);
+      setSelected(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update physiotherapist status");
+    },
+  });
+
+  const filteredHospitals = useMemo(() => {
+    if (!formData.zoneId) return [];
+    return hospitals.filter((hospital: Hospital) => {
+      const hospitalZoneId = hospital.zoneId || hospital.zone?.id;
+      return hospitalZoneId === formData.zoneId;
+    });
+  }, [hospitals, formData.zoneId]);
+
+  const filteredPhysiotherapists = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return physiotherapists;
+
+    return physiotherapists.filter((item: Physiotherapist) =>
+      [
+        item.name,
+        item.email,
+        item.phone,
+        item.specialization,
+        item.hospital?.name,
+        item.hospital?.zone?.name,
+      ]
+        .filter(Boolean)
+        .join(" ")
         .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+        .includes(term)
+    );
+  }, [physiotherapists, search]);
 
-    return matchesTab && matchesStatus && matchesDepartment && matchesSearch;
-  });
-
-  const openQuickView = (doctor: Doctor) => {
-    setLoadingQuickView(true);
-    setQuickViewDoctor(doctor);
-    setQuickViewOpen(true);
-    setTimeout(() => setLoadingQuickView(false), 300);
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setSelected(null);
+    setFormData(initialForm);
   };
 
-  const confirmDelete = (doctorId: string) => {
-    setDoctorToDelete(doctorId);
-    setDeleteDialogOpen(true);
+  const handleOpenAdd = () => {
+    setSelected(null);
+    setFormData(initialForm);
+    setDialogOpen(true);
   };
 
-  const handleDelete = () => {
-    if (!doctorToDelete) return;
-    setDoctors((prev) => prev.filter((doc) => doc.id !== doctorToDelete));
-    setDeleteDialogOpen(false);
-    toast.success("Doctor removed");
+  const handleOpenEdit = (item: Physiotherapist) => {
+    setSelected(item);
+    const zoneId = item.hospital?.zone?.id || item.hospital?.zoneId || "";
+    setFormData({
+      name: item.name || "",
+      email: item.email || "",
+      phone: item.phone || "",
+      specialization: item.specialization || "",
+      zoneId,
+      hospitalId: item.hospitalId || "",
+    });
+    setDialogOpen(true);
   };
 
-  const handleAddDoctor = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const newDoctor: Doctor = {
-      id: `doc-${Date.now()}`,
-      doctorId: `DOC-${Date.now()}`,
-      firstName: newDoctorForm.firstName || "New",
-      lastName: newDoctorForm.lastName || "Doctor",
-      email: newDoctorForm.email || "new.doctor@hospital.lk",
-      phone: newDoctorForm.phone || "N/A",
-      specialization: newDoctorForm.specialization,
-      department: newDoctorForm.department,
-      licenseNumber: newDoctorForm.licenseNumber || "Pending",
-      experienceYears: Number(newDoctorForm.experienceYears) || 0,
-      shift: newDoctorForm.shift,
-      type: newDoctorForm.type,
-      status: "ACTIVE",
-      languages: newDoctorForm.languages
-        .split(",")
-        .map((l) => l.trim())
-        .filter(Boolean),
-      joinedDate: new Date().toISOString().split("T")[0],
-      emailVerified: true,
-      phoneVerified: false,
-      twoFactorEnabled: false,
+
+    if (
+      !formData.name.trim() ||
+      !formData.phone.trim() ||
+      !formData.hospitalId ||
+      !formData.zoneId
+    ) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+
+    const payload = {
+      name: formData.name.trim(),
+      email: formData.email.trim() || undefined,
+      phone: formData.phone.trim(),
+      hospitalId: formData.hospitalId,
+      specialization: formData.specialization.trim() || undefined,
     };
 
-    setDoctors((prev) => [newDoctor, ...prev]);
-    setAddDoctorOpen(false);
-    toast.success("Doctor added");
-  };
-
-  const statusBadge = (status: Doctor["status"]) => {
-    switch (status) {
-      case "ACTIVE":
-        return (
-          <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="h-4 w-4 mr-1" /> Active
-          </Badge>
-        );
-      case "PENDING":
-      default:
-        return (
-          <Badge className="bg-amber-100 text-amber-700 border border-amber-200">
-            <Clock className="h-4 w-4 mr-1" /> Pending
-          </Badge>
-        );
+    if (selected) {
+      updateMutation.mutate({ id: selected.id, data: payload });
+      return;
     }
+
+    createMutation.mutate(payload);
   };
 
-  const verificationBadges = (doctor: Doctor) => (
-    <div className="flex gap-2">
-      {doctor.emailVerified ? (
-        <Badge
-          variant="outline"
-          className="border-emerald-200 text-emerald-700"
-        >
-          <Mail className="h-3.5 w-3.5 mr-1" /> Email
-        </Badge>
-      ) : (
-        <Badge variant="outline" className="border-amber-200 text-amber-700">
-          <Mail className="h-3.5 w-3.5 mr-1" /> Email
-        </Badge>
-      )}
-      {doctor.phoneVerified ? (
-        <Badge
-          variant="outline"
-          className="border-emerald-200 text-emerald-700"
-        >
-          <Phone className="h-3.5 w-3.5 mr-1" /> Phone
-        </Badge>
-      ) : (
-        <Badge variant="outline" className="border-amber-200 text-amber-700">
-          <Phone className="h-3.5 w-3.5 mr-1" /> Phone
-        </Badge>
-      )}
-      {doctor.twoFactorEnabled ? (
-        <Badge variant="outline" className="border-sky-200 text-sky-700">
-          <Shield className="h-3.5 w-3.5 mr-1" /> 2FA
-        </Badge>
-      ) : null}
-    </div>
-  );
+  const handleMarkInactive = () => {
+    if (!selected) return;
+    updateStatusMutation.mutate({ id: selected.id, isActive: false });
+  };
 
-  const departmentOptions = Array.from(
-    new Set(doctors.map((doc) => doc.department))
-  );
+  const handleDeletePermanent = () => {
+    if (!selected) return;
+    deleteMutation.mutate({ id: selected.id, mode: "permanent" });
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Hospital Workforce</p>
-          <h1 className="text-2xl font-semibold">Doctor Management</h1>
+          <h1 className="text-2xl font-semibold">Physiotherapy Management</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toast.info("Data refreshed (demo)")}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" /> Refresh
-          </Button>
-          <Button size="sm" onClick={() => setAddDoctorOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-2" /> Add Doctor
-          </Button>
-        </div>
+        <Button onClick={handleOpenAdd}>
+          <Plus className="h-4 w-4 mr-2" /> Add Physiotherapist
+        </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Doctors</p>
-              <p className="text-2xl font-semibold">{stats.total}</p>
-              <div className="flex items-center gap-1 text-xs text-emerald-600">
-                <TrendingUp className="h-3.5 w-3.5" /> +{stats.newThisWeek} this
-                week
-              </div>
-            </div>
-            <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <Users className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">On Duty</p>
-              <p className="text-2xl font-semibold">{stats.active}</p>
-              <div className="flex items-center gap-1 text-xs text-emerald-600">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Verified:{" "}
-                {stats.verified}
-              </div>
-            </div>
-            <div className="h-12 w-12 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center">
-              <UserCog className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Pending</p>
-              <p className="text-2xl font-semibold">{stats.pending}</p>
-              <div className="flex items-center gap-1 text-xs text-amber-600">
-                <Clock className="h-3.5 w-3.5" /> {stats.newToday} new today
-              </div>
-            </div>
-            <div className="h-12 w-12 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center">
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Off Duty</p>
-              <p className="text-2xl font-semibold">{stats.offDuty}</p>
-              <div className="flex items-center gap-1 text-xs text-rose-600">
-                <Ban className="h-3.5 w-3.5" /> Unverified: {stats.unverified}
-              </div>
-            </div>
-            <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Physiotherapists</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, hospital, phone..."
+              className="pl-9"
+            />
+          </div>
 
-      <Card className="shadow-sm">
-        <CardContent className="p-6 space-y-4">
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as "INTERNAL" | "VISITING")}
-          >
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <TabsList className="w-full md:w-auto">
-                  <TabsTrigger value="INTERNAL" className="w-full md:w-auto">
-                    Internal Doctors
-                  </TabsTrigger>
-                  <TabsTrigger value="VISITING" className="w-full md:w-auto">
-                    Visiting Doctors
-                  </TabsTrigger>
-                </TabsList>
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3 w-full md:w-auto">
-                  <div className="relative w-full md:w-64">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder="Search doctors"
-                      className="pl-9"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-full md:w-40">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All status</SelectItem>
-                      <SelectItem value="ACTIVE">Active</SelectItem>
-                      <SelectItem value="PENDING">Pending</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={filterDepartment}
-                    onValueChange={setFilterDepartment}
-                  >
-                    <SelectTrigger className="w-full md:w-44">
-                      <SelectValue placeholder="Department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All departments</SelectItem>
-                      {departmentOptions.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    className="w-full md:w-auto"
-                    onClick={() => setAddDoctorOpen(true)}
-                  >
-                    <UserPlus className="h-4 w-4 mr-2" /> Add Doctor
-                  </Button>
-                </div>
-              </div>
-
-              <TabsContent value="INTERNAL" className="mt-0">
-                <DoctorTable
-                  doctors={filteredDoctors.filter((d) => d.type === "INTERNAL")}
-                  onQuickView={openQuickView}
-                  onDelete={confirmDelete}
-                />
-              </TabsContent>
-              <TabsContent value="VISITING" className="mt-0">
-                <DoctorTable
-                  doctors={filteredDoctors.filter((d) => d.type === "VISITING")}
-                  onQuickView={openQuickView}
-                  onDelete={confirmDelete}
-                />
-              </TabsContent>
-            </div>
-          </Tabs>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Physiotherapist Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Hospital</TableHead>
+                  <TableHead>Zone</TableHead>
+                  <TableHead>Contact Number</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {physioLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      Loading physiotherapists...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredPhysiotherapists.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      No physiotherapists found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredPhysiotherapists.map((item: Physiotherapist) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>
+                        <Badge variant={item.isActive ? "default" : "secondary"}>
+                          {item.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{item.hospital?.name || "-"}</TableCell>
+                      <TableCell>{item.hospital?.zone?.name || "-"}</TableCell>
+                      <TableCell>{item.phone || "-"}</TableCell>
+                      <TableCell>{item.email || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(item)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              updateStatusMutation.mutate({
+                                id: item.id,
+                                isActive: !item.isActive,
+                              })
+                            }
+                            title={item.isActive ? "Mark inactive" : "Mark active"}
+                          >
+                            <Power className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSelected(item);
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      <Sheet open={quickViewOpen} onOpenChange={setQuickViewOpen}>
-        <SheetContent className="sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>Doctor quick view</SheetTitle>
-            <SheetDescription>
-              Profile, contact, and verification
-            </SheetDescription>
-          </SheetHeader>
-          {loadingQuickView || !quickViewDoctor ? (
-            <div className="flex items-center justify-center h-40 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading
-            </div>
-          ) : (
-            <div className="space-y-4 mt-4">
-              <div className="flex items-start gap-3">
-                <Avatar className="h-12 w-12">
-                  <AvatarFallback>
-                    {quickViewDoctor.firstName.charAt(0)}
-                    {quickViewDoctor.lastName.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-lg font-semibold">
-                      {quickViewDoctor.firstName} {quickViewDoctor.lastName}
-                    </p>
-                    {statusBadge(quickViewDoctor.status)}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {quickViewDoctor.specialization} �{" "}
-                    {quickViewDoctor.department}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    License {quickViewDoctor.licenseNumber}
-                  </p>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Doctor ID</p>
-                  <p className="font-medium">{quickViewDoctor.doctorId}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Shift</p>
-                  <p className="font-medium">{quickViewDoctor.shift}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Experience</p>
-                  <p className="font-medium">
-                    {quickViewDoctor.experienceYears} years
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Languages</p>
-                  <p className="font-medium">
-                    {quickViewDoctor.languages.join(", ")}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{quickViewDoctor.email}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{quickViewDoctor.phone}</span>
-                </div>
-              </div>
-
-              <div>{verificationBadges(quickViewDoctor)}</div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove doctor</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The doctor will be removed from the
-              roster.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-rose-600 hover:bg-rose-700"
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <Dialog open={addDoctorOpen} onOpenChange={setAddDoctorOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add Doctor</DialogTitle>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-2xl h-[90dvh] max-h-[90dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>
+              {selected ? "Update Physiotherapist" : "Add Physiotherapist"}
+            </DialogTitle>
           </DialogHeader>
-          <form className="space-y-4" onSubmit={handleAddDoctor}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+          <form
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-6 pb-6 pt-4"
+            onSubmit={handleSubmit}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="physio-name">Physiotherapist Name</Label>
               <Input
-                placeholder="First name"
-                value={newDoctorForm.firstName}
+                id="physio-name"
+                value={formData.name}
                 onChange={(e) =>
-                  setNewDoctorForm({
-                    ...newDoctorForm,
-                    firstName: e.target.value,
-                  })
+                  setFormData((prev) => ({ ...prev, name: e.target.value }))
                 }
-                required
+                placeholder="Enter name"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="physio-email">Email</Label>
               <Input
-                placeholder="Last name"
-                value={newDoctorForm.lastName}
-                onChange={(e) =>
-                  setNewDoctorForm({
-                    ...newDoctorForm,
-                    lastName: e.target.value,
-                  })
-                }
-                required
-              />
-              <Input
-                placeholder="Email"
+                id="physio-email"
                 type="email"
-                value={newDoctorForm.email}
+                value={formData.email}
                 onChange={(e) =>
-                  setNewDoctorForm({ ...newDoctorForm, email: e.target.value })
+                  setFormData((prev) => ({ ...prev, email: e.target.value }))
                 }
-                required
+                placeholder="Enter email"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="physio-contact">Contact Number</Label>
               <Input
-                placeholder="Phone"
-                value={newDoctorForm.phone}
+                id="physio-contact"
+                value={formData.phone}
                 onChange={(e) =>
-                  setNewDoctorForm({ ...newDoctorForm, phone: e.target.value })
+                  setFormData((prev) => ({
+                    ...prev,
+                    phone: e.target.value,
+                  }))
                 }
+                placeholder="Enter contact number"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="physio-specialization">Specialization</Label>
               <Input
-                placeholder="Specialization"
-                value={newDoctorForm.specialization}
+                id="physio-specialization"
+                value={formData.specialization}
                 onChange={(e) =>
-                  setNewDoctorForm({
-                    ...newDoctorForm,
+                  setFormData((prev) => ({
+                    ...prev,
                     specialization: e.target.value,
-                  })
+                  }))
                 }
-              />
-              <Input
-                placeholder="Department"
-                value={newDoctorForm.department}
-                onChange={(e) =>
-                  setNewDoctorForm({
-                    ...newDoctorForm,
-                    department: e.target.value,
-                  })
-                }
-              />
-              <Input
-                placeholder="License number"
-                value={newDoctorForm.licenseNumber}
-                onChange={(e) =>
-                  setNewDoctorForm({
-                    ...newDoctorForm,
-                    licenseNumber: e.target.value,
-                  })
-                }
-              />
-              <Input
-                placeholder="Experience (years)"
-                type="number"
-                min={0}
-                value={newDoctorForm.experienceYears}
-                onChange={(e) =>
-                  setNewDoctorForm({
-                    ...newDoctorForm,
-                    experienceYears: Number(e.target.value),
-                  })
-                }
+                placeholder="Optional"
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+            <div className="space-y-2">
+              <Label>Zone</Label>
               <Select
-                value={newDoctorForm.shift}
-                onValueChange={(v) =>
-                  setNewDoctorForm({
-                    ...newDoctorForm,
-                    shift: v as Doctor["shift"],
-                  })
+                value={formData.zoneId}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    zoneId: value,
+                    hospitalId: "",
+                  }))
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Shift" />
+                  <SelectValue
+                    placeholder={
+                      zonesLoading
+                        ? "Loading zones..."
+                        : zonesError
+                          ? "Failed to load zones"
+                          : "Select zone"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Day">Day</SelectItem>
-                  <SelectItem value="Night">Night</SelectItem>
-                  <SelectItem value="Rotational">Rotational</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={newDoctorForm.type}
-                onValueChange={(v) =>
-                  setNewDoctorForm({
-                    ...newDoctorForm,
-                    type: v as Doctor["type"],
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="INTERNAL">Internal</SelectItem>
-                  <SelectItem value="VISITING">Visiting</SelectItem>
+                  {!zonesLoading && zones.length === 0 ? (
+                    <SelectItem value="__NO_ZONES__" disabled>
+                      No zones available
+                    </SelectItem>
+                  ) : null}
+                  {zones.map((zone: Zone) => (
+                    <SelectItem key={zone.id} value={zone.id}>
+                      {zone.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <Input
-              placeholder="Languages (comma separated)"
-              value={newDoctorForm.languages}
-              onChange={(e) =>
-                setNewDoctorForm({
-                  ...newDoctorForm,
-                  languages: e.target.value,
-                })
-              }
-            />
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setAddDoctorOpen(false)}
+
+            <div className="space-y-2">
+              <Label>Hospital</Label>
+              <Select
+                value={formData.hospitalId}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, hospitalId: value }))
+                }
+                disabled={!formData.zoneId}
               >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      !formData.zoneId
+                        ? "Select zone first"
+                        : hospitalsLoading
+                          ? "Loading hospitals..."
+                          : "Select hospital"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredHospitals.length === 0 && formData.zoneId ? (
+                    <SelectItem value="__NO_HOSPITALS__" disabled>
+                      No hospitals available in this zone
+                    </SelectItem>
+                  ) : null}
+                  {filteredHospitals.map((hospital: Hospital) => (
+                    <SelectItem key={hospital.id} value={hospital.id}>
+                      {hospital.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter className="pt-3 border-t bg-background">
+              <Button type="button" variant="outline" onClick={handleCloseDialog}>
                 Cancel
               </Button>
-              <Button type="submit">Save</Button>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                {selected ? "Update Physiotherapist" : "Add Physiotherapist"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete physiotherapist</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose whether to mark this physiotherapist inactive or permanently
+              delete the physiotherapist and related appointments.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleMarkInactive}
+              disabled={updateStatusMutation.isPending || deleteMutation.isPending}
+            >
+              Make Inactive
+            </Button>
+            <Button
+              type="button"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeletePermanent}
+              disabled={updateStatusMutation.isPending || deleteMutation.isPending}
+            >
+              Delete Permanently
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-};
-
-const DoctorTable: React.FC<{
-  doctors: Doctor[];
-  onQuickView: (doctor: Doctor) => void;
-  onDelete: (id: string) => void;
-}> = ({ doctors, onQuickView, onDelete }) => {
-  return (
-    <div className="overflow-x-auto border rounded-md">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Contact</TableHead>
-            <TableHead>Department</TableHead>
-            <TableHead>Specialization</TableHead>
-            <TableHead>Doctor ID</TableHead>
-            <TableHead>Shift</TableHead>
-            <TableHead>Verification</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="w-14 text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {doctors.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={9}
-                className="text-center text-muted-foreground"
-              >
-                No doctors found
-              </TableCell>
-            </TableRow>
-          ) : (
-            doctors.map((doctor) => (
-              <TableRow key={doctor.id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback>
-                        {doctor.firstName.charAt(0)}
-                        {doctor.lastName.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">
-                        {doctor.firstName} {doctor.lastName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {doctor.type}
-                      </p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex items-center gap-1">
-                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{doctor.email}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{doctor.phone}</span>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>{doctor.department}</TableCell>
-                <TableCell>{doctor.specialization}</TableCell>
-                <TableCell>{doctor.doctorId}</TableCell>
-                <TableCell>{doctor.shift}</TableCell>
-                <TableCell>
-                  <div className="flex gap-1 flex-wrap text-xs">
-                    {doctor.emailVerified ? (
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-200 text-emerald-700"
-                      >
-                        <Mail className="h-3 w-3 mr-1" /> Email
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className="border-amber-200 text-amber-700"
-                      >
-                        <Mail className="h-3 w-3 mr-1" /> Email
-                      </Badge>
-                    )}
-                    {doctor.phoneVerified ? (
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-200 text-emerald-700"
-                      >
-                        <Phone className="h-3 w-3 mr-1" /> Phone
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className="border-amber-200 text-amber-700"
-                      >
-                        <Phone className="h-3 w-3 mr-1" /> Phone
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {doctor.status === "ACTIVE" ? (
-                    <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">
-                      Active
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-amber-100 text-amber-700 border border-amber-200">
-                      Pending
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => onQuickView(doctor)}>
-                        <Eye className="h-4 w-4 mr-2" /> Quick view
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Edit className="h-4 w-4 mr-2" /> Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => onDelete(doctor.id)}
-                        className="text-rose-600"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" /> Remove
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
-};
-
-export default DoctorManagement;
+}

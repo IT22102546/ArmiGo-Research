@@ -17,18 +17,18 @@ export default function DashboardRedirectPage() {
       return;
     }
 
+    console.log("🔍 Redirecting user with role:", user.role);
+
+    // ARMIGO ROLE REDIRECTS
     switch (user.role) {
-      case "ADMIN":
       case "SUPER_ADMIN":
-        router.replace("/admin");
+        router.replace("/dashboard/admin");
         break;
-      case "INTERNAL_TEACHER":
-      case "EXTERNAL_TEACHER":
-        router.replace("/teacher");
+      case "HOSPITAL_ADMIN":
+        router.replace("/hospital-dashboard");
         break;
-      case "INTERNAL_STUDENT":
-      case "EXTERNAL_STUDENT":
-        router.replace("/marketplace");
+      case "PARENT":
+        router.replace("/parent-dashboard");
         break;
       default:
         router.replace("/");

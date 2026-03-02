@@ -32,9 +32,9 @@ export default function ProvincesPage() {
   const { data: provinces, isLoading } = useQuery({
     queryKey: ["provinces"],
     queryFn: async () => {
-      const response = await ApiClient.get<any>("/admin/provinces");
+      const response = await ApiClient.get<any>("/geography/provinces");
       const resp = response?.data ?? response ?? {};
-      return resp.provinces || resp || [];
+      return resp.data || resp.provinces || resp || [];
     },
   });
   const [sortedProvinces, setSortedProvinces] = useState<any[]>([]);
@@ -43,7 +43,7 @@ export default function ProvincesPage() {
   }, [provinces]);
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => ApiClient.post("/admin/provinces", data),
+    mutationFn: (data: any) => ApiClient.post("/geography/provinces", data),
     onSuccess: () => {
       toast.success("Province created successfully");
       queryClient.invalidateQueries({ queryKey: ["provinces"] });
@@ -56,7 +56,7 @@ export default function ProvincesPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) =>
-      ApiClient.put(`/admin/provinces/${id}`, data),
+      ApiClient.put(`/geography/provinces/${id}`, data),
     onSuccess: () => {
       toast.success("Province updated successfully");
       queryClient.invalidateQueries({ queryKey: ["provinces"] });
@@ -68,7 +68,7 @@ export default function ProvincesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => ApiClient.delete(`/admin/provinces/${id}`),
+    mutationFn: (id: string) => ApiClient.delete(`/geography/provinces/${id}`),
     onSuccess: () => {
       toast.success("Province deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["provinces"] });
@@ -159,7 +159,8 @@ export default function ProvincesPage() {
                 {
                   key: "districts",
                   label: "Districts",
-                  render: (p: any) => p._count?.districts || 0,
+                  render: (p: any) =>
+                    p._count?.districts ?? p.districts?.length ?? 0,
                 },
                 {
                   key: "actions",
@@ -193,7 +194,7 @@ export default function ProvincesPage() {
                   id: item.id,
                   sortOrder: idx + 1,
                 }));
-                await ApiClient.post("/admin/provinces/reorder", {
+                await ApiClient.post("/geography/provinces/reorder", {
                   items: data,
                 });
                 queryClient.invalidateQueries({ queryKey: ["provinces"] });

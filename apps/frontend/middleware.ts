@@ -109,8 +109,11 @@ function getDashboardForRole(role: string): string {
       return "/teacher";
     case "EXTERNAL_TEACHER":
       return "/teacher/transfers";
+    case "INTERNAL_STUDENT":
+    case "EXTERNAL_STUDENT":
+      return "/sign-in";
     default:
-      return "/";
+      return "/sign-in";
   }
 }
 
@@ -141,8 +144,12 @@ export default function middleware(request: NextRequest) {
   // If user is authenticated and trying to access auth routes, redirect to appropriate dashboard
   if (isAuthenticated && matchesAny(pathname, AUTH_ROUTES)) {
     const dashboardPath = userRole ? getDashboardForRole(userRole) : "/";
-    const dashboardUrl = new URL(dashboardPath, request.url);
-    return NextResponse.redirect(dashboardUrl);
+    if (dashboardPath !== pathname) {
+      const dashboardUrl = new URL(dashboardPath, request.url);
+      return NextResponse.redirect(dashboardUrl);
+    }
+
+    return NextResponse.next();
   }
 
   // If user is not authenticated and trying to access protected routes

@@ -56,12 +56,12 @@ export default function AdminSidebar({
       {
         href: "/admin/students",
         icon: Users,
-        label: "Patient Management",
+        label: "Children Management",
       },
       {
         href: "/admin/teachers",
         icon: Users,
-        label: "Doctor Management",
+        label: "Physiotherapy Management",
       },
       {
         href: "/admin/enrollments",
@@ -74,9 +74,9 @@ export default function AdminSidebar({
       { href: "/admin/districts", icon: MapPin, label: t("nav.districts") },
       { href: "/admin/zones", icon: MapPin, label: t("nav.zones") },
       {
-        href: "/admin/institutions",
-        icon: Building,
-        label: t("nav.institutions"),
+        href: "/admin/hospitals",
+        icon: Building2,
+        label: "Hospitals",
       },
     ],
     academics: [
@@ -203,7 +203,7 @@ export default function AdminSidebar({
           ))}
         </NavSection>
 
-        <NavSection title="Patients & Doctors">
+        <NavSection title="Patients & Physiotherapy">
           {navigationConfig.users.map((item) => (
             <NavLink key={item.href} {...item} />
           ))}
