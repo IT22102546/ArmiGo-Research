@@ -67,8 +67,37 @@ export class CreatePatientDto {
   @IsOptional()
   emergencyPhone?: string;
 
-  @ApiProperty({ example: 'uuid-hospital-id' })
+  // Hospital & Location Selection
+  @ApiProperty({ 
+    example: 'uuid-district-id', 
+    description: 'District ID for geographical grouping' 
+  })
   @IsString()
   @IsOptional()
-  hospitalId?: string;
+  districtId?: string;
+
+  @ApiProperty({ 
+    example: 'uuid-zone-id', 
+    description: 'Zone ID within district' 
+  })
+  @IsString()
+  @IsOptional()
+  zoneId?: string;
+
+  @ApiProperty({ 
+    example: 'uuid-hospital-id', 
+    description: 'Main hospital ID - required for patient assignment' 
+  })
+  @IsString()
+  @IsNotEmpty()
+  hospitalId: string;
+
+  @ApiProperty({ 
+    example: 'uuid-subhospital-id', 
+    required: false,
+    description: 'SubHospital/Clinic ID if applicable' 
+  })
+  @IsString()
+  @IsOptional()
+  subHospitalId?: string;
 }

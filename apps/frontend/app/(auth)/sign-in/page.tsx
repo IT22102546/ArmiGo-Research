@@ -47,16 +47,14 @@ export default function SignIn() {
         "✅ User authenticated, redirecting to appropriate dashboard..."
       );
 
-      // ARMIGO ROLE REDIRECTS
-      if (userRole === "SUPER_ADMIN") {
-        router.replace("/dashboard");
-      } else if (userRole === "HOSPITAL_ADMIN") {
-        router.replace("/hospital"); // You'll need to create this route
-      } else if (userRole === "PARENT") {
-        router.replace("/parent"); // You'll need to create this route
+      if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
+        router.replace("/admin");
+      } else if (userRole === "INTERNAL_TEACHER") {
+        router.replace("/teacher");
+      } else if (userRole === "EXTERNAL_TEACHER") {
+        router.replace("/teacher/transfers");
       } else {
-        // Fallback
-        router.replace("/");
+        setError("This account type is not allowed in the web dashboard.");
       }
     }
   }, [isAuthenticated, user, router]);

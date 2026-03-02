@@ -20,6 +20,19 @@ export class PatientService {
    */
   async createPatient(data: CreatePatientDto): Promise<PatientResponseDto> {
     try {
+      // Validate hospital exists
+      if (!data.hospitalId) {
+        throw new BadRequestException('Hospital ID is required for patient assignment');
+      }
+
+      const hospital = await this.prisma.hospital.findUnique({
+        where: { id: data.hospitalId },
+      });
+
+      if (!hospital) {
+        throw new BadRequestException(`Hospital with ID ${data.hospitalId} not found`);
+      }
+
       // Calculate age from dateOfBirth
       const birthDate = new Date(data.dateOfBirth);
       const age = this.calculateAge(birthDate);
@@ -52,15 +65,20 @@ export class PatientService {
         data: {
           parentId,
           hospitalId: data.hospitalId,
+          subHospitalId: data.subHospitalId,
           firstName: data.firstName,
           lastName: data.lastName,
           dateOfBirth: birthDate,
           age,
           gender: data.gender,
-          diagnosis: data.diagnosis || null,
+          diagnosis: data.diagnosis,
           assignedDoctor: data.assignedDoctor,
           medicalNotes: data.medicalHistory,
           isActive: true,
+        },
+        include: {
+          hospital: true,
+          subHospital: true,
         },
       });
 
@@ -77,6 +95,10 @@ export class PatientService {
   async getPatientById(id: string): Promise<PatientResponseDto> {
     const patient = await this.prisma.child.findUnique({
       where: { id },
+      include: {
+        hospital: true,
+        subHospital: true,
+      },
     });
 
     if (!patient) {
@@ -138,6 +160,10 @@ export class PatientService {
         skip,
         take: limit,
         orderBy: { enrolledAt: 'desc' },
+        include: {
+          hospital: true,
+          subHospital: true,
+        },
       }),
       this.prisma.child.count({ where: whereClause }),
     ]);
@@ -168,6 +194,16 @@ export class PatientService {
       throw new NotFoundException(`Patient with ID ${id} not found`);
     }
 
+    // Validate hospital if being changed
+    if (data.hospitalId && data.hospitalId !== patient.hospitalId) {
+      const hospital = await this.prisma.hospital.findUnique({
+        where: { id: data.hospitalId },
+      });
+      if (!hospital) {
+        throw new BadRequestException(`Hospital with ID ${data.hospitalId} not found`);
+      }
+    }
+
     const updateData: any = { ...data };
     if (data.dateOfBirth) {
       const birthDate = new Date(data.dateOfBirth);
@@ -178,6 +214,10 @@ export class PatientService {
     const updated = await this.prisma.child.update({
       where: { id },
       data: updateData,
+      include: {
+        hospital: true,
+        subHospital: true,
+      },
     });
 
     return this.mapChildToPatientResponse(updated);
@@ -303,6 +343,90 @@ export class PatientService {
   }
 
   /**
+   * Get all hospitals with location information
+   */
+  async getHospitals() {
+    return await this.prisma.hospital.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        city: true,
+        districtId: true,
+        zoneId: true,
+        status: true,
+      },
+      where: {
+        status: 'ACTIVE',
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Get all districts with zones
+   */
+  async getDistricts() {
+    return await this.prisma.district.findMany({
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        provinceId: true,
+        zones: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+          orderBy: { name: 'asc' },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Get zones by district ID
+   */
+  async getZonesByDistrict(districtId: string) {
+    return await this.prisma.zone.findMany({
+      where: { districtId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        districtId: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Get sub-hospitals by hospital ID
+   */
+  async getSubHospitalsByHospital(hospitalId: string) {
+    return await this.prisma.subHospital.findMany({
+      where: {
+        hospitalId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        city: true,
+        type: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
    * Private helper method to map Child model to PatientResponseDto
    */
   private mapChildToPatientResponse(child: any): PatientResponseDto {
@@ -327,6 +451,29 @@ export class PatientService {
       emergencyContact: undefined, // Not in current schema
       emergencyPhone: undefined, // Not in current schema
       hospitalId: child.hospitalId,
+      hospital: child.hospital
+        ? {
+            id: child.hospital.id,
+            name: child.hospital.name,
+            email: child.hospital.email,
+            phone: child.hospital.phone,
+            address: child.hospital.address,
+            city: child.hospital.city,
+            districtId: child.hospital.districtId,
+            zoneId: child.hospital.zoneId,
+          }
+        : undefined,
+      subHospitalId: child.subHospitalId,
+      subHospital: child.subHospital
+        ? {
+            id: child.subHospital.id,
+            name: child.subHospital.name,
+            email: child.subHospital.email,
+            phone: child.subHospital.phone,
+            address: child.subHospital.address,
+            type: child.subHospital.type,
+          }
+        : undefined,
       isActive: child.isActive,
       enrolledAt: child.enrolledAt,
       createdAt: child.enrolledAt,

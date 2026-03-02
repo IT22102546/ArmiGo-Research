@@ -379,7 +379,7 @@ model Child {
   gender          String
   
   // Medical
-  diagnosis       String          // e.g., "Hemiplegia - Left", "Hemiplegia - Right"
+  diagnosis       String?         // e.g., "Hemiplegia - Left", "Hemiplegia - Right"
   diagnosisDate   DateTime?
   medicalNotes    String?
   assignedDoctor  String?         // Name or ID of primary doctor

@@ -40,9 +40,9 @@ export default function ZonesPage() {
   const { data: zones, isLoading } = useQuery({
     queryKey: ["zones"],
     queryFn: async () => {
-      const response = await ApiClient.get<any>("/admin/zones");
+      const response = await ApiClient.get<any>("/geography/zones");
       const resp = response?.data ?? response ?? {};
-      return resp.zones || resp || [];
+      return resp.data || resp.zones || resp || [];
     },
   });
   const [sortedZones, setSortedZones] = useState<any[]>([]);
@@ -53,17 +53,19 @@ export default function ZonesPage() {
   const { data: districts } = useQuery({
     queryKey: ["districts"],
     queryFn: async () => {
-      const response = await ApiClient.get<any>("/admin/districts");
+      const response = await ApiClient.get<any>("/geography/districts");
       const resp = response?.data ?? response ?? {};
-      return resp.districts || resp || [];
+      return resp.data || resp.districts || resp || [];
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => ApiClient.post("/admin/zones", data),
+    mutationFn: (data: any) => ApiClient.post("/geography/zones", data),
     onSuccess: () => {
       toast.success("Zone created successfully");
       queryClient.invalidateQueries({ queryKey: ["zones"] });
+      queryClient.invalidateQueries({ queryKey: ["districts"] });
+      queryClient.invalidateQueries({ queryKey: ["provinces"] });
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -73,10 +75,12 @@ export default function ZonesPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) =>
-      ApiClient.put(`/admin/zones/${id}`, data),
+      ApiClient.put(`/geography/zones/${id}`, data),
     onSuccess: () => {
       toast.success("Zone updated successfully");
       queryClient.invalidateQueries({ queryKey: ["zones"] });
+      queryClient.invalidateQueries({ queryKey: ["districts"] });
+      queryClient.invalidateQueries({ queryKey: ["provinces"] });
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -85,10 +89,12 @@ export default function ZonesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => ApiClient.delete(`/admin/zones/${id}`),
+    mutationFn: (id: string) => ApiClient.delete(`/geography/zones/${id}`),
     onSuccess: () => {
       toast.success("Zone deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["zones"] });
+      queryClient.invalidateQueries({ queryKey: ["districts"] });
+      queryClient.invalidateQueries({ queryKey: ["provinces"] });
       setDeleteDialogOpen(false);
       setSelectedZone(null);
     },
@@ -216,7 +222,7 @@ export default function ZonesPage() {
                   id: item.id,
                   sortOrder: idx + 1,
                 }));
-                await ApiClient.post("/admin/zones/reorder", { items: data });
+                await ApiClient.post("/geography/zones/reorder", { items: data });
                 queryClient.invalidateQueries({ queryKey: ["zones"] });
               }}
               getItemId={(d) => d.id}

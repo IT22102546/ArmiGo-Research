@@ -46,8 +46,47 @@ export class PatientResponseDto {
   @ApiProperty()
   emergencyPhone?: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Main hospital ID' })
   hospitalId?: string;
+
+  @ApiProperty({ description: 'Hospital name and details' })
+  hospital?: {
+    id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    districtId?: string;
+    zoneId?: string;
+  };
+
+  @ApiProperty({ description: 'SubHospital/Clinic if applicable' })
+  subHospitalId?: string;
+
+  @ApiProperty({ description: 'SubHospital/Clinic details' })
+  subHospital?: {
+    id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    type?: string;
+  };
+
+  @ApiProperty({ description: 'District information' })
+  district?: {
+    id: string;
+    name: string;
+    code?: string;
+  };
+
+  @ApiProperty({ description: 'Zone information' })
+  zone?: {
+    id: string;
+    name: string;
+    code?: string;
+  };
 
   @ApiProperty()
   isActive: boolean;

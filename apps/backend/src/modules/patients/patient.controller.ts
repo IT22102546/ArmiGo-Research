@@ -168,4 +168,80 @@ export class PatientController {
       message: result.message,
     };
   }
+
+  /**
+   * Get all hospitals (for patient assignment)
+   */
+  @Get('locations/hospitals')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all hospitals for patient assignment' })
+  @ApiResponse({
+    status: 200,
+    description: 'Hospitals retrieved successfully',
+  })
+  async getHospitals() {
+    this.logger.log('Getting hospitals');
+    const hospitals = await this.patientService.getHospitals();
+    return {
+      success: true,
+      data: hospitals,
+    };
+  }
+
+  /**
+   * Get all districts with zones
+   */
+  @Get('locations/districts')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all districts with zones' })
+  @ApiResponse({
+    status: 200,
+    description: 'Districts retrieved successfully',
+  })
+  async getDistricts() {
+    this.logger.log('Getting districts');
+    const districts = await this.patientService.getDistricts();
+    return {
+      success: true,
+      data: districts,
+    };
+  }
+
+  /**
+   * Get zones by district
+   */
+  @Get('locations/districts/:districtId/zones')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get zones by district ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Zones retrieved successfully',
+  })
+  async getZonesByDistrict(@Param('districtId') districtId: string) {
+    this.logger.log(`Getting zones for district: ${districtId}`);
+    const zones = await this.patientService.getZonesByDistrict(districtId);
+    return {
+      success: true,
+      data: zones,
+    };
+  }
+
+  /**
+   * Get sub-hospitals by hospital
+   */
+  @Get('locations/hospitals/:hospitalId/sub-hospitals')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get sub-hospitals by hospital ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Sub-hospitals retrieved successfully',
+  })
+  async getSubHospitalsByHospital(@Param('hospitalId') hospitalId: string) {
+    this.logger.log(`Getting sub-hospitals for hospital: ${hospitalId}`);
+    const subHospitals = await this.patientService.getSubHospitalsByHospital(hospitalId);
+    return {
+      success: true,
+      data: subHospitals,
+    };
+  }
 }

@@ -1,9 +1,21 @@
-import { Controller, Post, Body, UseGuards, Request, HttpCode, HttpStatus, Response, BadRequestException } from "@nestjs/common";
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Request,
+  HttpCode,
+  HttpStatus,
+  Response,
+  BadRequestException,
+  Get,
+} from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { LocalAuthGuard } from "./guards/local-auth.guard";
-import { ApiTags, ApiBody } from "@nestjs/swagger";
+import { ApiTags, ApiBody, ApiBearerAuth } from "@nestjs/swagger";
 import { LoginDto } from "./dto/login.dto";
 import { Public } from "../../common/decorators/public.decorator";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 
 @ApiTags("Auth")
 @Controller("auth")
@@ -54,6 +66,14 @@ export class AuthController {
       loginDto.allowedRoles
     );
     return { found: !!user, user };
+  }
+
+  @Get("profile")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  async getProfile(@Request() req: { user: any }) {
+    return { user: req.user };
   }
 
   @Post("logout")

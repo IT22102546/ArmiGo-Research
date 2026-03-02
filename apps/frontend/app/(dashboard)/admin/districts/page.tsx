@@ -40,9 +40,9 @@ export default function DistrictsPage() {
   const { data: districts, isLoading } = useQuery({
     queryKey: ["districts"],
     queryFn: async () => {
-      const response = await ApiClient.get<any>("/admin/districts");
+      const response = await ApiClient.get<any>("/geography/districts");
       const resp = response?.data ?? response ?? {};
-      return resp.districts || resp || [];
+      return resp.data || resp.districts || resp || [];
     },
   });
   const [sortedDistricts, setSortedDistricts] = useState<any[]>([]);
@@ -53,17 +53,18 @@ export default function DistrictsPage() {
   const { data: provinces } = useQuery({
     queryKey: ["provinces"],
     queryFn: async () => {
-      const response = await ApiClient.get<any>("/admin/provinces");
+      const response = await ApiClient.get<any>("/geography/provinces");
       const resp = response?.data ?? response ?? {};
-      return resp.provinces || resp || [];
+      return resp.data || resp.provinces || resp || [];
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => ApiClient.post("/admin/districts", data),
+    mutationFn: (data: any) => ApiClient.post("/geography/districts", data),
     onSuccess: () => {
       toast.success("District created successfully");
       queryClient.invalidateQueries({ queryKey: ["districts"] });
+      queryClient.invalidateQueries({ queryKey: ["provinces"] });
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -73,10 +74,11 @@ export default function DistrictsPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) =>
-      ApiClient.put(`/admin/districts/${id}`, data),
+      ApiClient.put(`/geography/districts/${id}`, data),
     onSuccess: () => {
       toast.success("District updated successfully");
       queryClient.invalidateQueries({ queryKey: ["districts"] });
+      queryClient.invalidateQueries({ queryKey: ["provinces"] });
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -85,10 +87,11 @@ export default function DistrictsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => ApiClient.delete(`/admin/districts/${id}`),
+    mutationFn: (id: string) => ApiClient.delete(`/geography/districts/${id}`),
     onSuccess: () => {
       toast.success("District deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["districts"] });
+      queryClient.invalidateQueries({ queryKey: ["provinces"] });
       setDeleteDialogOpen(false);
       setSelectedDistrict(null);
     },
@@ -182,7 +185,7 @@ export default function DistrictsPage() {
                 {
                   key: "zones",
                   label: "Zones",
-                  render: (d: any) => d._count?.zones || 0,
+                  render: (d: any) => d._count?.zones ?? d.zones?.length ?? 0,
                 },
                 {
                   key: "actions",
@@ -216,7 +219,7 @@ export default function DistrictsPage() {
                   id: item.id,
                   sortOrder: idx + 1,
                 }));
-                await ApiClient.post("/admin/districts/reorder", {
+                await ApiClient.post("/geography/districts/reorder", {
                   items: data,
                 });
                 queryClient.invalidateQueries({ queryKey: ["districts"] });

@@ -15,6 +15,8 @@ import { UsersModule } from "./modules/users/users.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { SystemSettingsModule } from "./modules/system-settings/system-settings.module";
 import { PatientModule } from "./modules/patients/patient.module";
+import { GeographyModule } from "./modules/geography/geography.module";
+import { HospitalModule } from "./modules/hospitals/hospital.module";
 
 // Infrastructure - ONLY keep what's necessary
 import { HealthModule } from "./infrastructure/health/health.module";
@@ -44,6 +46,8 @@ import { CorrelationIdMiddleware } from "./common/middleware";
     NotificationsModule,
     SystemSettingsModule,
     PatientModule,
+    GeographyModule,
+    HospitalModule,
 
     // Infrastructure - only Health module
     HealthModule,

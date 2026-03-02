@@ -427,10 +427,10 @@ const PatientManagement: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Heart className="h-6 w-6 text-primary" />
-            Patient Management
+            Children Management
           </h1>
           <p className="text-sm text-muted-foreground">
-            Manage patient records and admissions
+            Manage children's medical records and admissions
           </p>
         </div>
         <div className="flex gap-2">
@@ -450,7 +450,7 @@ const PatientManagement: React.FC = () => {
           </Button>
           <Button size="sm" onClick={() => setAddPatientOpen(true)}>
             <UserPlus className="h-4 w-4 mr-1.5" />
-            Add Patient
+            Add Child
           </Button>
         </div>
       </div>
@@ -461,7 +461,7 @@ const PatientManagement: React.FC = () => {
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">Total Patients</p>
+                <p className="text-xs text-muted-foreground">Total Children</p>
                 <p className="text-xl font-bold">{stats.totalUsers}</p>
               </div>
               <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
