@@ -363,6 +363,11 @@ export class GeographyService {
               province: true,
             },
           },
+          _count: {
+            select: {
+              hospitals: true,
+            },
+          },
         },
         orderBy: { name: 'asc' },
       });
@@ -385,6 +390,11 @@ export class GeographyService {
           district: {
             include: {
               province: true,
+            },
+          },
+          _count: {
+            select: {
+              hospitals: true,
             },
           },
         },

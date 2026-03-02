@@ -186,9 +186,9 @@ export default function ZonesPage() {
                   render: (z: any) => z.district?.name,
                 },
                 {
-                  key: "institutions",
-                  label: "Institutions",
-                  render: (z: any) => z._count?.institutions || 0,
+                  key: "hospitals",
+                  label: "Hospitals",
+                  render: (z: any) => z._count?.hospitals || 0,
                 },
                 {
                   key: "actions",

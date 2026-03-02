@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsPhoneNumber, IsOptional, IsNotEmpty, IsEnum, IsInt } from 'class-validator';
+import { IsString, IsEmail, IsPhoneNumber, IsOptional, IsNotEmpty, IsEnum, IsInt, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum HospitalTypeEnum {
@@ -24,6 +24,11 @@ export class CreateHospitalDto {
   @IsEnum(HospitalTypeEnum)
   @IsNotEmpty()
   type: HospitalTypeEnum;
+
+  @ApiProperty({ example: false, required: false, description: 'Mark as the single main hospital in the system' })
+  @IsBoolean()
+  @IsOptional()
+  isMainHospital?: boolean;
 
   @ApiProperty({ example: 'contact@hospital.lk' })
   @IsEmail()
@@ -115,6 +120,11 @@ export class UpdateHospitalDto {
   @IsString()
   @IsOptional()
   name?: string;
+
+  @ApiProperty({ required: false, description: 'Mark as the single main hospital in the system' })
+  @IsBoolean()
+  @IsOptional()
+  isMainHospital?: boolean;
 
   @ApiProperty({ required: false })
   @IsString()

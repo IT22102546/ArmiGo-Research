@@ -36,6 +36,8 @@ const HOSPITAL_TYPES = [
   { value: "CLINIC", label: "Clinic" },
 ];
 
+const NO_ZONE_VALUE = "__NO_ZONE__";
+
 export default function HospitalsPage() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -56,6 +58,7 @@ export default function HospitalsPage() {
     zoneId: "",
     bedCapacity: "",
     totalStaff: "",
+    isMainHospital: false,
     adminPassword: "",
   });
 
@@ -177,6 +180,7 @@ export default function HospitalsPage() {
         zoneId: hospital.zoneId || "",
         bedCapacity: hospital.bedCapacity?.toString() || "",
         totalStaff: hospital.totalStaff?.toString() || "",
+        isMainHospital: hospital.isMainHospital === true,
         adminPassword: "",
       });
     } else {
@@ -194,6 +198,7 @@ export default function HospitalsPage() {
         zoneId: "",
         bedCapacity: "",
         totalStaff: "",
+        isMainHospital: false,
         adminPassword: "",
       });
     }
@@ -216,6 +221,7 @@ export default function HospitalsPage() {
       zoneId: "",
       bedCapacity: "",
       totalStaff: "",
+      isMainHospital: false,
       adminPassword: "",
     });
   };
@@ -250,6 +256,7 @@ export default function HospitalsPage() {
           zoneId: formData.zoneId || null,
           bedCapacity: parseInt(formData.bedCapacity) || 0,
           totalStaff: parseInt(formData.totalStaff) || 0,
+          isMainHospital: formData.isMainHospital,
         },
       });
     } else {
@@ -270,6 +277,7 @@ export default function HospitalsPage() {
         zoneId: formData.zoneId || null,
         bedCapacity: parseInt(formData.bedCapacity) || 0,
         totalStaff: parseInt(formData.totalStaff) || 0,
+        isMainHospital: formData.isMainHospital,
         adminPassword: formData.adminPassword,
       });
     }
@@ -336,6 +344,12 @@ export default function HospitalsPage() {
       key: "totalStaff",
       label: "Staff",
       render: (h: any) => h.totalStaff || "-",
+    },
+    {
+      key: "mainHospital",
+      label: "Main Hospital",
+      render: (h: any) =>
+        h.isMainHospital ? <Badge>Yes</Badge> : <Badge variant="outline">No</Badge>,
     },
     {
       key: "status",
@@ -554,11 +568,16 @@ export default function HospitalsPage() {
                       <SelectValue placeholder="Select province" />
                     </SelectTrigger>
                     <SelectContent>
-                      {provinces.map((province: any) => (
+                      {provinces
+                        .filter(
+                          (province: any) =>
+                            province?.id && String(province.id).trim() !== ""
+                        )
+                        .map((province: any) => (
                         <SelectItem key={province.id} value={province.id}>
                           {province.name}
                         </SelectItem>
-                      ))}
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -579,11 +598,16 @@ export default function HospitalsPage() {
                       <SelectValue placeholder="Select district" />
                     </SelectTrigger>
                     <SelectContent>
-                      {districts.map((district: any) => (
+                      {districts
+                        .filter(
+                          (district: any) =>
+                            district?.id && String(district.id).trim() !== ""
+                        )
+                        .map((district: any) => (
                         <SelectItem key={district.id} value={district.id}>
                           {district.name}
                         </SelectItem>
-                      ))}
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -591,21 +615,29 @@ export default function HospitalsPage() {
                 <div className="col-span-2">
                   <Label htmlFor="zone">Zone</Label>
                   <Select
-                    value={formData.zoneId}
+                    value={formData.zoneId || NO_ZONE_VALUE}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, zoneId: value })
+                      setFormData({
+                        ...formData,
+                        zoneId: value === NO_ZONE_VALUE ? "" : value,
+                      })
                     }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select zone (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
-                      {zones.map((zone: any) => (
+                      <SelectItem value={NO_ZONE_VALUE}>None</SelectItem>
+                      {zones
+                        .filter(
+                          (zone: any) =>
+                            zone?.id && String(zone.id).trim() !== ""
+                        )
+                        .map((zone: any) => (
                         <SelectItem key={zone.id} value={zone.id}>
                           {zone.name}
                         </SelectItem>
-                      ))}
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -650,6 +682,24 @@ export default function HospitalsPage() {
                     min="0"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="font-semibold">Main Hospital</h3>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Set as Main Hospital</p>
+                  <p className="text-xs text-muted-foreground">
+                    Only one main hospital can exist at a time. Enabling this will unset the previous main hospital.
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.isMainHospital}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, isMainHospital: checked })
+                  }
+                />
               </div>
             </div>
 

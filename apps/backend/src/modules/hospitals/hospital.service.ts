@@ -60,44 +60,56 @@ export class HospitalService {
       // Store admin password as-is (in production, consider proper encryption)
       const adminPassword = data.adminPassword || `TempPass@${Date.now()}`;
 
-      const hospital = await this.prisma.hospital.create({
-        data: {
-          name: data.name,
-          registrationNo: data.registrationNo,
-          type: data.type,
-          email: data.email,
-          phone: data.phone,
-          alternatePhone: data.alternatePhone,
-          website: data.website,
-          address: data.address,
-          city: data.city,
-          districtId: data.districtId,
-          zoneId: data.zoneId,
-          postalCode: data.postalCode,
-          establishedYear: data.establishedYear,
-          licenseNumber: data.licenseNumber,
-          bedCapacity: data.bedCapacity,
-          specialization: data.specialization || [],
-          totalDoctors: data.totalDoctors,
-          totalTherapists: data.totalTherapists,
-          totalStaff: data.totalStaff,
-          adminEmail,
-          adminPassword,
-          createdById,
-          status: 'ACTIVE',
-        },
-        include: {
-          district: true,
-          zone: true,
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
+      const isMainHospital = data.isMainHospital === true;
+
+      const hospital = await this.prisma.$transaction(async (tx) => {
+        if (isMainHospital) {
+          await tx.hospital.updateMany({
+            where: { isMainHospital: true },
+            data: { isMainHospital: false },
+          });
+        }
+
+        return tx.hospital.create({
+          data: {
+            name: data.name,
+            registrationNo: data.registrationNo,
+            type: data.type,
+            isMainHospital,
+            email: data.email,
+            phone: data.phone,
+            alternatePhone: data.alternatePhone,
+            website: data.website,
+            address: data.address,
+            city: data.city,
+            districtId: data.districtId,
+            zoneId: data.zoneId,
+            postalCode: data.postalCode,
+            establishedYear: data.establishedYear,
+            licenseNumber: data.licenseNumber,
+            bedCapacity: data.bedCapacity,
+            specialization: data.specialization || [],
+            totalDoctors: data.totalDoctors,
+            totalTherapists: data.totalTherapists,
+            totalStaff: data.totalStaff,
+            adminEmail,
+            adminPassword,
+            createdById,
+            status: 'ACTIVE',
+          },
+          include: {
+            district: true,
+            zone: true,
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
             },
           },
-        },
+        });
       });
 
       return {
@@ -302,21 +314,34 @@ export class HospitalService {
       if (data.totalTherapists !== undefined) updateData.totalTherapists = data.totalTherapists;
       if (data.totalStaff !== undefined) updateData.totalStaff = data.totalStaff;
       if (data.status !== undefined) updateData.status = data.status;
+      if (data.isMainHospital !== undefined) updateData.isMainHospital = data.isMainHospital;
 
-      const updated = await this.prisma.hospital.update({
-        where: { id },
-        data: updateData,
-        include: {
-          district: true,
-          zone: true,
-          createdBy: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
+      const updated = await this.prisma.$transaction(async (tx) => {
+        if (data.isMainHospital === true) {
+          await tx.hospital.updateMany({
+            where: {
+              isMainHospital: true,
+              id: { not: id },
+            },
+            data: { isMainHospital: false },
+          });
+        }
+
+        return tx.hospital.update({
+          where: { id },
+          data: updateData,
+          include: {
+            district: true,
+            zone: true,
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
             },
           },
-        },
+        });
       });
 
       return {

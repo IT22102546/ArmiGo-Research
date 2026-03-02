@@ -744,6 +744,14 @@ async findByEmail(email: string): Promise<User | null> {
   
   const user = await this.prisma.user.findFirst({
     where: { email: email }, // Exact match, no toLowerCase if email is already lowercase
+    include: {
+      parentProfile: true,
+      hospitalProfile: {
+        include: {
+          hospital: true,
+        },
+      },
+    },
   });
   
   if (user) {
@@ -759,6 +767,14 @@ async findByEmail(email: string): Promise<User | null> {
           equals: email,
           mode: 'insensitive'
         } 
+      },
+      include: {
+        parentProfile: true,
+        hospitalProfile: {
+          include: {
+            hospital: true,
+          },
+        },
       },
     });
     
@@ -804,7 +820,11 @@ async findByEmail(email: string): Promise<User | null> {
       },
       include: {
         parentProfile: true,
-        hospitalProfile: true,
+        hospitalProfile: {
+          include: {
+            hospital: true,
+          },
+        },
       },
     });
 

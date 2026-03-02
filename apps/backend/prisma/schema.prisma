@@ -183,6 +183,7 @@ model Hospital {
   name              String          @unique
   registrationNo    String          @unique
   type              HospitalType
+  isMainHospital    Boolean         @default(false)
   status            HospitalStatus  @default(PENDING_APPROVAL)
   
   // Contact Information
@@ -250,6 +251,7 @@ model Hospital {
   credentialLogs    CredentialLog[] @relation("HospitalCredentialLogs")
 
   @@index([status])
+  @@index([isMainHospital])
   @@index([districtId])
   @@index([zoneId])
   @@index([type])
