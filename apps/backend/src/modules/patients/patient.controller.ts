@@ -22,6 +22,10 @@ import {
   CreatePhysiotherapistDto,
   UpdatePhysiotherapistDto,
 } from './dtos/physiotherapist.dto';
+import {
+  CreateAdmissionTrackingDto,
+  UpdateAdmissionTrackingDto,
+} from './dtos/admission-tracking.dto';
 
 @ApiTags('Patients')
 @Controller('patients')
@@ -312,15 +316,46 @@ export class PatientController {
     status: 200,
     description: 'Physiotherapists retrieved successfully',
   })
-  async getPhysiotherapists(@Query('hospitalId') hospitalId?: string) {
+  async getPhysiotherapists(
+    @Query('hospitalId') hospitalId?: string,
+    @Query('includeInactive') includeInactive?: string
+  ) {
     this.logger.log(
       `Getting physiotherapists${hospitalId ? ` for hospital: ${hospitalId}` : ''}`
     );
-    const physiotherapists =
-      await this.patientService.getPhysiotherapists(hospitalId);
+    const physiotherapists = await this.patientService.getPhysiotherapists(
+      hospitalId,
+      includeInactive === 'true'
+    );
     return {
       success: true,
       data: physiotherapists,
+    };
+  }
+
+  /**
+   * Update physiotherapist active/inactive status
+   */
+  @Put('locations/physiotherapists/:id/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update physiotherapist active/inactive status' })
+  @ApiResponse({
+    status: 200,
+    description: 'Physiotherapist status updated successfully',
+  })
+  async updatePhysiotherapistStatus(
+    @Param('id') id: string,
+    @Body() body: UpdatePatientStatusDto
+  ) {
+    this.logger.log(`Updating physiotherapist status: ${id} -> ${body.isActive}`);
+    const physiotherapist = await this.patientService.setPhysiotherapistStatus(
+      id,
+      body.isActive
+    );
+    return {
+      success: true,
+      data: physiotherapist,
+      message: 'Physiotherapist status updated successfully',
     };
   }
 
@@ -377,9 +412,156 @@ export class PatientController {
     status: 200,
     description: 'Physiotherapist deleted successfully',
   })
-  async deletePhysiotherapist(@Param('id') id: string) {
-    this.logger.log(`Deleting physiotherapist: ${id}`);
-    const result = await this.patientService.deletePhysiotherapist(id);
+  async deletePhysiotherapist(
+    @Param('id') id: string,
+    @Query('mode') mode?: 'inactive' | 'permanent'
+  ) {
+    const normalizedMode = mode === 'inactive' ? 'inactive' : 'permanent';
+    this.logger.log(
+      `Deleting physiotherapist: ${id} with mode ${normalizedMode}`
+    );
+    const result = await this.patientService.deletePhysiotherapist(
+      id,
+      normalizedMode
+    );
+    return {
+      success: true,
+      message: result.message,
+    };
+  }
+
+  /**
+   * Get admission tracking options
+   */
+  @Get('management/admissions/options')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get admission tracking options (children, physiotherapists, hospitals, devices)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admission tracking options retrieved successfully',
+  })
+  async getAdmissionTrackingOptions(@Query('hospitalId') hospitalId?: string) {
+    this.logger.log('Getting admission tracking options');
+    const data = await this.patientService.getAdmissionTrackingOptions(hospitalId);
+    return {
+      success: true,
+      data,
+    };
+  }
+
+  /**
+   * Get admission tracking records
+   */
+  @Get('management/admissions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get admission tracking records' })
+  @ApiResponse({
+    status: 200,
+    description: 'Admission tracking records retrieved successfully',
+  })
+  async getAdmissionTrackings(
+    @Query('hospitalId') hospitalId?: string,
+    @Query('childId') childId?: string,
+    @Query('physiotherapistId') physiotherapistId?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string
+  ) {
+    const data = await this.patientService.getAdmissionTrackings({
+      hospitalId,
+      childId,
+      physiotherapistId,
+      status,
+      search,
+    });
+
+    return {
+      success: true,
+      data,
+    };
+  }
+
+  /**
+   * Create admission tracking record
+   */
+  @Post('management/admissions')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create admission tracking record' })
+  @ApiResponse({
+    status: 201,
+    description: 'Admission tracking created successfully',
+  })
+  async createAdmissionTracking(@Body() body: CreateAdmissionTrackingDto) {
+    this.logger.log(`Creating admission tracking for child: ${body.childId}`);
+    const data = await this.patientService.createAdmissionTracking(body);
+    return {
+      success: true,
+      data,
+      message: 'Admission tracking created successfully',
+    };
+  }
+
+  /**
+   * Update admission tracking record
+   */
+  @Put('management/admissions/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update admission tracking record' })
+  @ApiResponse({
+    status: 200,
+    description: 'Admission tracking updated successfully',
+  })
+  async updateAdmissionTracking(
+    @Param('id') id: string,
+    @Body() body: UpdateAdmissionTrackingDto
+  ) {
+    this.logger.log(`Updating admission tracking: ${id}`);
+    const data = await this.patientService.updateAdmissionTracking(id, body);
+    return {
+      success: true,
+      data,
+      message: 'Admission tracking updated successfully',
+    };
+  }
+
+  /**
+   * Update admission tracking status
+   */
+  @Put('management/admissions/:id/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update admission tracking status' })
+  @ApiResponse({
+    status: 200,
+    description: 'Admission tracking status updated successfully',
+  })
+  async updateAdmissionTrackingStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string }
+  ) {
+    const data = await this.patientService.updateAdmissionTrackingStatus(
+      id,
+      body?.status
+    );
+    return {
+      success: true,
+      data,
+      message: 'Admission tracking status updated successfully',
+    };
+  }
+
+  /**
+   * Delete admission tracking record
+   */
+  @Delete('management/admissions/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete admission tracking record' })
+  @ApiResponse({
+    status: 200,
+    description: 'Admission tracking deleted successfully',
+  })
+  async deleteAdmissionTracking(@Param('id') id: string) {
+    const result = await this.patientService.deleteAdmissionTracking(id);
     return {
       success: true,
       message: result.message,

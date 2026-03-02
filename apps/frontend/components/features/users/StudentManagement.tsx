@@ -229,6 +229,8 @@ export default function StudentManagement() {
   const { data: physiotherapists = [], isLoading: physiotherapistsLoading } =
     useQuery({
       queryKey: ["patients-management", "physiotherapists"],
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
       queryFn: async () => {
         const response = await ApiClient.get<any>(
           "/patients/locations/physiotherapists"

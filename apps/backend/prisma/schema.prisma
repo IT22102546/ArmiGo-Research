@@ -249,6 +249,7 @@ model Hospital {
   
   // Credential logs
   credentialLogs    CredentialLog[] @relation("HospitalCredentialLogs")
+  admissionTrackings AdmissionTracking[]
 
   @@index([status])
   @@index([isMainHospital])
@@ -356,6 +357,7 @@ model HospitalStaff {
   
   // Appointments/therapies they handle
   appointments    Appointment[]   @relation("StaffAppointments")
+  admissionTrackings AdmissionTracking[] @relation("AdmissionPhysiotherapist")
 
   @@index([hospitalId])
   @@index([subHospitalId])
@@ -407,6 +409,7 @@ model Child {
   progressRecords ProgressRecord[]
   therapySessions TherapySession[]
   appointments    Appointment[]
+  admissionTrackings AdmissionTracking[]
   
   @@index([parentId])
   @@index([hospitalId])
@@ -449,6 +452,7 @@ model Device {
   assignments     DeviceAssignment[]
   movementLogs    MovementLog[]
   therapySessions TherapySession[] @relation("TherapySessionDevice")
+  admissionTrackings AdmissionTracking[] @relation("AdmissionTrackingDevice")
 
   @@index([status])
   @@index([deviceType])
@@ -644,6 +648,47 @@ model Appointment {
   @@index([parentId, scheduledDate])
   @@index([status])
   @@map("appointments")
+}
+
+model AdmissionTracking {
+  id                 String         @id @default(cuid())
+  childId            String
+  physiotherapistId  String?
+  hospitalId         String?
+  deviceId           String?
+
+  admissionType      String         @default("REHAB")
+  status             String         @default("ACTIVE")
+  admissionDate      DateTime
+  startTime          String?
+  endTime            String?
+  dischargeDate      DateTime?
+  deviceAssignedDate DateTime?
+
+  clinic             String?
+  room               String?
+  notes              String?
+
+  manualDeviceName   String?
+  manualDeviceType   String?
+  manualDeviceSerial String?
+
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  child              Child          @relation(fields: [childId], references: [id], onDelete: Cascade)
+  physiotherapist    HospitalStaff? @relation("AdmissionPhysiotherapist", fields: [physiotherapistId], references: [id], onDelete: SetNull)
+  hospital           Hospital?      @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  device             Device?        @relation("AdmissionTrackingDevice", fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@index([physiotherapistId])
+  @@index([hospitalId])
+  @@index([deviceId])
+  @@index([status])
+  @@index([admissionDate])
+  @@index([childId, admissionDate])
+  @@map("admission_tracking")
 }
 
 // ============================================

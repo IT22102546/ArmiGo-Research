@@ -1,13 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,783 +20,729 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import {
-  Search,
-  Filter,
-  Users,
-  BedSingle,
-  Stethoscope,
-  Activity,
-  GroupIcon,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  MonitorSmartphone,
-} from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Pencil, Trash2, Power, Eye } from "lucide-react";
+import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 
-type AdmissionType = "all" | "inpatient" | "outpatient" | "rehab";
-
-interface Admission {
+type Child = {
   id: string;
-  patientId: string;
-  patientName: string;
-  age: number;
-  diagnosis: string;
-  admissionType: "inpatient" | "outpatient" | "rehab";
-  clinic: string;
-  doctor: string;
-  room?: string;
+  firstName: string;
+  lastName: string;
+  age?: number;
+  diagnosis?: string;
+  assignedDoctor?: string;
+  hospitalId?: string | null;
+  hospital?: { id: string; name: string } | null;
+};
+
+type Physiotherapist = {
+  id: string;
+  name: string;
+  hospitalId?: string | null;
+  isActive?: boolean;
+  hospital?: { id: string; name: string } | null;
+};
+
+type Hospital = {
+  id: string;
+  name: string;
+  status?: string;
+};
+
+type SessionRecord = {
+  id: string;
+  childId: string;
+  physiotherapistId?: string | null;
+  hospitalId?: string | null;
   admissionDate: string;
-  status: "active" | "pending" | "discharged";
-  devicesConnected: number;
-  lastUpdate: string;
-  notes?: string;
-}
+  startTime?: string | null;
+  endTime?: string | null;
+  status: string;
+  notes?: string | null;
+  clinic?: string | null;
+  room?: string | null;
+  child?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    diagnosis?: string;
+    assignedDoctor?: string;
+  };
+  physiotherapist?: {
+    id: string;
+    name: string;
+  } | null;
+  hospital?: {
+    id: string;
+    name: string;
+  } | null;
+};
 
-// Dummy data
-const dummyAdmissions: Admission[] = [
-  {
-    id: "ADM-001",
-    patientId: "P-001",
-    patientName: "Lihini Perera",
-    age: 8,
-    diagnosis: "Left Hemiplegia",
-    admissionType: "rehab",
-    clinic: "Pediatric Neuro Rehab",
-    doctor: "Dr. Nimal Silva",
-    admissionDate: "2024-03-15",
-    status: "active",
-    devicesConnected: 2,
-    lastUpdate: "2024-03-20T10:30:00",
-    notes: "Regular therapy sessions, good progress with upper limb exercises",
-  },
-  {
-    id: "ADM-002",
-    patientId: "P-002",
-    patientName: "Kavin Jayasekara",
-    age: 10,
-    diagnosis: "Right Hemiplegia",
-    admissionType: "inpatient",
-    clinic: "Gait & Balance Lab",
-    doctor: "Dr. Priya Fernando",
-    room: "Ward-A, Bed 12",
-    admissionDate: "2024-03-18",
-    status: "active",
-    devicesConnected: 3,
-    lastUpdate: "2024-03-20T14:15:00",
-    notes: "Post-surgery rehabilitation, requires intensive monitoring",
-  },
-  {
-    id: "ADM-003",
-    patientId: "P-003",
-    patientName: "Anya de Silva",
-    age: 7,
-    diagnosis: "Bilateral Motor Delay",
-    admissionType: "outpatient",
-    clinic: "Assistive Play Clinic",
-    doctor: "Dr. Sunil Wijesinghe",
-    admissionDate: "2024-03-10",
-    status: "active",
-    devicesConnected: 1,
-    lastUpdate: "2024-03-20T09:00:00",
-    notes: "Weekly sessions, showing improvement in fine motor skills",
-  },
-  {
-    id: "ADM-004",
-    patientId: "P-004",
-    patientName: "Dineth Bandara",
-    age: 9,
-    diagnosis: "Cerebral Palsy - Spastic Hemiplegia",
-    admissionType: "inpatient",
-    clinic: "Pediatric Neuro Rehab",
-    doctor: "Dr. Nimal Silva",
-    room: "Ward-B, Bed 5",
-    admissionDate: "2024-03-12",
-    status: "active",
-    devicesConnected: 2,
-    lastUpdate: "2024-03-20T11:45:00",
-    notes: "Intensive therapy program, good response to gamified exercises",
-  },
-  {
-    id: "ADM-005",
-    patientId: "P-005",
-    patientName: "Sithumi Rajapaksa",
-    age: 6,
-    diagnosis: "Left Hemiplegia - Stroke Recovery",
-    admissionType: "outpatient",
-    clinic: "Gait & Balance Lab",
-    doctor: "Dr. Priya Fernando",
-    admissionDate: "2024-02-28",
-    status: "active",
-    devicesConnected: 1,
-    lastUpdate: "2024-03-20T08:30:00",
-    notes: "Bi-weekly sessions, significant progress in gait training",
-  },
-  {
-    id: "ADM-006",
-    patientId: "P-006",
-    patientName: "Ravindu Dissanayake",
-    age: 11,
-    diagnosis: "Right Hemiplegia",
-    admissionType: "rehab",
-    clinic: "Assistive Play Clinic",
-    doctor: "Dr. Sunil Wijesinghe",
-    admissionDate: "2024-03-05",
-    status: "pending",
-    devicesConnected: 0,
-    lastUpdate: "2024-03-19T16:00:00",
-    notes: "Waiting for device calibration",
-  },
-];
+type SessionForm = {
+  childId: string;
+  physiotherapistId: string;
+  hospitalId: string;
+  admissionDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  clinic: string;
+  room: string;
+  notes: string;
+};
 
-const clinics = [
-  "Pediatric Neuro Rehab",
-  "Gait & Balance Lab",
-  "Assistive Play Clinic",
-  "Upper Limb Therapy Center",
-  "Motor Skills Development Unit",
-];
-
-const doctors = [
-  "Dr. Nimal Silva",
-  "Dr. Priya Fernando",
-  "Dr. Sunil Wijesinghe",
-  "Dr. Chamari Perera",
-  "Dr. Rohan Gunasekara",
-];
-
-const availablePatients = [
-  { id: "P-007", name: "Nethmi Kumari", age: 8, diagnosis: "Left Hemiplegia" },
-  {
-    id: "P-008",
-    name: "Dasun Liyanage",
-    age: 9,
-    diagnosis: "Right Hemiplegia",
-  },
-  { id: "P-009", name: "Ishara Mendis", age: 7, diagnosis: "Cerebral Palsy" },
-];
+const initialForm: SessionForm = {
+  childId: "",
+  physiotherapistId: "",
+  hospitalId: "",
+  admissionDate: new Date().toISOString().split("T")[0],
+  startTime: "",
+  endTime: "",
+  status: "ACTIVE",
+  clinic: "",
+  room: "",
+  notes: "",
+};
 
 export default function EnrollmentsPage() {
-  const [activeTab, setActiveTab] = useState<AdmissionType>("all");
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [clinicFilter, setClinicFilter] = useState<string>("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewingSession, setViewingSession] = useState<SessionRecord | null>(null);
+  const [selected, setSelected] = useState<SessionRecord | null>(null);
+  const [formData, setFormData] = useState<SessionForm>(initialForm);
 
-  // Form state
-  const [formData, setFormData] = useState({
-    patientId: "",
-    admissionType: "",
-    clinic: "",
-    doctor: "",
-    room: "",
-    admissionDate: format(new Date(), "yyyy-MM-dd"),
-    notes: "",
+  const { data: children = [] } = useQuery({
+    queryKey: ["session-scheduling", "children"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients", {
+        params: { limit: 1000 },
+      });
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
   });
 
-  // Filter admissions
-  const filteredAdmissions = dummyAdmissions.filter((admission) => {
-    const matchesTab =
-      activeTab === "all" || admission.admissionType === activeTab;
-    const matchesSearch =
-      admission.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      admission.diagnosis.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      admission.doctor.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || admission.status === statusFilter;
-    const matchesClinic =
-      clinicFilter === "all" || admission.clinic === clinicFilter;
-
-    return matchesTab && matchesSearch && matchesStatus && matchesClinic;
+  const { data: hospitals = [] } = useQuery({
+    queryKey: ["session-scheduling", "hospitals"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients/locations/hospitals");
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
   });
 
-  // Calculate stats
-  const stats = {
-    totalAdmissions: dummyAdmissions.length,
-    inpatientCount: dummyAdmissions.filter(
-      (a) => a.admissionType === "inpatient"
-    ).length,
-    outpatientCount: dummyAdmissions.filter(
-      (a) => a.admissionType === "outpatient"
-    ).length,
-    rehabCount: dummyAdmissions.filter((a) => a.admissionType === "rehab")
-      .length,
+  const { data: physiotherapists = [] } = useQuery({
+    queryKey: ["session-scheduling", "physiotherapists"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>(
+        "/patients/locations/physiotherapists",
+        { params: { includeInactive: true } }
+      );
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
+  });
+
+  const { data: sessions = [], isLoading } = useQuery({
+    queryKey: ["session-scheduling", "records", search, statusFilter],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients/management/admissions", {
+        params: {
+          search: search || undefined,
+          status: statusFilter === "ALL" ? undefined : statusFilter,
+        },
+      });
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
+  });
+
+  const filteredPhysiotherapists = useMemo(() => {
+    if (!formData.hospitalId) return physiotherapists;
+    return physiotherapists.filter(
+      (item: Physiotherapist) => item.hospitalId === formData.hospitalId
+    );
+  }, [physiotherapists, formData.hospitalId]);
+
+  const createMutation = useMutation({
+    mutationFn: (payload: any) =>
+      ApiClient.post("/patients/management/admissions", payload),
+    onSuccess: () => {
+      toast.success("Session added successfully");
+      queryClient.invalidateQueries({ queryKey: ["session-scheduling"] });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to add session");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) =>
+      ApiClient.put(`/patients/management/admissions/${id}`, payload),
+    onSuccess: () => {
+      toast.success("Session updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["session-scheduling"] });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update session");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      ApiClient.delete(`/patients/management/admissions/${id}`),
+    onSuccess: () => {
+      toast.success("Session deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["session-scheduling"] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to delete session");
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      ApiClient.put(`/patients/management/admissions/${id}/status`, { status }),
+    onSuccess: () => {
+      toast.success("Session status updated");
+      queryClient.invalidateQueries({ queryKey: ["session-scheduling"] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update session status");
+    },
+  });
+
+  const handleOpenCreate = () => {
+    setSelected(null);
+    setFormData(initialForm);
+    setDialogOpen(true);
   };
 
-  // Pagination
-  const totalPages = Math.ceil(filteredAdmissions.length / itemsPerPage);
-  const paginatedAdmissions = filteredAdmissions.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  const handleTabChange = (value: string) => {
-    setActiveTab(value as AdmissionType);
-    setCurrentPage(1);
+  const handleOpenEdit = (record: SessionRecord) => {
+    setSelected(record);
+    setFormData({
+      childId: record.childId || "",
+      physiotherapistId: record.physiotherapistId || "",
+      hospitalId: record.hospitalId || "",
+      admissionDate: record.admissionDate
+        ? new Date(record.admissionDate).toISOString().split("T")[0]
+        : initialForm.admissionDate,
+      startTime: record.startTime || "",
+      endTime: record.endTime || "",
+      status: record.status || "ACTIVE",
+      clinic: record.clinic || "",
+      room: record.room || "",
+      notes: record.notes || "",
+    });
+    setDialogOpen(true);
   };
 
-  const handleCreateAdmission = () => {
+  const handleOpenView = (record: SessionRecord) => {
+    setViewingSession(record);
+    setViewDialogOpen(true);
+  };
+
+  const handleCloseView = () => {
+    setViewDialogOpen(false);
+    setViewingSession(null);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setSelected(null);
+    setFormData(initialForm);
+  };
+
+  const handleChildSelection = (childId: string) => {
+    const selectedChild = children.find((child: Child) => child.id === childId);
+
+    let matchedPhysiotherapistId = "";
+    if (selectedChild?.assignedDoctor) {
+      const matched = physiotherapists.find((physio: Physiotherapist) => {
+        const sameName =
+          physio.name?.trim().toLowerCase() ===
+          selectedChild.assignedDoctor?.trim().toLowerCase();
+
+        if (!sameName) return false;
+        if (selectedChild.hospitalId && physio.hospitalId) {
+          return physio.hospitalId === selectedChild.hospitalId;
+        }
+        return true;
+      });
+
+      matchedPhysiotherapistId = matched?.id || "";
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      childId,
+      hospitalId: selectedChild?.hospitalId || prev.hospitalId,
+      physiotherapistId: matchedPhysiotherapistId || prev.physiotherapistId,
+    }));
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     if (
-      !formData.patientId ||
-      !formData.admissionType ||
-      !formData.clinic ||
-      !formData.doctor
+      !formData.childId ||
+      !formData.hospitalId ||
+      !formData.admissionDate ||
+      !formData.startTime ||
+      !formData.endTime
     ) {
-      toast.error("Please fill in all required fields");
+      toast.error("Child, hospital, date, start time and end time are required");
       return;
     }
 
-    toast.success("Admission created successfully!");
-    setIsCreateDialogOpen(false);
-    setFormData({
-      patientId: "",
-      admissionType: "",
-      clinic: "",
-      doctor: "",
-      room: "",
-      admissionDate: format(new Date(), "yyyy-MM-dd"),
-      notes: "",
-    });
-  };
-
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive"> = {
-      active: "default",
-      pending: "secondary",
-      discharged: "destructive",
+    const payload = {
+      childId: formData.childId,
+      hospitalId: formData.hospitalId,
+      physiotherapistId: formData.physiotherapistId || undefined,
+      admissionDate: formData.admissionDate,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      status: formData.status,
+      clinic: formData.clinic || undefined,
+      room: formData.room || undefined,
+      notes: formData.notes || undefined,
+      admissionType: "REHAB",
     };
-    return (
-      <Badge variant={variants[status] || "default"}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    );
-  };
 
-  const clearFilters = () => {
-    setSearchQuery("");
-    setStatusFilter("all");
-    setClinicFilter("all");
-    setCurrentPage(1);
+    if (selected) {
+      updateMutation.mutate({ id: selected.id, payload });
+      return;
+    }
+
+    createMutation.mutate(payload);
   };
 
   return (
-    <div className="space-y-6 p-6 w-full">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <GroupIcon className="h-8 w-8" />
-            Patient Admission Management
-          </h1>
-          <p className="text-muted-foreground">
-            Manage patient admissions and clinic assignments for pediatric
-            hemiplegia rehabilitation
-          </p>
+          <p className="text-sm text-muted-foreground">Patients & Physiotherapy</p>
+          <h1 className="text-2xl font-semibold">Session Scheduling</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toast.info("Refreshed")}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Admission
-          </Button>
-        </div>
+        <Button onClick={handleOpenCreate}>
+          <Plus className="h-4 w-4 mr-2" /> Add Session
+        </Button>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card
-          className={`cursor-pointer transition-all ${
-            activeTab === "all" ? "ring-2 ring-primary" : ""
-          }`}
-          onClick={() => handleTabChange("all")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Admissions
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalAdmissions}</div>
-            <p className="text-xs text-muted-foreground">All admission types</p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className={`cursor-pointer transition-all ${
-            activeTab === "inpatient" ? "ring-2 ring-blue-500" : ""
-          }`}
-          onClick={() => handleTabChange("inpatient")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inpatient</CardTitle>
-            <BedSingle className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {stats.inpatientCount}
-            </div>
-            <p className="text-xs text-muted-foreground">Admitted patients</p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className={`cursor-pointer transition-all ${
-            activeTab === "outpatient" ? "ring-2 ring-purple-500" : ""
-          }`}
-          onClick={() => handleTabChange("outpatient")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outpatient</CardTitle>
-            <Stethoscope className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">
-              {stats.outpatientCount}
-            </div>
-            <p className="text-xs text-muted-foreground">Regular visits</p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className={`cursor-pointer transition-all ${
-            activeTab === "rehab" ? "ring-2 ring-orange-500" : ""
-          }`}
-          onClick={() => handleTabChange("rehab")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Rehabilitation
-            </CardTitle>
-            <Activity className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
-              {stats.rehabCount}
-            </div>
-            <p className="text-xs text-muted-foreground">Therapy programs</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tab Navigation & Filters */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filter Admissions
-            </CardTitle>
-            <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList>
-                <TabsTrigger value="all" className="gap-2">
-                  <Users className="h-4 w-4" />
-                  All
-                </TabsTrigger>
-                <TabsTrigger value="inpatient" className="gap-2">
-                  <BedSingle className="h-4 w-4" />
-                  Inpatient
-                </TabsTrigger>
-                <TabsTrigger value="outpatient" className="gap-2">
-                  <Stethoscope className="h-4 w-4" />
-                  Outpatient
-                </TabsTrigger>
-                <TabsTrigger value="rehab" className="gap-2">
-                  <Activity className="h-4 w-4" />
-                  Rehab
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
+          <CardTitle className="text-base">Child Sessions</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-5">
-            <div className="relative md:col-span-2">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by patient, diagnosis, or doctor..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
-            </div>
-
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => {
-                setStatusFilter(value);
-                setCurrentPage(1);
-              }}
-            >
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search child, hospital, physiotherapist..."
+            />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All Statuses" />
+                <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="discharged">Discharged</SelectItem>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="DISCHARGED">Discharged</SelectItem>
+                <SelectItem value="INACTIVE">Inactive</SelectItem>
               </SelectContent>
             </Select>
-
-            <Select
-              value={clinicFilter}
-              onValueChange={(value) => {
-                setClinicFilter(value);
-                setCurrentPage(1);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All Clinics" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Clinics</SelectItem>
-                {clinics.map((clinic) => (
-                  <SelectItem key={clinic} value={clinic}>
-                    {clinic}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button variant="outline" onClick={clearFilters}>
-              Clear Filters
-            </Button>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Admissions Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Patient Admissions</CardTitle>
-          <CardDescription>
-            {filteredAdmissions.length} admission(s) found • Showing page{" "}
-            {currentPage} of {totalPages || 1}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Patient</TableHead>
-                <TableHead>Admission Type</TableHead>
-                <TableHead>Clinic</TableHead>
-                <TableHead>Doctor</TableHead>
-                <TableHead>Room/Bed</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Devices</TableHead>
-                <TableHead>Last Update</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedAdmissions.length === 0 ? (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="text-center py-8 text-muted-foreground"
-                  >
-                    No admissions found
-                  </TableCell>
+                  <TableHead>Child</TableHead>
+                  <TableHead>Hospital</TableHead>
+                  <TableHead>Physiotherapist</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead>End</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ) : (
-                paginatedAdmissions.map((admission) => (
-                  <TableRow key={admission.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">
-                          {admission.patientName}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Age {admission.age} • {admission.diagnosis}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="capitalize">
-                        {admission.admissionType}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {format(
-                          new Date(admission.admissionDate),
-                          "MMM dd, yyyy"
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{admission.clinic}</TableCell>
-                    <TableCell>{admission.doctor}</TableCell>
-                    <TableCell>
-                      {admission.room || (
-                        <span className="text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(admission.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <MonitorSmartphone className="h-4 w-4 text-blue-500" />
-                        <span className="font-medium">
-                          {admission.devicesConnected}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(admission.lastUpdate), "MMM dd, HH:mm")}
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      Loading sessions...
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t">
-              <div className="text-sm text-muted-foreground">
-                Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                {Math.min(
-                  currentPage * itemsPerPage,
-                  filteredAdmissions.length
-                )}{" "}
-                of {filteredAdmissions.length} admissions
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage <= 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum: number;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={
-                          currentPage === pageNum ? "default" : "outline"
-                        }
-                        size="sm"
-                        className="w-8 h-8 p-0"
-                        onClick={() => setCurrentPage(pageNum)}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage >= totalPages}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
+                ) : sessions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      No sessions found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sessions.map((record: SessionRecord) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">
+                        {record.child
+                          ? `${record.child.firstName} ${record.child.lastName}`
+                          : "-"}
+                      </TableCell>
+                      <TableCell>{record.hospital?.name || "-"}</TableCell>
+                      <TableCell>{record.physiotherapist?.name || "-"}</TableCell>
+                      <TableCell>
+                        {new Date(record.admissionDate).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>{record.startTime || "-"}</TableCell>
+                      <TableCell>{record.endTime || "-"}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            record.status === "ACTIVE"
+                              ? "default"
+                              : record.status === "PENDING"
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {record.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenView(record)}
+                            title="View session"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              statusMutation.mutate({
+                                id: record.id,
+                                status:
+                                  record.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+                              })
+                            }
+                            title={
+                              record.status === "ACTIVE"
+                                ? "Mark inactive"
+                                : "Mark active"
+                            }
+                          >
+                            <Power className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(record)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteMutation.mutate(record.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Create Admission Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <GroupIcon className="h-5 w-5" />
-              Create New Admission
-            </DialogTitle>
-            <DialogDescription>
-              Add a patient to a clinic and assign monitoring devices for
-              rehabilitation therapy
-            </DialogDescription>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-2xl h-[90dvh] max-h-[90dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>{selected ? "Update Session" : "Add Session"}</DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="patient">
-                Patient <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.patientId}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, patientId: value })
-                }
-              >
-                <SelectTrigger id="patient">
-                  <SelectValue placeholder="Select a patient" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availablePatients.map((patient) => (
-                    <SelectItem key={patient.id} value={patient.id}>
-                      {patient.name} - Age {patient.age} ({patient.diagnosis})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="admissionType">
-                  Admission Type <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={formData.admissionType}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, admissionType: value })
-                  }
-                >
-                  <SelectTrigger id="admissionType">
-                    <SelectValue placeholder="Select type" />
+          <form
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-6 pb-6 pt-4"
+            onSubmit={handleSubmit}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Child</Label>
+                <Select value={formData.childId} onValueChange={handleChildSelection}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select child" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="inpatient">Inpatient</SelectItem>
-                    <SelectItem value="outpatient">Outpatient</SelectItem>
-                    <SelectItem value="rehab">Rehabilitation</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="admissionDate">
-                  Admission Date <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="admissionDate"
-                  type="date"
-                  value={formData.admissionDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, admissionDate: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="clinic">
-                Clinic Assignment <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.clinic}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, clinic: value })
-                }
-              >
-                <SelectTrigger id="clinic">
-                  <SelectValue placeholder="Select a clinic" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clinics.map((clinic) => (
-                    <SelectItem key={clinic} value={clinic}>
-                      {clinic}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="doctor">
-                  Assigned Doctor <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={formData.doctor}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, doctor: value })
-                  }
-                >
-                  <SelectTrigger id="doctor">
-                    <SelectValue placeholder="Select doctor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {doctors.map((doctor) => (
-                      <SelectItem key={doctor} value={doctor}>
-                        {doctor}
+                    {children.map((child: Child) => (
+                      <SelectItem key={child.id} value={child.id}>
+                        {child.firstName} {child.lastName}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="room">Room/Bed Number</Label>
+              <div className="space-y-2">
+                <Label>Hospital</Label>
+                <Select
+                  value={formData.hospitalId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      hospitalId: value === "__NONE__" ? "" : value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select hospital" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__NONE__">None</SelectItem>
+                    {hospitals.map((hospital: Hospital) => (
+                      <SelectItem key={hospital.id} value={hospital.id}>
+                        {hospital.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Physiotherapist</Label>
+                <Select
+                  value={formData.physiotherapistId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      physiotherapistId: value === "__NONE__" ? "" : value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select physiotherapist" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__NONE__">None</SelectItem>
+                    {filteredPhysiotherapists.map((physio: Physiotherapist) => (
+                      <SelectItem key={physio.id} value={physio.id}>
+                        {physio.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Date</Label>
                 <Input
-                  id="room"
-                  placeholder="e.g., Ward-A, Bed 12"
+                  type="date"
+                  value={formData.admissionDate}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, admissionDate: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, status: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="DISCHARGED">Discharged</SelectItem>
+                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Start Time</Label>
+                <Input
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, startTime: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>End Time</Label>
+                <Input
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, endTime: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Clinic</Label>
+                <Input
+                  value={formData.clinic}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, clinic: e.target.value }))
+                  }
+                  placeholder="Clinic name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Room / Ward</Label>
+                <Input
                   value={formData.room}
                   onChange={(e) =>
-                    setFormData({ ...formData, room: e.target.value })
+                    setFormData((prev) => ({ ...prev, room: e.target.value }))
                   }
+                  placeholder="Room or ward"
                 />
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="notes">Initial Assessment Notes</Label>
-              <textarea
-                id="notes"
-                placeholder="Enter initial assessment, therapy goals, or special requirements..."
-                rows={4}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
                 value={formData.notes}
                 onChange={(e) =>
-                  setFormData({ ...formData, notes: e.target.value })
+                  setFormData((prev) => ({ ...prev, notes: e.target.value }))
                 }
+                placeholder="Session notes"
+                rows={4}
               />
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsCreateDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleCreateAdmission}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Admission
+            <DialogFooter className="pt-3 border-t bg-background">
+              <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                {selected ? "Update Session" : "Create Session"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-2xl h-[85dvh] max-h-[85dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>Session Details</DialogTitle>
+          </DialogHeader>
+
+          {viewingSession ? (
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 pb-6 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label>Child</Label>
+                  <p className="text-sm">
+                    {viewingSession.child
+                      ? `${viewingSession.child.firstName} ${viewingSession.child.lastName}`
+                      : "-"}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <div>
+                    <Badge
+                      variant={
+                        viewingSession.status === "ACTIVE"
+                          ? "default"
+                          : viewingSession.status === "PENDING"
+                            ? "secondary"
+                            : "outline"
+                      }
+                    >
+                      {viewingSession.status}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Hospital</Label>
+                  <p className="text-sm">{viewingSession.hospital?.name || "-"}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Physiotherapist</Label>
+                  <p className="text-sm">
+                    {viewingSession.physiotherapist?.name || "-"}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Date</Label>
+                  <p className="text-sm">
+                    {new Date(viewingSession.admissionDate).toLocaleDateString()}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Time</Label>
+                  <p className="text-sm">
+                    {viewingSession.startTime || "-"} - {viewingSession.endTime || "-"}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Clinic</Label>
+                  <p className="text-sm">{viewingSession.clinic || "-"}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Room / Ward</Label>
+                  <p className="text-sm">{viewingSession.room || "-"}</p>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Notes</Label>
+                <p className="text-sm whitespace-pre-wrap">{viewingSession.notes || "-"}</p>
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter className="px-6 py-3 border-t bg-background">
+            <Button type="button" variant="outline" onClick={handleCloseView}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

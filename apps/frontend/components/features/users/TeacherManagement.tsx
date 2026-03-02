@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -38,7 +37,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, Search, Pencil } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Trash2, Search, Pencil, Power } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 
@@ -63,6 +63,7 @@ type Physiotherapist = {
   email?: string;
   phone: string;
   specialization?: string;
+  isActive: boolean;
   hospitalId: string;
   hospital?: {
     id: string;
@@ -132,7 +133,10 @@ export default function TeacherManagement() {
   const { data: physiotherapists = [], isLoading: physioLoading } = useQuery({
     queryKey: ["physio-management", "physiotherapists"],
     queryFn: async () => {
-      const response = await ApiClient.get<any>("/patients/locations/physiotherapists");
+      const response = await ApiClient.get<any>(
+        "/patients/locations/physiotherapists",
+        { params: { includeInactive: true } }
+      );
       const payload = response?.data ?? response ?? {};
       const list = payload?.data || payload || [];
       return Array.isArray(list) ? list : [];
@@ -145,6 +149,9 @@ export default function TeacherManagement() {
     onSuccess: () => {
       toast.success("Physiotherapist added successfully");
       queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      queryClient.invalidateQueries({
+        queryKey: ["patients-management", "physiotherapists"],
+      });
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -158,6 +165,9 @@ export default function TeacherManagement() {
     onSuccess: () => {
       toast.success("Physiotherapist updated successfully");
       queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      queryClient.invalidateQueries({
+        queryKey: ["patients-management", "physiotherapists"],
+      });
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -166,16 +176,44 @@ export default function TeacherManagement() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      ApiClient.delete(`/patients/locations/physiotherapists/${id}`),
+    mutationFn: ({ id, mode }: { id: string; mode: "inactive" | "permanent" }) =>
+      ApiClient.delete(`/patients/locations/physiotherapists/${id}`, {
+        params: { mode },
+      }),
     onSuccess: () => {
-      toast.success("Physiotherapist deleted successfully");
+      toast.success("Physiotherapist permanently deleted");
       queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      queryClient.invalidateQueries({
+        queryKey: ["patients-management", "physiotherapists"],
+      });
       setDeleteDialogOpen(false);
       setSelected(null);
     },
     onError: (error: any) => {
       toast.error(error?.message || "Failed to delete physiotherapist");
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      ApiClient.put(`/patients/locations/physiotherapists/${id}/status`, {
+        isActive,
+      }),
+    onSuccess: (_response: any, variables) => {
+      toast.success(
+        variables.isActive
+          ? "Physiotherapist marked as active"
+          : "Physiotherapist marked as inactive"
+      );
+      queryClient.invalidateQueries({ queryKey: ["physio-management"] });
+      queryClient.invalidateQueries({
+        queryKey: ["patients-management", "physiotherapists"],
+      });
+      setDeleteDialogOpen(false);
+      setSelected(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update physiotherapist status");
     },
   });
 
@@ -262,6 +300,16 @@ export default function TeacherManagement() {
     createMutation.mutate(payload);
   };
 
+  const handleMarkInactive = () => {
+    if (!selected) return;
+    updateStatusMutation.mutate({ id: selected.id, isActive: false });
+  };
+
+  const handleDeletePermanent = () => {
+    if (!selected) return;
+    deleteMutation.mutate({ id: selected.id, mode: "permanent" });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -294,6 +342,7 @@ export default function TeacherManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Physiotherapist Name</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Hospital</TableHead>
                   <TableHead>Zone</TableHead>
                   <TableHead>Contact Number</TableHead>
@@ -304,13 +353,13 @@ export default function TeacherManagement() {
               <TableBody>
                 {physioLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       Loading physiotherapists...
                     </TableCell>
                   </TableRow>
                 ) : filteredPhysiotherapists.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       No physiotherapists found.
                     </TableCell>
                   </TableRow>
@@ -318,6 +367,11 @@ export default function TeacherManagement() {
                   filteredPhysiotherapists.map((item: Physiotherapist) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>
+                        <Badge variant={item.isActive ? "default" : "secondary"}>
+                          {item.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{item.hospital?.name || "-"}</TableCell>
                       <TableCell>{item.hospital?.zone?.name || "-"}</TableCell>
                       <TableCell>{item.phone || "-"}</TableCell>
@@ -330,6 +384,19 @@ export default function TeacherManagement() {
                             onClick={() => handleOpenEdit(item)}
                           >
                             <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              updateStatusMutation.mutate({
+                                id: item.id,
+                                isActive: !item.isActive,
+                              })
+                            }
+                            title={item.isActive ? "Mark inactive" : "Mark active"}
+                          >
+                            <Power className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -512,20 +579,28 @@ export default function TeacherManagement() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete physiotherapist</AlertDialogTitle>
             <AlertDialogDescription>
-              This action will deactivate the physiotherapist record.
+              Choose whether to mark this physiotherapist inactive or permanently
+              delete the physiotherapist and related appointments.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (!selected) return;
-                deleteMutation.mutate(selected.id);
-              }}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleMarkInactive}
+              disabled={updateStatusMutation.isPending || deleteMutation.isPending}
             >
-              Delete
-            </AlertDialogAction>
+              Make Inactive
+            </Button>
+            <Button
+              type="button"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeletePermanent}
+              disabled={updateStatusMutation.isPending || deleteMutation.isPending}
+            >
+              Delete Permanently
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

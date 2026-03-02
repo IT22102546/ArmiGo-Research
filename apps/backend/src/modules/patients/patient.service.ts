@@ -10,6 +10,10 @@ import { PrismaService } from '@database/prisma.service';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { UpdatePatientDto } from './dtos/update-patient.dto';
 import { PatientResponseDto, PatientStatsDto } from './dtos/patient-response.dto';
+import {
+  CreateAdmissionTrackingDto,
+  UpdateAdmissionTrackingDto,
+} from './dtos/admission-tracking.dto';
 
 @Injectable()
 export class PatientService {
@@ -834,10 +838,10 @@ export class PatientService {
   /**
    * Get physiotherapists from real hospital staff records
    */
-  async getPhysiotherapists(hospitalId?: string) {
+  async getPhysiotherapists(hospitalId?: string, includeInactive = false) {
     return await this.prisma.hospitalStaff.findMany({
       where: {
-        isActive: true,
+        ...(includeInactive ? {} : { isActive: true }),
         ...(hospitalId ? { hospitalId } : {}),
         role: {
           in: ['THERAPIST', 'PHYSIOTHERAPIST'],
@@ -850,6 +854,7 @@ export class PatientService {
         specialization: true,
         phone: true,
         email: true,
+        isActive: true,
         hospitalId: true,
         hospital: {
           select: {
@@ -908,6 +913,7 @@ export class PatientService {
         specialization: true,
         phone: true,
         email: true,
+        isActive: true,
         hospitalId: true,
         hospital: {
           select: {
@@ -982,6 +988,7 @@ export class PatientService {
         specialization: true,
         phone: true,
         email: true,
+        isActive: true,
         hospitalId: true,
         hospital: {
           select: {
@@ -1001,9 +1008,9 @@ export class PatientService {
   }
 
   /**
-   * Soft delete physiotherapist
+   * Update physiotherapist active/inactive status
    */
-  async deletePhysiotherapist(id: string) {
+  async setPhysiotherapistStatus(id: string, isActive: boolean) {
     const existing = await this.prisma.hospitalStaff.findUnique({
       where: { id },
       select: { id: true, role: true },
@@ -1017,15 +1024,658 @@ export class PatientService {
       throw new BadRequestException('Selected staff member is not a physiotherapist');
     }
 
-    await this.prisma.hospitalStaff.update({
+    return await this.prisma.hospitalStaff.update({
       where: { id },
       data: {
-        isActive: false,
-        leftAt: new Date(),
+        isActive,
+        leftAt: isActive ? null : new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        specialization: true,
+        phone: true,
+        email: true,
+        isActive: true,
+        hospitalId: true,
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+            zoneId: true,
+            zone: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Delete physiotherapist (inactive mode or permanent mode)
+   */
+  async deletePhysiotherapist(
+    id: string,
+    mode: 'inactive' | 'permanent' = 'permanent'
+  ): Promise<{ message: string }> {
+    const existing = await this.prisma.hospitalStaff.findUnique({
+      where: { id },
+      select: { id: true, role: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Physiotherapist with ID ${id} not found`);
+    }
+
+    if (!['THERAPIST', 'PHYSIOTHERAPIST'].includes(existing.role)) {
+      throw new BadRequestException('Selected staff member is not a physiotherapist');
+    }
+
+    if (mode === 'inactive') {
+      await this.prisma.hospitalStaff.update({
+        where: { id },
+        data: {
+          isActive: false,
+          leftAt: new Date(),
+        },
+      });
+
+      return { message: `Physiotherapist ${id} has been marked as inactive` };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.appointment.deleteMany({ where: { staffId: id } });
+      await tx.hospitalStaff.delete({ where: { id } });
+    });
+
+    return { message: `Physiotherapist ${id} has been permanently deleted` };
+  }
+
+  async getAdmissionTrackingOptions(hospitalId?: string) {
+    const [children, physiotherapists, hospitals, devices] = await Promise.all([
+      this.prisma.child.findMany({
+        where: {
+          ...(hospitalId ? { hospitalId } : {}),
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          age: true,
+          diagnosis: true,
+          assignedDoctor: true,
+          isActive: true,
+          hospitalId: true,
+          hospital: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      }),
+      this.getPhysiotherapists(hospitalId, true),
+      this.prisma.hospital.findMany({
+        where: {
+          ...(hospitalId ? { id: hospitalId } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.device.findMany({
+        where: {
+          ...(hospitalId ? { hospitalId } : {}),
+          status: {
+            in: ['AVAILABLE', 'ASSIGNED', 'MAINTENANCE'],
+          },
+        },
+        select: {
+          id: true,
+          serialNumber: true,
+          deviceType: true,
+          modelNumber: true,
+          status: true,
+          hospitalId: true,
+          hospital: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: { serialNumber: 'asc' },
+      }),
+    ]);
+
+    return {
+      children,
+      physiotherapists,
+      hospitals,
+      devices,
+    };
+  }
+
+  async getAdmissionTrackings(filters?: {
+    hospitalId?: string;
+    childId?: string;
+    physiotherapistId?: string;
+    status?: string;
+    search?: string;
+  }) {
+    const whereClause: any = {
+      ...(filters?.hospitalId ? { hospitalId: filters.hospitalId } : {}),
+      ...(filters?.childId ? { childId: filters.childId } : {}),
+      ...(filters?.physiotherapistId
+        ? { physiotherapistId: filters.physiotherapistId }
+        : {}),
+      ...(filters?.status && filters.status !== 'ALL'
+        ? { status: filters.status }
+        : {}),
+    };
+
+    if (filters?.search?.trim()) {
+      const search = filters.search.trim();
+      whereClause.OR = [
+        {
+          child: {
+            firstName: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          child: {
+            lastName: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          physiotherapist: {
+            name: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          manualDeviceName: { contains: search, mode: 'insensitive' },
+        },
+        {
+          clinic: { contains: search, mode: 'insensitive' },
+        },
+      ];
+    }
+
+    return await this.prisma.admissionTracking.findMany({
+      where: whereClause,
+      include: {
+        child: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            age: true,
+            diagnosis: true,
+            assignedDoctor: true,
+            hospitalId: true,
+          },
+        },
+        physiotherapist: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            hospitalId: true,
+          },
+        },
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        device: {
+          select: {
+            id: true,
+            serialNumber: true,
+            modelNumber: true,
+            deviceType: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: [{ admissionDate: 'desc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  async createAdmissionTracking(data: CreateAdmissionTrackingDto) {
+    this.validateSessionTimeRange(data.startTime, data.endTime);
+
+    const child = await this.prisma.child.findUnique({
+      where: { id: data.childId },
+      select: {
+        id: true,
+        hospitalId: true,
+        assignedDoctor: true,
       },
     });
 
-    return { message: 'Physiotherapist deleted successfully' };
+    if (!child) {
+      throw new NotFoundException(`Child with ID ${data.childId} not found`);
+    }
+
+    if (data.physiotherapistId) {
+      const physio = await this.prisma.hospitalStaff.findUnique({
+        where: { id: data.physiotherapistId },
+        select: { id: true, role: true },
+      });
+
+      if (!physio) {
+        throw new NotFoundException(
+          `Physiotherapist with ID ${data.physiotherapistId} not found`
+        );
+      }
+
+      if (!['THERAPIST', 'PHYSIOTHERAPIST'].includes(physio.role)) {
+        throw new BadRequestException('Selected staff member is not a physiotherapist');
+      }
+    }
+
+    if (data.hospitalId) {
+      const hospital = await this.prisma.hospital.findUnique({
+        where: { id: data.hospitalId },
+        select: { id: true },
+      });
+
+      if (!hospital) {
+        throw new NotFoundException(`Hospital with ID ${data.hospitalId} not found`);
+      }
+    }
+
+    if (data.deviceId) {
+      const device = await this.prisma.device.findUnique({
+        where: { id: data.deviceId },
+        select: { id: true },
+      });
+
+      if (!device) {
+        throw new NotFoundException(`Device with ID ${data.deviceId} not found`);
+      }
+    }
+
+    let resolvedPhysiotherapistId: string | null = data.physiotherapistId || null;
+
+    if (!resolvedPhysiotherapistId && child.assignedDoctor?.trim()) {
+      const matchedPhysio = await this.prisma.hospitalStaff.findFirst({
+        where: {
+          role: {
+            in: ['THERAPIST', 'PHYSIOTHERAPIST'],
+          },
+          name: {
+            equals: child.assignedDoctor.trim(),
+            mode: 'insensitive',
+          },
+          ...(child.hospitalId ? { hospitalId: child.hospitalId } : {}),
+        },
+        select: { id: true },
+      });
+
+      resolvedPhysiotherapistId = matchedPhysio?.id || null;
+    }
+
+    const resolvedHospitalId = data.hospitalId || child.hospitalId || null;
+    const admissionDate = new Date(data.admissionDate);
+
+    await this.ensureNoAdmissionSessionOverlap({
+      childId: data.childId,
+      admissionDate,
+      startTime: data.startTime,
+      endTime: data.endTime,
+    });
+
+    return await this.prisma.admissionTracking.create({
+      data: {
+        childId: data.childId,
+        physiotherapistId: resolvedPhysiotherapistId,
+        hospitalId: resolvedHospitalId,
+        deviceId: data.deviceId || null,
+        admissionType: data.admissionType || 'REHAB',
+        status: data.status || 'ACTIVE',
+        admissionDate,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        dischargeDate: data.dischargeDate ? new Date(data.dischargeDate) : null,
+        deviceAssignedDate: data.deviceAssignedDate
+          ? new Date(data.deviceAssignedDate)
+          : null,
+        clinic: data.clinic,
+        room: data.room,
+        notes: data.notes,
+        manualDeviceName: data.manualDeviceName,
+        manualDeviceType: data.manualDeviceType,
+        manualDeviceSerial: data.manualDeviceSerial,
+      },
+      include: {
+        child: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            age: true,
+            diagnosis: true,
+            assignedDoctor: true,
+          },
+        },
+        physiotherapist: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        device: {
+          select: {
+            id: true,
+            serialNumber: true,
+            deviceType: true,
+            modelNumber: true,
+          },
+        },
+      },
+    });
+  }
+
+  async updateAdmissionTracking(id: string, data: UpdateAdmissionTrackingDto) {
+    const existing = await this.prisma.admissionTracking.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        childId: true,
+        hospitalId: true,
+        admissionDate: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Admission tracking with ID ${id} not found`);
+    }
+
+    if (data.childId) {
+      const child = await this.prisma.child.findUnique({
+        where: { id: data.childId },
+        select: { id: true },
+      });
+      if (!child) {
+        throw new NotFoundException(`Child with ID ${data.childId} not found`);
+      }
+    }
+
+    if (data.physiotherapistId) {
+      const physio = await this.prisma.hospitalStaff.findUnique({
+        where: { id: data.physiotherapistId },
+        select: { id: true, role: true },
+      });
+
+      if (!physio) {
+        throw new NotFoundException(
+          `Physiotherapist with ID ${data.physiotherapistId} not found`
+        );
+      }
+
+      if (!['THERAPIST', 'PHYSIOTHERAPIST'].includes(physio.role)) {
+        throw new BadRequestException('Selected staff member is not a physiotherapist');
+      }
+    }
+
+    if (data.hospitalId) {
+      const hospital = await this.prisma.hospital.findUnique({
+        where: { id: data.hospitalId },
+        select: { id: true },
+      });
+
+      if (!hospital) {
+        throw new NotFoundException(`Hospital with ID ${data.hospitalId} not found`);
+      }
+    }
+
+    if (data.deviceId) {
+      const device = await this.prisma.device.findUnique({
+        where: { id: data.deviceId },
+        select: { id: true },
+      });
+
+      if (!device) {
+        throw new NotFoundException(`Device with ID ${data.deviceId} not found`);
+      }
+    }
+
+    const resolvedChildId = data.childId || existing.childId;
+    const resolvedAdmissionDate = data.admissionDate
+      ? new Date(data.admissionDate)
+      : existing.admissionDate;
+    const resolvedStartTime = data.startTime ?? existing.startTime;
+    const resolvedEndTime = data.endTime ?? existing.endTime;
+
+    if (resolvedStartTime && resolvedEndTime) {
+      this.validateSessionTimeRange(resolvedStartTime, resolvedEndTime);
+      await this.ensureNoAdmissionSessionOverlap({
+        childId: resolvedChildId,
+        admissionDate: resolvedAdmissionDate,
+        startTime: resolvedStartTime,
+        endTime: resolvedEndTime,
+        excludeId: id,
+      });
+    }
+
+    return await this.prisma.admissionTracking.update({
+      where: { id },
+      data: {
+        ...(data.childId !== undefined ? { childId: data.childId } : {}),
+        ...(data.physiotherapistId !== undefined
+          ? { physiotherapistId: data.physiotherapistId || null }
+          : {}),
+        ...(data.hospitalId !== undefined
+          ? { hospitalId: data.hospitalId || null }
+          : {}),
+        ...(data.deviceId !== undefined ? { deviceId: data.deviceId || null } : {}),
+        ...(data.admissionType !== undefined
+          ? { admissionType: data.admissionType }
+          : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.admissionDate !== undefined
+          ? { admissionDate: new Date(data.admissionDate) }
+          : {}),
+        ...(data.startTime !== undefined ? { startTime: data.startTime } : {}),
+        ...(data.endTime !== undefined ? { endTime: data.endTime } : {}),
+        ...(data.dischargeDate !== undefined
+          ? {
+              dischargeDate: data.dischargeDate
+                ? new Date(data.dischargeDate)
+                : null,
+            }
+          : {}),
+        ...(data.deviceAssignedDate !== undefined
+          ? {
+              deviceAssignedDate: data.deviceAssignedDate
+                ? new Date(data.deviceAssignedDate)
+                : null,
+            }
+          : {}),
+        ...(data.clinic !== undefined ? { clinic: data.clinic } : {}),
+        ...(data.room !== undefined ? { room: data.room } : {}),
+        ...(data.notes !== undefined ? { notes: data.notes } : {}),
+        ...(data.manualDeviceName !== undefined
+          ? { manualDeviceName: data.manualDeviceName }
+          : {}),
+        ...(data.manualDeviceType !== undefined
+          ? { manualDeviceType: data.manualDeviceType }
+          : {}),
+        ...(data.manualDeviceSerial !== undefined
+          ? { manualDeviceSerial: data.manualDeviceSerial }
+          : {}),
+      },
+      include: {
+        child: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            age: true,
+            diagnosis: true,
+            assignedDoctor: true,
+          },
+        },
+        physiotherapist: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        device: {
+          select: {
+            id: true,
+            serialNumber: true,
+            deviceType: true,
+            modelNumber: true,
+          },
+        },
+      },
+    });
+  }
+
+  async updateAdmissionTrackingStatus(id: string, status: string) {
+    const existing = await this.prisma.admissionTracking.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Admission tracking with ID ${id} not found`);
+    }
+
+    return await this.prisma.admissionTracking.update({
+      where: { id },
+      data: { status },
+    });
+  }
+
+  async deleteAdmissionTracking(id: string): Promise<{ message: string }> {
+    const existing = await this.prisma.admissionTracking.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Admission tracking with ID ${id} not found`);
+    }
+
+    await this.prisma.admissionTracking.delete({
+      where: { id },
+    });
+
+    return { message: `Admission tracking ${id} has been deleted` };
+  }
+
+  private validateSessionTimeRange(startTime?: string | null, endTime?: string | null) {
+    if (!startTime || !endTime) {
+      throw new BadRequestException('Session start time and end time are required');
+    }
+
+    const startMinutes = this.parseTimeToMinutes(startTime);
+    const endMinutes = this.parseTimeToMinutes(endTime);
+
+    if (endMinutes <= startMinutes) {
+      throw new BadRequestException('Session end time must be after start time');
+    }
+  }
+
+  private parseTimeToMinutes(value: string): number {
+    const [hourText, minuteText] = (value || '').split(':');
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+
+    if (
+      Number.isNaN(hour) ||
+      Number.isNaN(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      throw new BadRequestException('Invalid time format. Use HH:mm');
+    }
+
+    return hour * 60 + minute;
+  }
+
+  private async ensureNoAdmissionSessionOverlap(params: {
+    childId: string;
+    admissionDate: Date;
+    startTime: string;
+    endTime: string;
+    excludeId?: string;
+  }) {
+    const dayStart = new Date(params.admissionDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(params.admissionDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const sessions = await this.prisma.admissionTracking.findMany({
+      where: {
+        childId: params.childId,
+        admissionDate: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
+        status: {
+          notIn: ['INACTIVE', 'DISCHARGED'],
+        },
+        ...(params.excludeId ? { id: { not: params.excludeId } } : {}),
+      },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    const requestedStart = this.parseTimeToMinutes(params.startTime);
+    const requestedEnd = this.parseTimeToMinutes(params.endTime);
+
+    const hasOverlap = sessions.some((session) => {
+      if (!session.startTime || !session.endTime) {
+        return false;
+      }
+
+      const existingStart = this.parseTimeToMinutes(session.startTime);
+      const existingEnd = this.parseTimeToMinutes(session.endTime);
+
+      return requestedStart < existingEnd && requestedEnd > existingStart;
+    });
+
+    if (hasOverlap) {
+      throw new BadRequestException(
+        'Another session already exists for this child within the selected time range'
+      );
+    }
   }
 
   /**
