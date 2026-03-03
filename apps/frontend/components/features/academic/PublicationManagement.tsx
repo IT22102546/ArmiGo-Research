@@ -10,9 +10,11 @@ import {
   FileText,
   Loader2,
   Eye,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -438,62 +440,83 @@ function PublicationManagement() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-background p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-          <button className="hover:text-foreground">Content</button>
-          <span>/</span>
-          <span className="text-foreground">Publications</span>
-        </div>
-
+    <div className="space-y-6">
         {/* Header */}
-        <div className="mb-6 rounded-xl border border-border bg-card p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10">
+              <FileText className="h-5 w-5 text-primary" />
+            </div>
             <div>
-              <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">
-                Publications
-              </h1>
-              <p className="text-muted-foreground mt-1">
+              <h1 className="text-2xl font-semibold text-foreground">Publications</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
                 Manage and publish professional documents for your ArmiGo users.
               </p>
             </div>
-            <Button
-              onClick={openAddModal}
-              className="bg-primary hover:bg-primary/90"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Plus className="w-4 h-4 mr-2" />
-              )}
-              Add Publication
-            </Button>
           </div>
+          <Button
+            onClick={openAddModal}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 mr-2" />
+            )}
+            Add Publication
+          </Button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Total</p>
-            <p className="text-2xl font-semibold text-foreground">{publications.length}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Published</p>
-            <p className="text-2xl font-semibold text-foreground">{publishedCount}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Drafts</p>
-            <p className="text-2xl font-semibold text-foreground">{draftCount}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Archived</p>
-            <p className="text-2xl font-semibold text-foreground">{archivedCount}</p>
-          </div>
+        {/* Stats */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="text-2xl font-semibold">{publications.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <Activity className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Published</p>
+                <p className="text-2xl font-semibold">{publishedCount}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                <Edit2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Drafts</p>
+                <p className="text-2xl font-semibold">{draftCount}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40">
+                <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Archived</p>
+                <p className="text-2xl font-semibold">{archivedCount}</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Filters and Actions */}
-        <div className="rounded-lg border border-border bg-card p-4 mb-6">
+        <Card className="border-0 shadow-sm"><CardContent className="p-4">
           <div className="flex flex-col lg:flex-row lg:items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -515,7 +538,7 @@ function PublicationManagement() {
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   setStatusFilter(e.target.value);
                 }}
-                className="h-10 px-4 border border-border rounded-md bg-background text-sm min-w-[160px]"
+                className="h-9 px-3 border border-border rounded-md bg-background text-sm min-w-[140px]"
                 aria-label="Filter publications by status"
               >
                 <option value="all">All Status</option>
@@ -531,17 +554,22 @@ function PublicationManagement() {
               </Button>
             </div>
           </div>
-        </div>
+        </CardContent></Card>
 
         {/* Table */}
-        <div className="bg-card rounded-lg border border-border overflow-hidden">
+        <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
           {isLoading ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">
-                Loading publications...
-              </span>
-            </div>
+            <table className="w-full">
+              <tbody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-border last:border-0">
+                    <td colSpan={6} className="p-3">
+                      <div className="h-10 rounded-lg bg-muted animate-pulse" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px]">
@@ -602,37 +630,36 @@ function PublicationManagement() {
                         <div className="flex items-center justify-end gap-2">
                           <Button
                             type="button"
-                            variant="outline"
-                            size="sm"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 hover:bg-sky-500/10 hover:text-sky-600"
                             onClick={() => window.open(publication.fileUrl, "_blank")}
                             disabled={isLoading || !publication.fileUrl}
                             aria-label={`View ${publication.title}`}
                           >
-                            <Eye className="w-4 h-4 mr-1" />
-                            View
+                            <Eye className="w-4 h-4" />
                           </Button>
                           <Button
                             type="button"
-                            variant="outline"
-                            size="sm"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                             onClick={() => openEditModal(publication)}
                             disabled={isLoading}
                             aria-label={`Edit ${publication.title}`}
                           >
-                            <Edit2 className="w-4 h-4 mr-1" />
-                            Edit
+                            <Edit2 className="w-4 h-4" />
                           </Button>
                           <Button
                             type="button"
-                            variant="outline"
-                            size="sm"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => openDeleteModal(publication)}
                             disabled={isLoading}
                             aria-label={`Delete ${publication.title}`}
-                            className="text-destructive hover:text-destructive"
                           >
-                            <Trash2 className="w-4 h-4 mr-1" />
-                            Delete
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </td>
@@ -660,7 +687,7 @@ function PublicationManagement() {
               </table>
             </div>
           )}
-        </div>
+        </CardContent></Card>
 
         {/* Add Publication Modal */}
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
@@ -1079,7 +1106,6 @@ function PublicationManagement() {
           </DialogContent>
         </Dialog>
 
-      </div>
     </div>
   );
 }

@@ -155,7 +155,8 @@ model User {
   // Appointments created
   createdAppointments Appointment[] @relation("AppointmentCreatedBy")
   notifications      Notification[]
-  createdPublications Publication[] @relation("UserCreatedPublications")
+  createdPublications      Publication[]              @relation("UserCreatedPublications")
+  physioAssignmentsCreated PhysiotherapyAssignment[]  @relation("PhysioAssignmentCreator")
 
   @@index([deletedAt])
   @@index([role, status])
@@ -253,6 +254,7 @@ model Hospital {
   credentialLogs    CredentialLog[] @relation("HospitalCredentialLogs")
   admissionTrackings AdmissionTracking[]
   publications      Publication[]
+  physioAssignments PhysiotherapyAssignment[]
 
   @@index([status])
   @@index([isMainHospital])
@@ -361,6 +363,7 @@ model HospitalStaff {
   // Appointments/therapies they handle
   appointments    Appointment[]   @relation("StaffAppointments")
   admissionTrackings AdmissionTracking[] @relation("AdmissionPhysiotherapist")
+  physioAssignments   PhysiotherapyAssignment[] @relation("PhysioStaffAssignments")
 
   @@index([hospitalId])
   @@index([subHospitalId])
@@ -413,6 +416,7 @@ model Child {
   therapySessions TherapySession[]
   appointments    Appointment[]
   admissionTrackings AdmissionTracking[]
+  physioAssignments   PhysiotherapyAssignment[] @relation("ChildPhysioAssignments")
   
   @@index([parentId])
   @@index([hospitalId])
@@ -704,6 +708,8 @@ model AdmissionTracking {
   manualDeviceType   String?
   manualDeviceSerial String?
 
+  treatmentPlanPdf   String?
+
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
@@ -720,6 +726,35 @@ model AdmissionTracking {
   @@index([admissionDate])
   @@index([childId, admissionDate])
   @@map("admission_tracking")
+}
+
+model PhysiotherapyAssignment {
+  id                  String         @id @default(cuid())
+  hospitalId          String?
+  physiotherapistId   String?
+  childId             String
+  title               String
+  description         String?        @db.Text
+  assignmentPdf       String?        // URL to uploaded PDF
+  assignmentPdfName   String?        // Original filename
+  status              String         @default("ACTIVE")
+  dueDate             DateTime?
+  createdById         String
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  hospital            Hospital?      @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  physiotherapist     HospitalStaff? @relation("PhysioStaffAssignments", fields: [physiotherapistId], references: [id], onDelete: SetNull)
+  child               Child          @relation("ChildPhysioAssignments", fields: [childId], references: [id], onDelete: Cascade)
+  createdBy           User           @relation("PhysioAssignmentCreator", fields: [createdById], references: [id])
+
+  @@index([hospitalId])
+  @@index([physiotherapistId])
+  @@index([childId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("physiotherapy_assignments")
 }
 
 model Publication {

@@ -1633,6 +1633,7 @@ export class PatientService {
         manualDeviceName: data.manualDeviceName,
         manualDeviceType: data.manualDeviceType,
         manualDeviceSerial: data.manualDeviceSerial,
+        treatmentPlanPdf: data.treatmentPlanPdf,
       },
       include: {
         child: {
@@ -1898,6 +1899,9 @@ export class PatientService {
           : {}),
         ...(data.manualDeviceSerial !== undefined
           ? { manualDeviceSerial: data.manualDeviceSerial }
+          : {}),
+        ...(data.treatmentPlanPdf !== undefined
+          ? { treatmentPlanPdf: data.treatmentPlanPdf }
           : {}),
       },
       include: {
@@ -2340,4 +2344,208 @@ export class PatientService {
     date.setHours(hours || 0, minutes || 0, 0, 0);
     return date;
   }
+
+  // ============================================================
+  // PHYSIOTHERAPY ASSIGNMENTS
+  // ============================================================
+
+  /**
+   * Return dropdown options for the Create Assignment form.
+   * - hospitals: all active (or scoped to hospitalId)
+   * - physiotherapists: staff of the selected hospital
+   * - childrenByPhysio: children who have an admission tracking record for the selected physiotherapist
+   */
+  async getPhysioAssignmentOptions(hospitalId?: string, physiotherapistId?: string) {
+    const [hospitals, physiotherapists] = await Promise.all([
+      this.prisma.hospital.findMany({
+        where: { ...(hospitalId ? { id: hospitalId } : {}), status: 'ACTIVE' },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.hospitalStaff.findMany({
+        where: {
+          ...(hospitalId ? { hospitalId } : {}),
+          isActive: true,
+          role: { in: ['THERAPIST', 'PHYSIOTHERAPIST', 'DOCTOR'] },
+        },
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          specialization: true,
+          hospitalId: true,
+          hospital: { select: { id: true, name: true } },
+        },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    // Get children assigned to the chosen physiotherapist (via admission tracking)
+    let children: any[] = [];
+    if (physiotherapistId) {
+      const admissions = await this.prisma.admissionTracking.findMany({
+        where: { physiotherapistId },
+        select: {
+          childId: true,
+          child: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              age: true,
+              diagnosis: true,
+              hospitalId: true,
+              hospital: { select: { id: true, name: true } },
+            },
+          },
+        },
+      });
+      // Deduplicate children
+      const seen = new Set<string>();
+      children = admissions
+        .map((a) => a.child)
+        .filter((c) => {
+          if (seen.has(c.id)) return false;
+          seen.add(c.id);
+          return true;
+        });
+    } else if (hospitalId) {
+      // No physiotherapist selected yet – return all active children for the hospital
+      children = await this.prisma.child.findMany({
+        where: { hospitalId, isActive: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          age: true,
+          diagnosis: true,
+          hospitalId: true,
+          hospital: { select: { id: true, name: true } },
+        },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      });
+    }
+
+    return { hospitals, physiotherapists, children };
+  }
+
+  /** List physiotherapy assignments with optional filters */
+  async getPhysioAssignments(filters?: {
+    hospitalId?: string;
+    physiotherapistId?: string;
+    childId?: string;
+    status?: string;
+    search?: string;
+  }) {
+    const where: any = {
+      ...(filters?.hospitalId ? { hospitalId: filters.hospitalId } : {}),
+      ...(filters?.physiotherapistId ? { physiotherapistId: filters.physiotherapistId } : {}),
+      ...(filters?.childId ? { childId: filters.childId } : {}),
+      ...(filters?.status && filters.status !== 'all' ? { status: filters.status } : {}),
+    };
+
+    if (filters?.search?.trim()) {
+      const s = filters.search.trim();
+      where.OR = [
+        { title: { contains: s, mode: 'insensitive' } },
+        { child: { firstName: { contains: s, mode: 'insensitive' } } },
+        { child: { lastName: { contains: s, mode: 'insensitive' } } },
+        { physiotherapist: { name: { contains: s, mode: 'insensitive' } } },
+      ];
+    }
+
+    return this.prisma.physiotherapyAssignment.findMany({
+      where,
+      include: {
+        hospital: { select: { id: true, name: true } },
+        physiotherapist: { select: { id: true, name: true, role: true, specialization: true } },
+        child: { select: { id: true, firstName: true, lastName: true, age: true, diagnosis: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Create a new physiotherapy assignment */
+  async createPhysioAssignment(
+    data: {
+      hospitalId?: string;
+      physiotherapistId?: string;
+      childId: string;
+      title: string;
+      description?: string;
+      assignmentPdf?: string;
+      assignmentPdfName?: string;
+      status?: string;
+      dueDate?: string;
+    },
+    createdById: string
+  ) {
+    const child = await this.prisma.child.findUnique({ where: { id: data.childId } });
+    if (!child) throw new NotFoundException(`Child ${data.childId} not found`);
+
+    return this.prisma.physiotherapyAssignment.create({
+      data: {
+        hospitalId: data.hospitalId || null,
+        physiotherapistId: data.physiotherapistId || null,
+        childId: data.childId,
+        title: data.title,
+        description: data.description || null,
+        assignmentPdf: data.assignmentPdf || null,
+        assignmentPdfName: data.assignmentPdfName || null,
+        status: data.status || 'ACTIVE',
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        createdById,
+      },
+      include: {
+        hospital: { select: { id: true, name: true } },
+        physiotherapist: { select: { id: true, name: true, role: true } },
+        child: { select: { id: true, firstName: true, lastName: true, age: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  /** Update an existing physiotherapy assignment */
+  async updatePhysioAssignment(
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      assignmentPdf?: string;
+      assignmentPdfName?: string;
+      status?: string;
+      dueDate?: string;
+    }
+  ) {
+    const existing = await this.prisma.physiotherapyAssignment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Assignment ${id} not found`);
+
+    return this.prisma.physiotherapyAssignment.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.assignmentPdf !== undefined ? { assignmentPdf: data.assignmentPdf } : {}),
+        ...(data.assignmentPdfName !== undefined ? { assignmentPdfName: data.assignmentPdfName } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.dueDate !== undefined ? { dueDate: data.dueDate ? new Date(data.dueDate) : null } : {}),
+      },
+      include: {
+        hospital: { select: { id: true, name: true } },
+        physiotherapist: { select: { id: true, name: true, role: true } },
+        child: { select: { id: true, firstName: true, lastName: true, age: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  /** Delete a physiotherapy assignment */
+  async deletePhysioAssignment(id: string) {
+    const existing = await this.prisma.physiotherapyAssignment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Assignment ${id} not found`);
+    await this.prisma.physiotherapyAssignment.delete({ where: { id } });
+    return { message: 'Assignment deleted successfully' };
+  }
 }
+

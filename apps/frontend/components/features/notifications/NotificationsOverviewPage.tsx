@@ -37,7 +37,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Eye, Calendar, Filter, Pencil, Trash2 } from "lucide-react";
+import { Search, Eye, Calendar, Filter, Pencil, Trash2, Bell, Send, Activity } from "lucide-react";
 import { notificationsApi } from "@/lib/api/endpoints";
 import type { Notification } from "@/lib/api/endpoints/notifications";
 import { handleApiError } from "@/lib/error-handling";
@@ -471,31 +471,36 @@ export default function NotificationsOverviewPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>System Notifications Overview</CardTitle>
-            <CardDescription>
-              View and monitor all sent notifications for debugging and support
-            </CardDescription>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="p-2.5 rounded-xl bg-primary/10">
+          <Bell className="h-6 w-6 text-primary" />
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="border rounded-lg p-4 mb-6 space-y-4">
-          <div>
+        <div>
+          <h1 className="text-2xl font-semibold">System Notifications</h1>
+          <p className="text-sm text-muted-foreground">
+            View and monitor all sent notifications for debugging and support
+          </p>
+        </div>
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardContent className="pt-5">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Send className="h-4 w-4 text-primary" />
             <h3 className="text-base font-semibold">
               {isHospitalScopedUser
                 ? `Send Notification (${scopedHospital?.name || "Hospital"})`
                 : "Send Notification (Super Admin)"}
             </h3>
+          </div>
             <p className="text-sm text-muted-foreground">
               {isHospitalScopedUser
                 ? "Select patients from your hospital. Notifications will be restricted to your hospital audience."
                 : "Select patients and/or hospitals. Parents of selected patients and admins of selected hospitals will receive this notification."}
             </p>
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -669,7 +674,11 @@ export default function NotificationsOverviewPage() {
             </Button>
           </div>
         </div>
+        </CardContent>
+      </Card>
 
+      <Card className="border-0 shadow-sm">
+        <CardContent className="pt-5">
         {/* Filters */}
         <div className="space-y-4 mb-6">
           <div className="flex gap-4">
@@ -777,18 +786,26 @@ export default function NotificationsOverviewPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center">
-                  Loading...
-                </TableCell>
-              </TableRow>
-            ) : notifications.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center">
-                  No notifications found
-                </TableCell>
-              </TableRow>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={9}>
+                        <div className="h-10 rounded-lg bg-muted animate-pulse" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : notifications.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9}>
+                      <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+                        <div className="p-3 rounded-full bg-muted">
+                          <Bell className="h-6 w-6" />
+                        </div>
+                        <p className="font-medium">No notifications found</p>
+                        <p className="text-xs">Send a notification or adjust your filters</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
             ) : (
               notifications.map((notification) => (
                 <TableRow
@@ -853,7 +870,8 @@ export default function NotificationsOverviewPage() {
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-sky-500/10 hover:text-sky-600"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleViewDetail(notification);
@@ -863,7 +881,8 @@ export default function NotificationsOverviewPage() {
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenEdit(notification);
@@ -873,14 +892,15 @@ export default function NotificationsOverviewPage() {
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedNotification(notification);
                           setDeleteDialogOpen(true);
                         }}
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
@@ -919,6 +939,7 @@ export default function NotificationsOverviewPage() {
           </div>
         </div>
       </CardContent>
+      </Card>
 
       {/* View Detail Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
@@ -1082,6 +1103,6 @@ export default function NotificationsOverviewPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }

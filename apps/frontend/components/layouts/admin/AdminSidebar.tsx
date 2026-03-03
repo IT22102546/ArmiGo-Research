@@ -93,7 +93,7 @@ export default function AdminSidebar({
       { href: "/admin/timetable", icon: Clock, label: "Session Schedule" },
       {
         href: "/admin/teacher-assignments",
-        icon: Calendar,
+        icon: ClipboardList,
         label: "Physiotherapy Assignments",
       },
       {

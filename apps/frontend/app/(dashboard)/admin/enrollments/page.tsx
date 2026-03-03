@@ -30,7 +30,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Eye, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, CheckCircle2, XCircle, CalendarClock, Search, Activity, Clock } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
@@ -411,37 +411,78 @@ export default function EnrollmentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Patients & Physiotherapy</p>
-          <h1 className="text-2xl font-semibold">Session Scheduling</h1>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <CalendarClock className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Patients & Physiotherapy</p>
+            <h1 className="text-2xl font-semibold">Session Scheduling</h1>
+          </div>
         </div>
         <Button onClick={handleOpenCreate}>
           <Plus className="h-4 w-4 mr-2" /> Add Session
         </Button>
       </div>
 
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Child Sessions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Total Sessions</p>
-              <p className="text-xl font-semibold">{sessionStats.total}</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Scheduled</p>
-              <p className="text-xl font-semibold">{sessionStats.scheduled}</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Ongoing</p>
-              <p className="text-xl font-semibold">{sessionStats.ongoing}</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Finished</p>
-              <p className="text-xl font-semibold">{sessionStats.finished}</p>
-            </div>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                    <CalendarClock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-xl font-bold">{sessionStats.total}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-950/40 dark:to-violet-900/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/40">
+                    <Clock className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Scheduled</p>
+                    <p className="text-xl font-bold text-violet-600">{sessionStats.scheduled}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                    <Activity className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Ongoing</p>
+                    <p className="text-xl font-bold text-amber-600">{sessionStats.ongoing}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Finished</p>
+                    <p className="text-xl font-bold text-emerald-600">{sessionStats.finished}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -467,11 +508,15 @@ export default function EnrollmentsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search child, hospital, physiotherapist..."
-            />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search child, hospital, physiotherapist..."
+                className="pl-9"
+              />
+            </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
                 <SelectValue placeholder="Filter status" />
@@ -503,15 +548,23 @@ export default function EnrollmentsPage() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                      Loading sessions...
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={8}>
+                        <div className="h-10 rounded-lg bg-muted animate-pulse" />
+                      </TableCell>
+                    </TableRow>
+                  ))
                 ) : sessions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                      No sessions found.
+                    <TableCell colSpan={8}>
+                      <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+                        <div className="p-3 rounded-full bg-muted">
+                          <CalendarClock className="h-6 w-6" />
+                        </div>
+                        <p className="font-medium">No sessions found</p>
+                        <p className="text-xs">Add a session or adjust your filters</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -539,6 +592,7 @@ export default function EnrollmentsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-sky-500/10 hover:text-sky-600"
                             onClick={() => handleOpenView(record)}
                             title="View session"
                           >
@@ -549,6 +603,7 @@ export default function EnrollmentsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 p-0 hover:bg-emerald-500/10 hover:text-emerald-600"
                                 onClick={() =>
                                   statusMutation.mutate({
                                     id: record.id,
@@ -557,11 +612,12 @@ export default function EnrollmentsPage() {
                                 }
                                 title="Mark attended and complete"
                               >
-                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                <CheckCircle2 className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                                 onClick={() =>
                                   statusMutation.mutate({
                                     id: record.id,
@@ -570,13 +626,14 @@ export default function EnrollmentsPage() {
                                 }
                                 title="Mark absent and incomplete"
                               >
-                                <XCircle className="h-4 w-4 text-destructive" />
+                                <XCircle className="h-4 w-4" />
                               </Button>
                             </>
                           ) : null}
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                             onClick={() => handleOpenEdit(record)}
                           >
                             <Pencil className="h-4 w-4" />
@@ -584,9 +641,10 @@ export default function EnrollmentsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => deleteMutation.mutate(record.id)}
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>

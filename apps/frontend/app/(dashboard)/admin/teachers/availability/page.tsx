@@ -233,15 +233,20 @@ export default function TeacherAvailabilityPage() {
   const leaves = availabilityData?.data || [];
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">
-            Physiotherapy Availability Management
-          </h1>
-          <p className="text-muted-foreground">
-            Manage physiotherapy staff leaves, replacements, and scheduling
-          </p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <Calendar className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold">
+              Physiotherapy Availability
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Manage physiotherapy staff leaves, replacements, and scheduling
+            </p>
+          </div>
         </div>
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
@@ -416,47 +421,55 @@ export default function TeacherAvailabilityPage() {
       {/* Statistics Cards */}
       {statistics && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Leaves
-              </CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statistics.total}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending</CardTitle>
-              <Clock className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {statistics.byStatus[LeaveStatus.PENDING] || 0}
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
+            <CardContent className="pt-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                  <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Total Leaves</p>
+                  <p className="text-2xl font-bold">{statistics.total}</p>
+                </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Approved</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {statistics.byStatus[LeaveStatus.APPROVED] || 0}
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20">
+            <CardContent className="pt-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Pending</p>
+                  <p className="text-2xl font-bold text-amber-600">{statistics.byStatus[LeaveStatus.PENDING] || 0}</p>
+                </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Rejected</CardTitle>
-              <XCircle className="h-4 w-4 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {statistics.byStatus[LeaveStatus.REJECTED] || 0}
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+            <CardContent className="pt-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                  <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Approved</p>
+                  <p className="text-2xl font-bold text-emerald-600">{statistics.byStatus[LeaveStatus.APPROVED] || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20">
+            <CardContent className="pt-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40">
+                  <XCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Rejected</p>
+                  <p className="text-2xl font-bold text-rose-600">{statistics.byStatus[LeaveStatus.REJECTED] || 0}</p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -568,16 +581,24 @@ export default function TeacherAvailabilityPage() {
       </Card>
 
       {/* Leaves Table */}
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader>
           <CardTitle>Leave Requests</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoadingAvailability ? (
-            <div className="text-center py-8">Loading...</div>
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
+              ))}
+            </div>
           ) : leaves.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No leave requests found
+            <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+              <div className="p-3 rounded-full bg-muted">
+                <Calendar className="h-6 w-6" />
+              </div>
+              <p className="font-medium">No leave requests found</p>
+              <p className="text-xs">Create a leave request or adjust your filters</p>
             </div>
           ) : (
             <>

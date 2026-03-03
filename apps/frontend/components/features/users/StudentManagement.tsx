@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power, Users, Activity } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
@@ -622,12 +622,17 @@ export default function StudentManagement() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Children Management</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage children with parent details, hospital and physiotherapist
-            assignment
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <Users className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold">Children Management</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage children with parent details, hospital and physiotherapist
+              assignment
+            </p>
+          </div>
         </div>
         <Button onClick={handleOpenAddDialog}>
           <Plus className="h-4 w-4 mr-2" /> Add Child
@@ -635,33 +640,48 @@ export default function StudentManagement() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Total</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">{stats.total}</p>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Children</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Active</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold text-emerald-600">{stats.active}</p>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Active</p>
+                <p className="text-2xl font-bold text-emerald-600">{stats.active}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Inactive</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold text-rose-600">{stats.inactive}</p>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40">
+                <Users className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Inactive</p>
+                <p className="text-2xl font-bold text-rose-600">{stats.inactive}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Children List</CardTitle>
         </CardHeader>
@@ -741,15 +761,23 @@ export default function StudentManagement() {
               </TableHeader>
               <TableBody>
                 {patientsLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={tableColumnCount} className="py-8 text-center text-muted-foreground">
-                      Loading children...
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={tableColumnCount}>
+                        <div className="h-10 rounded-lg bg-muted animate-pulse" />
+                      </TableCell>
+                    </TableRow>
+                  ))
                 ) : filteredPatients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={tableColumnCount} className="py-8 text-center text-muted-foreground">
-                      No children found.
+                    <TableCell colSpan={tableColumnCount}>
+                      <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+                        <div className="p-3 rounded-full bg-muted">
+                          <Users className="h-6 w-6" />
+                        </div>
+                        <p className="font-medium">No children found</p>
+                        <p className="text-xs">Add a child or adjust your search/filters</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -807,6 +835,7 @@ export default function StudentManagement() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-sky-500/10 hover:text-sky-600"
                             onClick={() => handleOpenViewDialog(patient)}
                             title="View details"
                           >
@@ -815,6 +844,7 @@ export default function StudentManagement() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                             onClick={() => handleOpenEditDialog(patient)}
                           >
                             <Pencil className="h-4 w-4" />
@@ -822,6 +852,7 @@ export default function StudentManagement() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-amber-500/10 hover:text-amber-600"
                             onClick={() =>
                               updatePatientStatusMutation.mutate({
                                 id: patient.id,
@@ -835,12 +866,13 @@ export default function StudentManagement() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => {
                               setPatientToDelete(patient);
                               setDeleteDialogOpen(true);
                             }}
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>

@@ -10,14 +10,19 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
   Logger,
   Request,
   ForbiddenException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { Roles } from '@common/decorators';
 import { JwtAuthGuard, RolesGuard } from '@common/guards';
+import { StorageService } from '@infrastructure/storage/storage.service';
 import { PatientService } from './patient.service';
 import { UsersService } from '@modules/users/users.service';
 import { CreatePatientDto } from './dtos/create-patient.dto';
@@ -28,6 +33,10 @@ import {
   CreatePhysiotherapistDto,
   UpdatePhysiotherapistDto,
 } from './dtos/physiotherapist.dto';
+import {
+  CreatePhysioAssignmentDto,
+  UpdatePhysioAssignmentDto,
+} from './dtos/physio-assignment.dto';
 import {
   CreateAdmissionTrackingDto,
   UpdateAdmissionTrackingDto,
@@ -43,7 +52,8 @@ export class PatientController {
 
   constructor(
     private readonly patientService: PatientService,
-    private readonly usersService: UsersService
+    private readonly usersService: UsersService,
+    private readonly storageService: StorageService
   ) {}
 
   private async resolveScopedHospitalId(req: any): Promise<string | undefined> {
@@ -139,6 +149,164 @@ export class PatientController {
       data: result.data,
       pagination: result.pagination,
     };
+  }
+
+  // ============================================================
+  // PHYSIOTHERAPY ASSIGNMENTS (must be before :id wildcard)
+  // ============================================================
+
+  /**
+   * Get options (hospitals, physiotherapists, children) for the assignment form
+   */
+  @Get('assignments/options')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get form options for physiotherapy assignments' })
+  async getPhysioAssignmentOptions(
+    @Request() req: any,
+    @Query('hospitalId') hospitalId?: string,
+    @Query('physiotherapistId') physiotherapistId?: string
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const effectiveHospitalId = scopedHospitalId || hospitalId;
+    const data = await this.patientService.getPhysioAssignmentOptions(
+      effectiveHospitalId,
+      physiotherapistId
+    );
+    return { success: true, data };
+  }
+
+  /**
+   * Upload a PDF for a physiotherapy assignment
+   */
+  @Post('assignments/upload')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Upload assignment PDF' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAssignmentPdf(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+
+    const allowed = ['application/pdf'];
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF files are allowed for assignment uploads');
+    }
+
+    const uploaded = await this.storageService.uploadFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      'publication',
+      {
+        fileName: file.originalname,
+        fileType: file.mimetype,
+        fileSize: file.size,
+        userId: req?.user?.id,
+        category: 'publication',
+        maxSize: 50 * 1024 * 1024,
+        allowedMimeTypes: allowed,
+      }
+    );
+
+    return {
+      success: true,
+      data: {
+        url: uploaded.url,
+        key: uploaded.key,
+        filename: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+      },
+    };
+  }
+
+  /**
+   * List physiotherapy assignments
+   */
+  @Get('assignments')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List physiotherapy assignments' })
+  async getPhysioAssignments(
+    @Request() req: any,
+    @Query('hospitalId') hospitalId?: string,
+    @Query('physiotherapistId') physiotherapistId?: string,
+    @Query('childId') childId?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const data = await this.patientService.getPhysioAssignments({
+      hospitalId: scopedHospitalId || hospitalId,
+      physiotherapistId,
+      childId,
+      status,
+      search,
+    });
+    return { success: true, data };
+  }
+
+  /**
+   * Create a physiotherapy assignment
+   */
+  @Post('assignments')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create physiotherapy assignment' })
+  async createPhysioAssignment(
+    @Request() req: any,
+    @Body() body: CreatePhysioAssignmentDto
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const payload = scopedHospitalId
+      ? { ...body, hospitalId: scopedHospitalId }
+      : body;
+
+    const createdById = req?.user?.id || req?.user?.sub;
+    if (!createdById) throw new ForbiddenException('User not authenticated');
+
+    const data = await this.patientService.createPhysioAssignment(payload, createdById);
+    return { success: true, data, message: 'Assignment created successfully' };
+  }
+
+  /**
+   * Update a physiotherapy assignment
+   */
+  @Put('assignments/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update physiotherapy assignment' })
+  async updatePhysioAssignment(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: UpdatePhysioAssignmentDto
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const records = await this.patientService.getPhysioAssignments({ hospitalId: scopedHospitalId });
+      if (!records.some((r: any) => r.id === id)) {
+        throw new ForbiddenException('You can only update assignments in your hospital');
+      }
+    }
+    const data = await this.patientService.updatePhysioAssignment(id, body);
+    return { success: true, data, message: 'Assignment updated successfully' };
+  }
+
+  /**
+   * Delete a physiotherapy assignment
+   */
+  @Delete('assignments/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete physiotherapy assignment' })
+  async deletePhysioAssignment(@Request() req: any, @Param('id') id: string) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const records = await this.patientService.getPhysioAssignments({ hospitalId: scopedHospitalId });
+      if (!records.some((r: any) => r.id === id)) {
+        throw new ForbiddenException('You can only delete assignments in your hospital');
+      }
+    }
+    const result = await this.patientService.deletePhysioAssignment(id);
+    return { success: true, message: result.message };
   }
 
   /**
@@ -754,4 +922,5 @@ export class PatientController {
       message: result.message,
     };
   }
+
 }

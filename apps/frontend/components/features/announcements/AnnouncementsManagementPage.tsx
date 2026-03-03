@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -47,6 +47,8 @@ import {
   Calendar,
   Users,
   BarChart3,
+  Megaphone,
+  Activity,
 } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
@@ -255,6 +257,13 @@ export default function AnnouncementsManagementPage() {
     pages: 0,
   };
 
+  const announcementStats = useMemo(() => {
+    const total = paginationMeta.total || 0;
+    const active = announcements.filter((a) => a.isActive).length;
+    const inactive = announcements.length - active;
+    return { total, active, inactive };
+  }, [announcements, paginationMeta.total]);
+
   const createMutation = useMutation({
     mutationFn: (payload: any) => ApiClient.post("/announcements", payload),
     onSuccess: () => {
@@ -459,22 +468,71 @@ export default function AnnouncementsManagementPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Product Announcements</CardTitle>
-            <CardDescription>
-              Manage stock alerts, promotions, and system notifications
-            </CardDescription>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <Megaphone className="h-6 w-6 text-primary" />
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Announcement
-          </Button>
+          <div>
+            <h1 className="text-2xl font-semibold">Announcements</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage stock alerts, promotions, and system notifications
+            </p>
+          </div>
         </div>
-      </CardHeader>
-      <CardContent>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Announcement
+        </Button>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/40 dark:to-orange-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/40">
+                <Megaphone className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total</p>
+                <p className="text-2xl font-bold">{announcementStats.total}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Active (this page)</p>
+                <p className="text-2xl font-bold text-emerald-600">{announcementStats.active}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40">
+                <Users className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Inactive (this page)</p>
+                <p className="text-2xl font-bold text-rose-600">{announcementStats.inactive}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardContent className="pt-5">
         {/* Filters */}
         <div className="flex gap-4 mb-6">
           <div className="flex-1 relative">
@@ -544,15 +602,23 @@ export default function AnnouncementsManagementPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center">
-                  Loading announcements...
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell colSpan={9}>
+                    <div className="h-10 rounded-lg bg-muted animate-pulse" />
+                  </TableCell>
+                </TableRow>
+              ))
             ) : announcements.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center">
-                  No announcements found
+                <TableCell colSpan={9}>
+                  <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+                    <div className="p-3 rounded-full bg-muted">
+                      <Megaphone className="h-6 w-6" />
+                    </div>
+                    <p className="font-medium">No announcements found</p>
+                    <p className="text-xs">Create an announcement or adjust your filters</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -608,10 +674,11 @@ export default function AnnouncementsManagementPage() {
                     </Button>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-sky-500/10 hover:text-sky-600"
                         onClick={() => {
                           setSelectedAnnouncement(announcement);
                           setViewDialogOpen(true);
@@ -621,22 +688,26 @@ export default function AnnouncementsManagementPage() {
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                         onClick={() => openEditDialog(announcement)}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-amber-500/10 hover:text-amber-600"
                         onClick={() => handleToggleActive(announcement)}
+                        title={announcement.isActive ? "Deactivate" : "Activate"}
                       >
-                        {announcement.isActive ? "Deactivate" : "Activate"}
+                        <Activity className="h-4 w-4" />
                       </Button>
                       {announcement.expiresAt && (
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          className="h-8 w-8 p-0 hover:bg-violet-500/10 hover:text-violet-600"
                           onClick={() => handleExtendExpiry(announcement)}
                         >
                           <Calendar className="h-4 w-4" />
@@ -644,7 +715,8 @@ export default function AnnouncementsManagementPage() {
                       )}
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => {
                           setSelectedAnnouncement(announcement);
                           setDeleteDialogOpen(true);
@@ -693,6 +765,7 @@ export default function AnnouncementsManagementPage() {
           </div>
         </div>
       </CardContent>
+      </Card>
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -1117,6 +1190,6 @@ export default function AnnouncementsManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }

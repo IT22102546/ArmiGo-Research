@@ -560,12 +560,16 @@ export default function TimetableManagement() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Sessions & Scheduling</p>
-          <h1 className="text-2xl font-semibold">Online Physiotherapy Schedule</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Schedule online therapy sessions by hospital, physiotherapist, and child.
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <CalendarClock className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold">Online Physiotherapy Schedule</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Schedule online therapy sessions by hospital, physiotherapist, and child.
+            </p>
+          </div>
         </div>
         <Button onClick={handleOpenCreate}>
           <Plus className="h-4 w-4 mr-2" /> Add Online Session
@@ -573,47 +577,55 @@ export default function TimetableManagement() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                <CalendarClock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total</p>
                 <p className="text-2xl font-semibold">{stats.total}</p>
               </div>
-              <CalendarClock className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-950/40 dark:to-violet-900/20">
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/40">
+                <Activity className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Scheduled</p>
                 <p className="text-2xl font-semibold">{stats.scheduled}</p>
               </div>
-              <Activity className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20">
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                <CalendarClock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Ongoing</p>
                 <p className="text-2xl font-semibold">{stats.ongoing}</p>
               </div>
-              <CalendarClock className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Physiotherapists</p>
                 <p className="text-2xl font-semibold">{stats.physiotherapists}</p>
               </div>
-              <Users className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
