@@ -1,12 +1,28 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
 import { CreateHospitalDto, UpdateHospitalDto } from './dtos/create-hospital.dto';
+import * as bcrypt from 'bcryptjs';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
 
 @Injectable()
 export class HospitalService {
   private readonly logger = new Logger(HospitalService.name);
 
   constructor(private prisma: PrismaService) {}
+
+  private async generateUniqueHospitalAdminPhone(tx: any) {
+    while (true) {
+      const candidate = `HOSP-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      const existing = await tx.user.findUnique({
+        where: { phone: candidate },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return candidate;
+      }
+    }
+  }
 
   /**
    * Create a new hospital
@@ -50,15 +66,33 @@ export class HospitalService {
         );
       }
 
-      // Generate admin email
-      const institutionCode = data.registrationNo
-        .replace(/[^a-zA-Z0-9]/g, '')
-        .toLowerCase()
-        .substring(0, 8);
-      const adminEmail = `admin-${institutionCode}@armigo-health.local`;
+      const adminEmail = data.email.trim();
+      const normalizedAdminEmail = adminEmail.toLowerCase();
 
-      // Store admin password as-is (in production, consider proper encryption)
-      const adminPassword = data.adminPassword || `TempPass@${Date.now()}`;
+      const existingAdminUser = await this.prisma.user.findUnique({
+        where: { email: normalizedAdminEmail },
+        select: { id: true },
+      });
+
+      if (existingAdminUser) {
+        throw new BadRequestException(
+          'Hospital admin user with this email already exists'
+        );
+      }
+
+      const existingAdminPhone = await this.prisma.user.findUnique({
+        where: { phone: data.phone },
+        select: { id: true },
+      });
+
+      if (existingAdminPhone) {
+        throw new BadRequestException(
+          'Hospital admin user with this phone already exists'
+        );
+      }
+
+      const adminPassword = data.adminPassword;
+      const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
 
       const isMainHospital = data.isMainHospital === true;
 
@@ -70,7 +104,7 @@ export class HospitalService {
           });
         }
 
-        return tx.hospital.create({
+        const createdHospital = await tx.hospital.create({
           data: {
             name: data.name,
             registrationNo: data.registrationNo,
@@ -93,7 +127,7 @@ export class HospitalService {
             totalTherapists: data.totalTherapists,
             totalStaff: data.totalStaff,
             adminEmail,
-            adminPassword,
+            adminPassword: hashedAdminPassword,
             createdById,
             status: 'ACTIVE',
           },
@@ -110,6 +144,33 @@ export class HospitalService {
             },
           },
         });
+
+        const hospitalAdminUser = await tx.user.create({
+          data: {
+            email: normalizedAdminEmail,
+            phone: data.phone,
+            password: hashedAdminPassword,
+            firstName: data.name,
+            lastName: 'Admin',
+            role: UserRole.HOSPITAL_ADMIN,
+            status: UserStatus.ACTIVE,
+            address: data.address,
+            city: data.city,
+            emailVerified: true,
+          },
+        });
+
+        await tx.hospitalProfile.create({
+          data: {
+            userId: hospitalAdminUser.id,
+            hospitalId: createdHospital.id,
+            department: 'Administration',
+            designation: 'Hospital Admin',
+            qualifications: [],
+          },
+        });
+
+        return createdHospital;
       });
 
       return {
@@ -270,10 +331,93 @@ export class HospitalService {
     try {
       const hospital = await this.prisma.hospital.findUnique({
         where: { id },
+        include: {
+          adminProfile: {
+            select: {
+              userId: true,
+            },
+          },
+        },
       });
 
       if (!hospital) {
         throw new NotFoundException(`Hospital with ID ${id} not found`);
+      }
+
+      if (data.name && data.name !== hospital.name) {
+        const existingByName = await this.prisma.hospital.findFirst({
+          where: {
+            name: data.name,
+            id: { not: id },
+          },
+          select: { id: true },
+        });
+
+        if (existingByName) {
+          throw new BadRequestException('Hospital with this name already exists');
+        }
+      }
+
+      if (data.registrationNo && data.registrationNo !== hospital.registrationNo) {
+        const existingByRegNo = await this.prisma.hospital.findFirst({
+          where: {
+            registrationNo: data.registrationNo,
+            id: { not: id },
+          },
+          select: { id: true },
+        });
+
+        if (existingByRegNo) {
+          throw new BadRequestException(
+            'Hospital with this registration number already exists'
+          );
+        }
+      }
+
+      if (data.email && data.email !== hospital.email) {
+        const existingByEmail = await this.prisma.hospital.findFirst({
+          where: {
+            email: data.email,
+            id: { not: id },
+          },
+          select: { id: true },
+        });
+
+        if (existingByEmail) {
+          throw new BadRequestException('Hospital with this email already exists');
+        }
+      }
+
+      if (hospital.adminProfile?.userId && data.email) {
+        const existingAdminEmail = await this.prisma.user.findFirst({
+          where: {
+            email: data.email.trim().toLowerCase(),
+            id: { not: hospital.adminProfile.userId },
+          },
+          select: { id: true },
+        });
+
+        if (existingAdminEmail) {
+          throw new BadRequestException(
+            'Hospital admin user with this email already exists'
+          );
+        }
+      }
+
+      if (hospital.adminProfile?.userId && data.phone) {
+        const existingAdminPhone = await this.prisma.user.findFirst({
+          where: {
+            phone: data.phone,
+            id: { not: hospital.adminProfile.userId },
+          },
+          select: { id: true },
+        });
+
+        if (existingAdminPhone) {
+          throw new BadRequestException(
+            'Hospital admin user with this phone already exists'
+          );
+        }
       }
 
       // Verify district if being changed
@@ -299,7 +443,19 @@ export class HospitalService {
       }
 
       const updateData: any = {};
+      let hashedAdminPassword: string | undefined;
+      if (data.adminPassword?.trim()) {
+        hashedAdminPassword = await bcrypt.hash(data.adminPassword.trim(), 10);
+      }
+
       if (data.name !== undefined) updateData.name = data.name;
+      if (data.registrationNo !== undefined) updateData.registrationNo = data.registrationNo;
+      if (data.type !== undefined) updateData.type = data.type;
+      if (data.email !== undefined) {
+        updateData.email = data.email;
+        updateData.adminEmail = data.email.trim().toLowerCase();
+      }
+      if (hashedAdminPassword !== undefined) updateData.adminPassword = hashedAdminPassword;
       if (data.phone !== undefined) updateData.phone = data.phone;
       if (data.alternatePhone !== undefined) updateData.alternatePhone = data.alternatePhone;
       if (data.website !== undefined) updateData.website = data.website;
@@ -327,7 +483,7 @@ export class HospitalService {
           });
         }
 
-        return tx.hospital.update({
+        const updatedHospital = await tx.hospital.update({
           where: { id },
           data: updateData,
           include: {
@@ -342,6 +498,34 @@ export class HospitalService {
             },
           },
         });
+
+        if (hospital.adminProfile?.userId) {
+          const mappedUserStatus =
+            data.status === 'ACTIVE'
+              ? UserStatus.ACTIVE
+              : data.status === 'INACTIVE'
+                ? UserStatus.INACTIVE
+                : undefined;
+
+          await tx.user.update({
+            where: { id: hospital.adminProfile.userId },
+            data: {
+              ...(data.email !== undefined
+                ? { email: data.email.trim().toLowerCase() }
+                : {}),
+              ...(hashedAdminPassword !== undefined
+                ? { password: hashedAdminPassword }
+                : {}),
+              ...(data.phone !== undefined ? { phone: data.phone } : {}),
+              ...(data.name !== undefined ? { firstName: data.name } : {}),
+              ...(data.address !== undefined ? { address: data.address } : {}),
+              ...(data.city !== undefined ? { city: data.city } : {}),
+              ...(mappedUserStatus !== undefined ? { status: mappedUserStatus } : {}),
+            },
+          });
+        }
+
+        return updatedHospital;
       });
 
       return {
@@ -354,6 +538,137 @@ export class HospitalService {
       };
     } catch (error) {
       this.logger.error('Error updating hospital:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Hard delete hospital and cleanup dependent links
+   */
+  async deleteHospital(id: string) {
+    try {
+      const hospital = await this.prisma.hospital.findUnique({
+        where: { id },
+        include: {
+          adminProfile: {
+            select: {
+              userId: true,
+            },
+          },
+          subHospitals: {
+            select: {
+              id: true,
+            },
+          },
+          staff: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      if (!hospital) {
+        throw new NotFoundException(`Hospital with ID ${id} not found`);
+      }
+
+      const subHospitalIds = hospital.subHospitals.map((item) => item.id);
+      const staffIds = hospital.staff.map((item) => item.id);
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.child.updateMany({
+          where: { hospitalId: id },
+          data: {
+            hospitalId: null,
+            subHospitalId: null,
+          },
+        });
+
+        const appointmentWhere: any = {
+          OR: [{ hospitalId: id }],
+        };
+
+        if (subHospitalIds.length > 0) {
+          appointmentWhere.OR.push({ subHospitalId: { in: subHospitalIds } });
+        }
+
+        if (staffIds.length > 0) {
+          appointmentWhere.OR.push({ staffId: { in: staffIds } });
+        }
+
+        await tx.appointment.updateMany({
+          where: appointmentWhere,
+          data: {
+            hospitalId: null,
+            subHospitalId: null,
+            staffId: null,
+          },
+        });
+
+        await tx.device.updateMany({
+          where: { hospitalId: id },
+          data: {
+            hospitalId: null,
+          },
+        });
+
+        await tx.admissionTracking.updateMany({
+          where: { hospitalId: id },
+          data: {
+            hospitalId: null,
+          },
+        });
+
+        await tx.credentialLog.deleteMany({
+          where: { hospitalId: id },
+        });
+
+        await tx.hospitalStaff.deleteMany({
+          where: { hospitalId: id },
+        });
+
+        await tx.hospitalProfile.deleteMany({
+          where: { hospitalId: id },
+        });
+
+        await tx.hospital.delete({
+          where: { id },
+        });
+
+        if (hospital.adminProfile?.userId) {
+          await tx.auditLog.deleteMany({
+            where: { userId: hospital.adminProfile.userId },
+          });
+
+          await tx.credentialLog.deleteMany({
+            where: { generatedById: hospital.adminProfile.userId },
+          });
+
+          await tx.$executeRaw(
+            Prisma.sql`DELETE FROM "users" WHERE "id" = ${hospital.adminProfile.userId}`
+          );
+        }
+
+        if (hospital.adminProfile?.userId) {
+          const stillExists = await tx.user.findUnique({
+            where: { id: hospital.adminProfile.userId },
+            select: { id: true },
+          });
+
+          if (stillExists) {
+            throw new BadRequestException(
+              'Hospital admin user could not be permanently deleted due to related records'
+            );
+          }
+        }
+      });
+
+      return {
+        success: true,
+        message: 'Hospital deleted successfully',
+      };
+    } catch (error) {
+      this.logger.error('Error deleting hospital:', error);
       throw error;
     }
   }

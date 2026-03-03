@@ -154,6 +154,9 @@ model User {
   
   // Appointments created
   createdAppointments Appointment[] @relation("AppointmentCreatedBy")
+  notifications      Notification[]
+  createdPublications      Publication[]              @relation("UserCreatedPublications")
+  physioAssignmentsCreated PhysiotherapyAssignment[]  @relation("PhysioAssignmentCreator")
 
   @@index([deletedAt])
   @@index([role, status])
@@ -250,6 +253,8 @@ model Hospital {
   // Credential logs
   credentialLogs    CredentialLog[] @relation("HospitalCredentialLogs")
   admissionTrackings AdmissionTracking[]
+  publications      Publication[]
+  physioAssignments PhysiotherapyAssignment[]
 
   @@index([status])
   @@index([isMainHospital])
@@ -347,8 +352,11 @@ model HospitalStaff {
   experience      Int?            // years
   
   // Status
-  isActive        Boolean         @default(true)
-  joinedAt        DateTime        @default(now())
+  isActive            Boolean         @default(true)
+  availabilityStatus  String?         @default("AVAILABLE") // AVAILABLE | IN_WORK | NOT_AVAILABLE
+  availabilityNote    String?
+  availabilityUpdatedAt DateTime?
+  joinedAt            DateTime        @default(now())
   leftAt          DateTime?
   
   // Relations
@@ -358,6 +366,8 @@ model HospitalStaff {
   // Appointments/therapies they handle
   appointments    Appointment[]   @relation("StaffAppointments")
   admissionTrackings AdmissionTracking[] @relation("AdmissionPhysiotherapist")
+  physioAssignments   PhysiotherapyAssignment[] @relation("PhysioStaffAssignments")
+  unavailableDates    PhysioUnavailableDate[]  @relation("PhysioUnavailableDates")
 
   @@index([hospitalId])
   @@index([subHospitalId])
@@ -410,6 +420,7 @@ model Child {
   therapySessions TherapySession[]
   appointments    Appointment[]
   admissionTrackings AdmissionTracking[]
+  physioAssignments   PhysiotherapyAssignment[] @relation("ChildPhysioAssignments")
   
   @@index([parentId])
   @@index([hospitalId])
@@ -650,6 +661,34 @@ model Appointment {
   @@map("appointments")
 }
 
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  message     String   @db.Text
+  type        String   @default("GENERAL")
+  status      String   @default("UNREAD")
+  isRead      Boolean  @default(false)
+  data        Json?
+  link        String?
+  metadata    Json?
+  sentAt      DateTime @default(now())
+  deliveredAt DateTime?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@index([sentAt])
+  @@index([deletedAt])
+  @@map("notifications")
+}
+
 model AdmissionTracking {
   id                 String         @id @default(cuid())
   childId            String
@@ -673,6 +712,8 @@ model AdmissionTracking {
   manualDeviceType   String?
   manualDeviceSerial String?
 
+  treatmentPlanPdf   String?
+
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
@@ -689,6 +730,73 @@ model AdmissionTracking {
   @@index([admissionDate])
   @@index([childId, admissionDate])
   @@map("admission_tracking")
+}
+
+model PhysiotherapyAssignment {
+  id                  String         @id @default(cuid())
+  hospitalId          String?
+  physiotherapistId   String?
+  childId             String
+  title               String
+  description         String?        @db.Text
+  assignmentPdf       String?        // URL to uploaded PDF
+  assignmentPdfName   String?        // Original filename
+  status              String         @default("ACTIVE")
+  dueDate             DateTime?
+  createdById         String
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  hospital            Hospital?      @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  physiotherapist     HospitalStaff? @relation("PhysioStaffAssignments", fields: [physiotherapistId], references: [id], onDelete: SetNull)
+  child               Child          @relation("ChildPhysioAssignments", fields: [childId], references: [id], onDelete: Cascade)
+  createdBy           User           @relation("PhysioAssignmentCreator", fields: [createdById], references: [id])
+
+  @@index([hospitalId])
+  @@index([physiotherapistId])
+  @@index([childId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("physiotherapy_assignments")
+}
+
+model Publication {
+  id               String    @id @default(cuid())
+  title            String
+  description      String    @db.Text
+  shortDescription String?
+  coverImage       String?
+  price            Float
+  discountPrice    Float?
+  fileUrl          String
+  fileSize         Int?
+  fileType         String?
+  previewUrl       String?
+  gradeId          String?
+  subjectId        String?
+  mediumId         String?
+  author           String?
+  publisher        String?
+  status           String    @default("DRAFT")
+  publishedAt      DateTime?
+  downloads        Int       @default(0)
+  views            Int       @default(0)
+  createdById      String
+  hospitalId       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  createdBy        User      @relation("UserCreatedPublications", fields: [createdById], references: [id])
+  hospital         Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+  @@index([hospitalId])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([deletedAt])
+  @@map("publications")
 }
 
 // ============================================
@@ -748,6 +856,29 @@ model Zone {
 // SYSTEM MODELS
 // ============================================
 
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  type        String   @default("GENERAL")
+  priority    String   @default("NORMAL")
+  targetRoles String[]
+  isActive    Boolean  @default(true)
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([isActive])
+  @@index([type])
+  @@index([priority])
+  @@index([publishedAt])
+  @@index([expiresAt])
+  @@index([deletedAt])
+  @@map("announcements")
+}
+
 model SystemSettings {
   id              String          @id @default(cuid())
   key             String          @unique
@@ -800,4 +931,23 @@ model CredentialLog {
   @@index([hospitalId])
   @@index([generatedAt])
   @@map("credential_logs")
+}
+
+// ============================================
+// PHYSIO SCHEDULED UNAVAILABILITY
+// ============================================
+
+model PhysioUnavailableDate {
+  id        String        @id @default(cuid())
+  staffId   String
+  date      DateTime      @db.Date
+  reason    String?
+  createdAt DateTime      @default(now())
+
+  staff     HospitalStaff @relation("PhysioUnavailableDates", fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date])
+  @@index([staffId])
+  @@index([date])
+  @@map("physio_unavailable_dates")
 }

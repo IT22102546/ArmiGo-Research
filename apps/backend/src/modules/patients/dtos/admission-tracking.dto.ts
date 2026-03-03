@@ -85,6 +85,11 @@ export class CreateAdmissionTrackingDto {
   @IsOptional()
   @IsString()
   manualDeviceSerial?: string;
+
+  @ApiPropertyOptional({ example: 'https://storage.example.com/pdf/plan.pdf' })
+  @IsOptional()
+  @IsString()
+  treatmentPlanPdf?: string;
 }
 
 export class UpdateAdmissionTrackingDto {
@@ -172,4 +177,9 @@ export class UpdateAdmissionTrackingDto {
   @IsOptional()
   @IsString()
   manualDeviceSerial?: string;
+
+  @ApiPropertyOptional({ example: 'https://storage.example.com/pdf/plan.pdf' })
+  @IsOptional()
+  @IsString()
+  treatmentPlanPdf?: string;
 }

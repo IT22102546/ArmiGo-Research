@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,9 +30,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Power, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, CheckCircle2, XCircle, CalendarClock, Search, Activity, Clock } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
+import { useAuthStore } from "@/stores/auth-store";
 
 type Child = {
   id: string;
@@ -95,7 +96,6 @@ type SessionForm = {
   admissionDate: string;
   startTime: string;
   endTime: string;
-  status: string;
   clinic: string;
   room: string;
   notes: string;
@@ -108,7 +108,6 @@ const initialForm: SessionForm = {
   admissionDate: new Date().toISOString().split("T")[0],
   startTime: "",
   endTime: "",
-  status: "ACTIVE",
   clinic: "",
   room: "",
   notes: "",
@@ -116,19 +115,34 @@ const initialForm: SessionForm = {
 
 export default function EnrollmentsPage() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const userRoles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : [user?.role].filter(Boolean) as string[];
+  const isHospitalScopedUser =
+    userRoles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [selectedHospitalId, setSelectedHospitalId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [viewingSession, setViewingSession] = useState<SessionRecord | null>(null);
   const [selected, setSelected] = useState<SessionRecord | null>(null);
   const [formData, setFormData] = useState<SessionForm>(initialForm);
 
+  const hospitalContextId = isHospitalScopedUser
+    ? selectedHospitalId
+    : selectedHospitalId;
+
   const { data: children = [] } = useQuery({
-    queryKey: ["session-scheduling", "children"],
+    queryKey: ["session-scheduling", "children", hospitalContextId],
     queryFn: async () => {
       const response = await ApiClient.get<any>("/patients", {
-        params: { limit: 1000 },
+        params: {
+          limit: 1000,
+          hospitalId: hospitalContextId || undefined,
+        },
       });
       const payload = response?.data ?? response ?? {};
       const list = payload?.data || payload || [];
@@ -147,11 +161,15 @@ export default function EnrollmentsPage() {
   });
 
   const { data: physiotherapists = [] } = useQuery({
-    queryKey: ["session-scheduling", "physiotherapists"],
+    queryKey: ["session-scheduling", "physiotherapists", hospitalContextId],
     queryFn: async () => {
       const response = await ApiClient.get<any>(
         "/patients/locations/physiotherapists",
-        { params: { includeInactive: true } }
+        {
+          params: {
+            hospitalId: hospitalContextId || undefined,
+          },
+        }
       );
       const payload = response?.data ?? response ?? {};
       const list = payload?.data || payload || [];
@@ -160,10 +178,18 @@ export default function EnrollmentsPage() {
   });
 
   const { data: sessions = [], isLoading } = useQuery({
-    queryKey: ["session-scheduling", "records", search, statusFilter],
+    queryKey: [
+      "session-scheduling",
+      "records",
+      search,
+      statusFilter,
+      hospitalContextId,
+    ],
     queryFn: async () => {
       const response = await ApiClient.get<any>("/patients/management/admissions", {
         params: {
+          admissionType: "REHAB",
+          hospitalId: hospitalContextId || undefined,
           search: search || undefined,
           status: statusFilter === "ALL" ? undefined : statusFilter,
         },
@@ -175,11 +201,32 @@ export default function EnrollmentsPage() {
   });
 
   const filteredPhysiotherapists = useMemo(() => {
-    if (!formData.hospitalId) return physiotherapists;
-    return physiotherapists.filter(
+    const activePhysiotherapists = physiotherapists.filter(
+      (item: Physiotherapist) => item.isActive
+    );
+    if (!formData.hospitalId) return activePhysiotherapists;
+    return activePhysiotherapists.filter(
       (item: Physiotherapist) => item.hospitalId === formData.hospitalId
     );
   }, [physiotherapists, formData.hospitalId]);
+
+  useEffect(() => {
+    if (hospitals.length === 0) return;
+
+    if (isHospitalScopedUser) {
+      const scopedId = hospitals[0]?.id || "";
+      setSelectedHospitalId(scopedId);
+      setFormData((prev) => ({
+        ...prev,
+        hospitalId: scopedId || prev.hospitalId,
+      }));
+      return;
+    }
+
+    if (!selectedHospitalId) {
+      setSelectedHospitalId("");
+    }
+  }, [hospitals, isHospitalScopedUser]);
 
   const createMutation = useMutation({
     mutationFn: (payload: any) =>
@@ -223,7 +270,7 @@ export default function EnrollmentsPage() {
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       ApiClient.put(`/patients/management/admissions/${id}/status`, { status }),
     onSuccess: () => {
-      toast.success("Session status updated");
+      toast.success("Session outcome updated");
       queryClient.invalidateQueries({ queryKey: ["session-scheduling"] });
     },
     onError: (error: any) => {
@@ -233,7 +280,10 @@ export default function EnrollmentsPage() {
 
   const handleOpenCreate = () => {
     setSelected(null);
-    setFormData(initialForm);
+    setFormData({
+      ...initialForm,
+      hospitalId: isHospitalScopedUser ? hospitalContextId : selectedHospitalId,
+    });
     setDialogOpen(true);
   };
 
@@ -248,7 +298,6 @@ export default function EnrollmentsPage() {
         : initialForm.admissionDate,
       startTime: record.startTime || "",
       endTime: record.endTime || "",
-      status: record.status || "ACTIVE",
       clinic: record.clinic || "",
       room: record.room || "",
       notes: record.notes || "",
@@ -321,7 +370,6 @@ export default function EnrollmentsPage() {
       admissionDate: formData.admissionDate,
       startTime: formData.startTime,
       endTime: formData.endTime,
-      status: formData.status,
       clinic: formData.clinic || undefined,
       room: formData.room || undefined,
       notes: formData.notes || undefined,
@@ -336,39 +384,150 @@ export default function EnrollmentsPage() {
     createMutation.mutate(payload);
   };
 
+  const getStatusBadgeVariant = (status: string) => {
+    if (status === "ONGOING") return "default" as const;
+    if (status === "SCHEDULED") return "secondary" as const;
+    if (status === "ATTENDED_COMPLETE") return "default" as const;
+    if (status === "ABSENT_INCOMPLETE") return "destructive" as const;
+    return "outline" as const;
+  };
+
+  const formatStatus = (status: string) =>
+    status
+      .split("_")
+      .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+      .join(" ");
+
+  const sessionStats = useMemo(() => {
+    const total = sessions.length;
+    const scheduled = sessions.filter((item: SessionRecord) => item.status === "SCHEDULED").length;
+    const ongoing = sessions.filter((item: SessionRecord) => item.status === "ONGOING").length;
+    const finished = sessions.filter((item: SessionRecord) =>
+      ["FINISHED", "ATTENDED_COMPLETE", "ABSENT_INCOMPLETE"].includes(item.status)
+    ).length;
+    return { total, scheduled, ongoing, finished };
+  }, [sessions]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Patients & Physiotherapy</p>
-          <h1 className="text-2xl font-semibold">Session Scheduling</h1>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <CalendarClock className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Patients & Physiotherapy</p>
+            <h1 className="text-2xl font-semibold">Session Scheduling</h1>
+          </div>
         </div>
         <Button onClick={handleOpenCreate}>
           <Plus className="h-4 w-4 mr-2" /> Add Session
         </Button>
       </div>
 
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Child Sessions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search child, hospital, physiotherapist..."
-            />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                    <CalendarClock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-xl font-bold">{sessionStats.total}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-950/40 dark:to-violet-900/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/40">
+                    <Clock className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Scheduled</p>
+                    <p className="text-xl font-bold text-violet-600">{sessionStats.scheduled}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                    <Activity className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Ongoing</p>
+                    <p className="text-xl font-bold text-amber-600">{sessionStats.ongoing}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Finished</p>
+                    <p className="text-xl font-bold text-emerald-600">{sessionStats.finished}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <Select
+              value={selectedHospitalId || "ALL"}
+              onValueChange={(value) => {
+                const nextHospitalId = value === "ALL" ? "" : value;
+                setSelectedHospitalId(nextHospitalId);
+              }}
+              disabled={isHospitalScopedUser}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select hospital" />
+              </SelectTrigger>
+              <SelectContent>
+                {!isHospitalScopedUser ? (
+                  <SelectItem value="ALL">All hospitals</SelectItem>
+                ) : null}
+                {hospitals.map((hospital: Hospital) => (
+                  <SelectItem key={hospital.id} value={hospital.id}>
+                    {hospital.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search child, hospital, physiotherapist..."
+                className="pl-9"
+              />
+            </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
                 <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All statuses</SelectItem>
-                <SelectItem value="ACTIVE">Active</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="DISCHARGED">Discharged</SelectItem>
-                <SelectItem value="INACTIVE">Inactive</SelectItem>
+                <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+                <SelectItem value="ONGOING">Ongoing</SelectItem>
+                <SelectItem value="FINISHED">Finished</SelectItem>
+                <SelectItem value="ATTENDED_COMPLETE">Attended + Complete</SelectItem>
+                <SelectItem value="ABSENT_INCOMPLETE">Absent + Incomplete</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -389,15 +548,23 @@ export default function EnrollmentsPage() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                      Loading sessions...
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={8}>
+                        <div className="h-10 rounded-lg bg-muted animate-pulse" />
+                      </TableCell>
+                    </TableRow>
+                  ))
                 ) : sessions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                      No sessions found.
+                    <TableCell colSpan={8}>
+                      <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+                        <div className="p-3 rounded-full bg-muted">
+                          <CalendarClock className="h-6 w-6" />
+                        </div>
+                        <p className="font-medium">No sessions found</p>
+                        <p className="text-xs">Add a session or adjust your filters</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -416,16 +583,8 @@ export default function EnrollmentsPage() {
                       <TableCell>{record.startTime || "-"}</TableCell>
                       <TableCell>{record.endTime || "-"}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            record.status === "ACTIVE"
-                              ? "default"
-                              : record.status === "PENDING"
-                                ? "secondary"
-                                : "outline"
-                          }
-                        >
-                          {record.status}
+                        <Badge variant={getStatusBadgeVariant(record.status)}>
+                          {formatStatus(record.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -433,32 +592,48 @@ export default function EnrollmentsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-sky-500/10 hover:text-sky-600"
                             onClick={() => handleOpenView(record)}
                             title="View session"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          {record.status === "FINISHED" ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 p-0 hover:bg-emerald-500/10 hover:text-emerald-600"
+                                onClick={() =>
+                                  statusMutation.mutate({
+                                    id: record.id,
+                                    status: "ATTENDED_COMPLETE",
+                                  })
+                                }
+                                title="Mark attended and complete"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() =>
+                                  statusMutation.mutate({
+                                    id: record.id,
+                                    status: "ABSENT_INCOMPLETE",
+                                  })
+                                }
+                                title="Mark absent and incomplete"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : null}
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() =>
-                              statusMutation.mutate({
-                                id: record.id,
-                                status:
-                                  record.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
-                              })
-                            }
-                            title={
-                              record.status === "ACTIVE"
-                                ? "Mark inactive"
-                                : "Mark active"
-                            }
-                          >
-                            <Power className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
+                            className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                             onClick={() => handleOpenEdit(record)}
                           >
                             <Pencil className="h-4 w-4" />
@@ -466,9 +641,10 @@ export default function EnrollmentsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => deleteMutation.mutate(record.id)}
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -499,39 +675,47 @@ export default function EnrollmentsPage() {
                     <SelectValue placeholder="Select child" />
                   </SelectTrigger>
                   <SelectContent>
-                    {children.map((child: Child) => (
+                      {children
+                        .filter((child: Child) =>
+                          formData.hospitalId
+                            ? child.hospitalId === formData.hospitalId
+                            : true
+                        )
+                        .map((child: Child) => (
                       <SelectItem key={child.id} value={child.id}>
                         {child.firstName} {child.lastName}
                       </SelectItem>
-                    ))}
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>Hospital</Label>
-                <Select
-                  value={formData.hospitalId}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      hospitalId: value === "__NONE__" ? "" : value,
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select hospital" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__NONE__">None</SelectItem>
-                    {hospitals.map((hospital: Hospital) => (
-                      <SelectItem key={hospital.id} value={hospital.id}>
-                        {hospital.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {!isHospitalScopedUser ? (
+                  <div className="space-y-2">
+                    <Label>Hospital</Label>
+                    <Select
+                      value={formData.hospitalId}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          hospitalId: value,
+                          physiotherapistId: "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select hospital" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {hospitals.map((hospital: Hospital) => (
+                          <SelectItem key={hospital.id} value={hospital.id}>
+                            {hospital.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
 
               <div className="space-y-2">
                 <Label>Physiotherapist</Label>
@@ -567,26 +751,6 @@ export default function EnrollmentsPage() {
                     setFormData((prev) => ({ ...prev, admissionDate: e.target.value }))
                   }
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, status: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ACTIVE">Active</SelectItem>
-                    <SelectItem value="PENDING">Pending</SelectItem>
-                    <SelectItem value="DISCHARGED">Discharged</SelectItem>
-                    <SelectItem value="INACTIVE">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-2">
@@ -683,15 +847,9 @@ export default function EnrollmentsPage() {
                   <Label>Status</Label>
                   <div>
                     <Badge
-                      variant={
-                        viewingSession.status === "ACTIVE"
-                          ? "default"
-                          : viewingSession.status === "PENDING"
-                            ? "secondary"
-                            : "outline"
-                      }
+                      variant={getStatusBadgeVariant(viewingSession.status)}
                     >
-                      {viewingSession.status}
+                      {formatStatus(viewingSession.status)}
                     </Badge>
                   </div>
                 </div>

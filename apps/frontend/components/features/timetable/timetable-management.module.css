@@ -22,3 +22,114 @@
   height: 4px;
   background-color: #f59e0b;
 }
+
+.calendarContainer {
+  height: 680px;
+}
+
+.calendarEventCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  overflow: hidden;
+  justify-content: center;
+}
+
+.calendarEventTitle {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.calendarEventMeta,
+.calendarEventTime {
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  opacity: 0.98;
+}
+
+.calendarEventTime {
+  font-weight: 700;
+}
+
+.calendarContainer :global(.rbc-calendar) {
+  font-size: 13px;
+}
+
+.calendarContainer :global(.rbc-toolbar) {
+  margin-bottom: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.calendarContainer :global(.rbc-toolbar button) {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  padding: 6px 10px;
+}
+
+.calendarContainer :global(.rbc-toolbar button.rbc-active) {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+
+.calendarContainer :global(.rbc-time-view),
+.calendarContainer :global(.rbc-month-view),
+.calendarContainer :global(.rbc-agenda-view table) {
+  border-color: hsl(var(--border));
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.calendarContainer :global(.rbc-header) {
+  background: hsl(var(--muted));
+  font-weight: 600;
+  padding: 8px 6px;
+  border-color: hsl(var(--border));
+}
+
+.calendarContainer :global(.rbc-time-content),
+.calendarContainer :global(.rbc-timeslot-group),
+.calendarContainer :global(.rbc-time-header-content),
+.calendarContainer :global(.rbc-day-slot .rbc-time-slot) {
+  border-color: hsl(var(--border));
+}
+
+.calendarContainer :global(.rbc-today) {
+  background-color: color-mix(in srgb, hsl(var(--primary)) 8%, transparent);
+}
+
+.calendarContainer :global(.rbc-event) {
+  min-height: 64px;
+  padding: 0 !important;
+}
+
+.calendarContainer :global(.rbc-event-content) {
+  height: 100%;
+  padding: 6px;
+  display: block;
+  color: inherit;
+  overflow: hidden;
+}
+
+.calendarContainer :global(.rbc-event-label) {
+  display: none;
+}
+
+.calendarContainer :global(.rbc-day-slot .rbc-event) {
+  max-width: calc(100% - 6px);
+}
+
+.calendarContainer :global(.rbc-agenda-event-cell) {
+  font-weight: 500;
+}

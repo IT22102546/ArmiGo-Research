@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, Power, Building2, Search, Activity, BedDouble, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -101,25 +101,46 @@ export default function HospitalsPage() {
   });
 
   // Query for hospitals
-  const { data: hospitals, isLoading } = useQuery({
+  const { data: hospitals, isLoading, isFetching } = useQuery({
     queryKey: ["hospitals"],
     queryFn: async () => {
       const response = await ApiClient.get<any>("/hospitals");
       const resp = response?.data ?? response ?? {};
       return resp.data || resp || [];
     },
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
+  const [search, setSearch] = useState("");
   const [sortedHospitals, setSortedHospitals] = useState<any[]>([]);
   useEffect(() => {
-    if (hospitals) setSortedHospitals(hospitals);
+    if (hospitals && hospitals.length > 0) setSortedHospitals(hospitals);
   }, [hospitals]);
+
+  const hospitalStats = useMemo(() => {
+    const list = sortedHospitals;
+    const total = list.length;
+    const active = list.filter((h: any) => h.status === "ACTIVE").length;
+    const inactive = total - active;
+    return { total, active, inactive };
+  }, [sortedHospitals]);
+
+  const filteredHospitals = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return sortedHospitals;
+    return sortedHospitals.filter((h: any) =>
+      [h.name, h.registrationNo, h.type, h.phone, h.email, h.district?.name, h.zone?.name, h.city]
+        .filter(Boolean).join(" ").toLowerCase().includes(term)
+    );
+  }, [sortedHospitals, search]);
 
   const createMutation = useMutation({
     mutationFn: (data: any) => ApiClient.post("/hospitals", data),
     onSuccess: (response: any) => {
       toast.success("Hospital created successfully");
       queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+      queryClient.invalidateQueries({ queryKey: ["zones"] });
       if (response?.adminPassword) {
         setSelectedHospital(response);
         handleCloseDialog();
@@ -141,6 +162,7 @@ export default function HospitalsPage() {
     onSuccess: () => {
       toast.success("Hospital updated successfully");
       queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+      queryClient.invalidateQueries({ queryKey: ["zones"] });
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -155,11 +177,31 @@ export default function HospitalsPage() {
     onSuccess: () => {
       toast.success("Hospital deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+      queryClient.invalidateQueries({ queryKey: ["zones"] });
       setDeleteDialogOpen(false);
     },
     onError: (error: any) => {
       toast.error(
         error.response?.data?.message || "Failed to delete hospital"
+      );
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "INACTIVE" }) =>
+      ApiClient.put(`/hospitals/${id}`, { status }),
+    onSuccess: (_response: any, variables) => {
+      toast.success(
+        variables.status === "ACTIVE"
+          ? "Hospital marked as active"
+          : "Hospital marked as inactive"
+      );
+      queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+      queryClient.invalidateQueries({ queryKey: ["zones"] });
+    },
+    onError: (error: any) => {
+      toast.error(
+        error.response?.data?.message || "Failed to update hospital status"
       );
     },
   });
@@ -257,6 +299,9 @@ export default function HospitalsPage() {
           bedCapacity: parseInt(formData.bedCapacity) || 0,
           totalStaff: parseInt(formData.totalStaff) || 0,
           isMainHospital: formData.isMainHospital,
+          ...(formData.adminPassword
+            ? { adminPassword: formData.adminPassword }
+            : {}),
         },
       });
     } else {
@@ -364,17 +409,34 @@ export default function HospitalsPage() {
       key: "actions",
       label: "Actions",
       render: (h: any) => (
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
+            className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
             onClick={() => handleOpenDialog(h)}
           >
             <Pencil className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
+            className="h-8 w-8 p-0 hover:bg-amber-500/10 hover:text-amber-600"
+            onClick={() =>
+              statusMutation.mutate({
+                id: h.id,
+                status: h.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+              })
+            }
+            title={h.status === "ACTIVE" ? "Mark inactive" : "Mark active"}
+            disabled={statusMutation.isPending}
+          >
+            <Power className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
             onClick={() => handleDeleteClick(h)}
           >
             <Trash2 className="h-4 w-4" />
@@ -386,10 +448,16 @@ export default function HospitalsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Hospital Management</h1>
-          <p className="text-gray-500 mt-1">Manage hospitals and their details</p>
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <Building2 className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold">Hospital Management</h1>
+            <p className="text-sm text-muted-foreground">Manage hospitals and their details</p>
+          </div>
         </div>
         <Button onClick={() => handleOpenDialog()} className="gap-2">
           <Plus className="w-4 h-4" />
@@ -397,18 +465,79 @@ export default function HospitalsPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          {isLoading ? (
-            <div className="text-center py-8">Loading hospitals...</div>
-          ) : sortedHospitals.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No hospitals found</p>
+      {/* Stat Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Hospitals</p>
+                <p className="text-2xl font-bold">{hospitalStats.total}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Active</p>
+                <p className="text-2xl font-bold text-emerald-600">{hospitalStats.active}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40">
+                <Users className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Inactive</p>
+                <p className="text-2xl font-bold text-rose-600">{hospitalStats.inactive}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardContent className="pt-5 space-y-4">
+          {/* Search */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search hospitals..."
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 pl-9 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+          {isLoading || (isFetching && sortedHospitals.length === 0) ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : filteredHospitals.length === 0 ? (
+            <div className="py-16 flex flex-col items-center gap-2 text-muted-foreground">
+              <div className="p-3 rounded-full bg-muted">
+                <Building2 className="h-6 w-6" />
+              </div>
+              <p className="font-medium">No hospitals found</p>
+              <p className="text-xs">{search ? "Try a different search term" : "Add your first hospital to get started"}</p>
             </div>
           ) : (
             <SortableTable
               columns={tableColumns}
-              data={sortedHospitals}
+              data={filteredHospitals}
               onReorder={setSortedHospitals}
               getItemId={(h: any) => h.id}
             />
@@ -420,7 +549,10 @@ export default function HospitalsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10">
+                <Building2 className="h-4 w-4 text-primary" />
+              </div>
               {selectedHospital ? "Edit Hospital" : "Create New Hospital"}
             </DialogTitle>
             <DialogDescription>
@@ -487,7 +619,7 @@ export default function HospitalsPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">Hospital Login Email *</Label>
                   <Input
                     id="email"
                     type="email"
@@ -703,47 +835,50 @@ export default function HospitalsPage() {
               </div>
             </div>
 
-            {/* Admin Credentials - Only for new hospitals */}
-            {!selectedHospital && (
-              <div className="space-y-3">
-                <h3 className="font-semibold">Admin Credentials</h3>
+            <div className="space-y-3">
+              <h3 className="font-semibold">Admin Credentials</h3>
 
-                <div>
-                  <Label htmlFor="adminPassword">
-                    Admin Password (for hospital admin account) *
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="adminPassword"
-                      type={showPassword ? "text" : "password"}
-                      value={formData.adminPassword}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          adminPassword: e.target.value,
-                        })
-                      }
-                      placeholder="Set a strong password"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Note: Hospital admin email will be auto-generated
-                  </p>
+              <div>
+                <Label htmlFor="adminPassword">
+                  Admin Password (for hospital admin account){selectedHospital ? "" : " *"}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="adminPassword"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.adminPassword}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        adminPassword: e.target.value,
+                      })
+                    }
+                    placeholder={
+                      selectedHospital
+                        ? "Leave blank to keep current password"
+                        : "Set a strong password"
+                    }
+                    required={!selectedHospital}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedHospital
+                    ? "Set a new password only if you want to change it"
+                    : "This exact email will be used for hospital admin sign-in"}
+                </p>
               </div>
-            )}
+            </div>
 
             <DialogFooter>
               <Button
@@ -856,9 +991,24 @@ export default function HospitalsPage() {
               Cancel
             </Button>
             <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!selectedHospital?.id) return;
+                statusMutation.mutate({
+                  id: selectedHospital.id,
+                  status: "INACTIVE",
+                });
+                setDeleteDialogOpen(false);
+              }}
+              disabled={statusMutation.isPending || deleteMutation.isPending}
+            >
+              Make Inactive
+            </Button>
+            <Button
               variant="destructive"
               onClick={handleConfirmDelete}
-              disabled={deleteMutation.isPending}
+              disabled={statusMutation.isPending || deleteMutation.isPending}
             >
               Delete
             </Button>

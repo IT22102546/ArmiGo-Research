@@ -10,10 +10,21 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
   Logger,
+  Request,
+  ForbiddenException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { Roles } from '@common/decorators';
+import { JwtAuthGuard, RolesGuard } from '@common/guards';
+import { StorageService } from '@infrastructure/storage/storage.service';
 import { PatientService } from './patient.service';
+import { UsersService } from '@modules/users/users.service';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { UpdatePatientDto } from './dtos/update-patient.dto';
 import { UpdatePatientStatusDto } from './dtos/update-patient-status.dto';
@@ -23,6 +34,10 @@ import {
   UpdatePhysiotherapistDto,
 } from './dtos/physiotherapist.dto';
 import {
+  CreatePhysioAssignmentDto,
+  UpdatePhysioAssignmentDto,
+} from './dtos/physio-assignment.dto';
+import {
   CreateAdmissionTrackingDto,
   UpdateAdmissionTrackingDto,
 } from './dtos/admission-tracking.dto';
@@ -30,10 +45,41 @@ import {
 @ApiTags('Patients')
 @Controller('patients')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN)
 export class PatientController {
   private readonly logger = new Logger(PatientController.name);
 
-  constructor(private readonly patientService: PatientService) {}
+  constructor(
+    private readonly patientService: PatientService,
+    private readonly usersService: UsersService,
+    private readonly storageService: StorageService
+  ) {}
+
+  private async resolveScopedHospitalId(req: any): Promise<string | undefined> {
+    const roles = Array.isArray(req?.user?.roles)
+      ? req.user.roles
+      : [req?.user?.role].filter(Boolean);
+    const isHospitalScopedUser =
+      roles.includes(UserRole.HOSPITAL_ADMIN) && req?.user?.email !== 'armigo@gmail.com';
+
+    if (!isHospitalScopedUser) {
+      return undefined;
+    }
+
+    const userId = req?.user?.id || req?.user?.sub;
+    if (!userId) {
+      throw new ForbiddenException('Hospital scope resolution failed');
+    }
+
+    const user = await this.usersService.findById(userId);
+    const hospitalId = user?.hospitalProfile?.hospitalId;
+    if (!hospitalId) {
+      throw new ForbiddenException('Hospital profile is not linked to this account');
+    }
+
+    return hospitalId;
+  }
 
   /**
    * Create a new patient
@@ -46,11 +92,16 @@ export class PatientController {
     description: 'Patient created successfully',
     type: PatientResponseDto,
   })
-  async createPatient(@Body() createPatientDto: CreatePatientDto) {
+  async createPatient(@Request() req: any, @Body() createPatientDto: CreatePatientDto) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const payload: CreatePatientDto = scopedHospitalId
+      ? { ...createPatientDto, hospitalId: scopedHospitalId }
+      : createPatientDto;
+
     this.logger.log(
-      `Creating patient: ${createPatientDto.firstName} ${createPatientDto.lastName}`
+      `Creating patient: ${payload.firstName} ${payload.lastName}`
     );
-    const patient = await this.patientService.createPatient(createPatientDto);
+    const patient = await this.patientService.createPatient(payload);
     return {
       success: true,
       data: patient,
@@ -69,6 +120,7 @@ export class PatientController {
     description: 'Patients retrieved successfully',
   })
   async getAllPatients(
+    @Request() req: any,
     @Query('hospitalId') hospitalId?: string,
     @Query('isActive') isActive?: string,
     @Query('gender') gender?: string,
@@ -77,8 +129,9 @@ export class PatientController {
     @Query('page') page?: string,
     @Query('limit') limit?: string
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
     const filters = {
-      hospitalId,
+      hospitalId: scopedHospitalId || hospitalId,
       isActive:
         isActive !== undefined && isActive !== null && isActive !== ''
           ? isActive === 'true'
@@ -98,6 +151,164 @@ export class PatientController {
     };
   }
 
+  // ============================================================
+  // PHYSIOTHERAPY ASSIGNMENTS (must be before :id wildcard)
+  // ============================================================
+
+  /**
+   * Get options (hospitals, physiotherapists, children) for the assignment form
+   */
+  @Get('assignments/options')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get form options for physiotherapy assignments' })
+  async getPhysioAssignmentOptions(
+    @Request() req: any,
+    @Query('hospitalId') hospitalId?: string,
+    @Query('physiotherapistId') physiotherapistId?: string
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const effectiveHospitalId = scopedHospitalId || hospitalId;
+    const data = await this.patientService.getPhysioAssignmentOptions(
+      effectiveHospitalId,
+      physiotherapistId
+    );
+    return { success: true, data };
+  }
+
+  /**
+   * Upload a PDF for a physiotherapy assignment
+   */
+  @Post('assignments/upload')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Upload assignment PDF' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAssignmentPdf(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+
+    const allowed = ['application/pdf'];
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF files are allowed for assignment uploads');
+    }
+
+    const uploaded = await this.storageService.uploadFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      'publication',
+      {
+        fileName: file.originalname,
+        fileType: file.mimetype,
+        fileSize: file.size,
+        userId: req?.user?.id,
+        category: 'publication',
+        maxSize: 50 * 1024 * 1024,
+        allowedMimeTypes: allowed,
+      }
+    );
+
+    return {
+      success: true,
+      data: {
+        url: uploaded.url,
+        key: uploaded.key,
+        filename: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+      },
+    };
+  }
+
+  /**
+   * List physiotherapy assignments
+   */
+  @Get('assignments')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List physiotherapy assignments' })
+  async getPhysioAssignments(
+    @Request() req: any,
+    @Query('hospitalId') hospitalId?: string,
+    @Query('physiotherapistId') physiotherapistId?: string,
+    @Query('childId') childId?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const data = await this.patientService.getPhysioAssignments({
+      hospitalId: scopedHospitalId || hospitalId,
+      physiotherapistId,
+      childId,
+      status,
+      search,
+    });
+    return { success: true, data };
+  }
+
+  /**
+   * Create a physiotherapy assignment
+   */
+  @Post('assignments')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create physiotherapy assignment' })
+  async createPhysioAssignment(
+    @Request() req: any,
+    @Body() body: CreatePhysioAssignmentDto
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const payload = scopedHospitalId
+      ? { ...body, hospitalId: scopedHospitalId }
+      : body;
+
+    const createdById = req?.user?.id || req?.user?.sub;
+    if (!createdById) throw new ForbiddenException('User not authenticated');
+
+    const data = await this.patientService.createPhysioAssignment(payload, createdById);
+    return { success: true, data, message: 'Assignment created successfully' };
+  }
+
+  /**
+   * Update a physiotherapy assignment
+   */
+  @Put('assignments/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update physiotherapy assignment' })
+  async updatePhysioAssignment(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: UpdatePhysioAssignmentDto
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const records = await this.patientService.getPhysioAssignments({ hospitalId: scopedHospitalId });
+      if (!records.some((r: any) => r.id === id)) {
+        throw new ForbiddenException('You can only update assignments in your hospital');
+      }
+    }
+    const data = await this.patientService.updatePhysioAssignment(id, body);
+    return { success: true, data, message: 'Assignment updated successfully' };
+  }
+
+  /**
+   * Delete a physiotherapy assignment
+   */
+  @Delete('assignments/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete physiotherapy assignment' })
+  async deletePhysioAssignment(@Request() req: any, @Param('id') id: string) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const records = await this.patientService.getPhysioAssignments({ hospitalId: scopedHospitalId });
+      if (!records.some((r: any) => r.id === id)) {
+        throw new ForbiddenException('You can only delete assignments in your hospital');
+      }
+    }
+    const result = await this.patientService.deletePhysioAssignment(id);
+    return { success: true, message: result.message };
+  }
+
   /**
    * Get patient by ID
    */
@@ -109,9 +320,17 @@ export class PatientController {
     description: 'Patient retrieved successfully',
     type: PatientResponseDto,
   })
-  async getPatientById(@Param('id') id: string) {
+  async getPatientById(@Request() req: any, @Param('id') id: string) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
     this.logger.log(`Getting patient: ${id}`);
     const patient = await this.patientService.getPatientById(id);
+    if (
+      scopedHospitalId &&
+      patient?.hospital?.id !== scopedHospitalId &&
+      patient?.hospitalId !== scopedHospitalId
+    ) {
+      throw new ForbiddenException('You can only access patients in your hospital');
+    }
     return {
       success: true,
       data: patient,
@@ -129,9 +348,10 @@ export class PatientController {
     description: 'Patient stats retrieved successfully',
     type: PatientStatsDto,
   })
-  async getPatientStats(@Query('hospitalId') hospitalId?: string) {
+  async getPatientStats(@Request() req: any, @Query('hospitalId') hospitalId?: string) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
     this.logger.log('Getting patient statistics');
-    const stats = await this.patientService.getPatientStats(hospitalId);
+    const stats = await this.patientService.getPatientStats(scopedHospitalId || hospitalId);
     return {
       success: true,
       data: stats,
@@ -150,11 +370,24 @@ export class PatientController {
     type: PatientResponseDto,
   })
   async updatePatient(
+    @Request() req: any,
     @Param('id') id: string,
     @Body() updatePatientDto: UpdatePatientDto
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const existing = await this.patientService.getPatientById(id);
+      if (existing?.hospital?.id !== scopedHospitalId && existing?.hospitalId !== scopedHospitalId) {
+        throw new ForbiddenException('You can only update patients in your hospital');
+      }
+    }
+
+    const payload: UpdatePatientDto = scopedHospitalId
+      ? { ...updatePatientDto, hospitalId: scopedHospitalId }
+      : updatePatientDto;
+
     this.logger.log(`Updating patient: ${id}`);
-    const patient = await this.patientService.updatePatient(id, updatePatientDto);
+    const patient = await this.patientService.updatePatient(id, payload);
     return {
       success: true,
       data: patient,
@@ -174,9 +407,18 @@ export class PatientController {
     type: PatientResponseDto,
   })
   async updatePatientStatus(
+    @Request() req: any,
     @Param('id') id: string,
     @Body() body: UpdatePatientStatusDto
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const existing = await this.patientService.getPatientById(id);
+      if (existing?.hospital?.id !== scopedHospitalId && existing?.hospitalId !== scopedHospitalId) {
+        throw new ForbiddenException('You can only update patients in your hospital');
+      }
+    }
+
     this.logger.log(`Updating patient status: ${id} -> ${body.isActive}`);
     const patient = await this.patientService.setPatientStatus(id, body.isActive);
     return {
@@ -197,9 +439,18 @@ export class PatientController {
     description: 'Patient deleted successfully',
   })
   async deletePatient(
+    @Request() req: any,
     @Param('id') id: string,
     @Query('mode') mode?: 'inactive' | 'permanent'
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const existing = await this.patientService.getPatientById(id);
+      if (existing?.hospital?.id !== scopedHospitalId && existing?.hospitalId !== scopedHospitalId) {
+        throw new ForbiddenException('You can only delete patients in your hospital');
+      }
+    }
+
     const normalizedMode = mode === 'inactive' ? 'inactive' : 'permanent';
     this.logger.log(`Deleting patient: ${id} with mode ${normalizedMode}`);
     const result = await this.patientService.deletePatient(id, normalizedMode);
@@ -219,12 +470,16 @@ export class PatientController {
     status: 200,
     description: 'Hospitals retrieved successfully',
   })
-  async getHospitals() {
+  async getHospitals(@Request() req: any) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
     this.logger.log('Getting hospitals');
     const hospitals = await this.patientService.getHospitals();
+    const filteredHospitals = scopedHospitalId
+      ? hospitals.filter((item: any) => item.id === scopedHospitalId)
+      : hospitals;
     return {
       success: true,
-      data: hospitals,
+      data: filteredHospitals,
     };
   }
 
@@ -276,9 +531,16 @@ export class PatientController {
     status: 200,
     description: 'Sub-hospitals retrieved successfully',
   })
-  async getSubHospitalsByHospital(@Param('hospitalId') hospitalId: string) {
+  async getSubHospitalsByHospital(
+    @Request() req: any,
+    @Param('hospitalId') hospitalId: string
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const effectiveHospitalId = scopedHospitalId || hospitalId;
     this.logger.log(`Getting sub-hospitals for hospital: ${hospitalId}`);
-    const subHospitals = await this.patientService.getSubHospitalsByHospital(hospitalId);
+    const subHospitals = await this.patientService.getSubHospitalsByHospital(
+      effectiveHospitalId
+    );
     return {
       success: true,
       data: subHospitals,
@@ -295,11 +557,13 @@ export class PatientController {
     status: 200,
     description: 'Doctors retrieved successfully',
   })
-  async getDoctors(@Query('hospitalId') hospitalId?: string) {
+  async getDoctors(@Request() req: any, @Query('hospitalId') hospitalId?: string) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const effectiveHospitalId = scopedHospitalId || hospitalId;
     this.logger.log(
-      `Getting doctors${hospitalId ? ` for hospital: ${hospitalId}` : ''}`
+      `Getting doctors${effectiveHospitalId ? ` for hospital: ${effectiveHospitalId}` : ''}`
     );
-    const doctors = await this.patientService.getDoctors(hospitalId);
+    const doctors = await this.patientService.getDoctors(effectiveHospitalId);
     return {
       success: true,
       data: doctors,
@@ -317,14 +581,17 @@ export class PatientController {
     description: 'Physiotherapists retrieved successfully',
   })
   async getPhysiotherapists(
+    @Request() req: any,
     @Query('hospitalId') hospitalId?: string,
     @Query('includeInactive') includeInactive?: string
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const effectiveHospitalId = scopedHospitalId || hospitalId;
     this.logger.log(
-      `Getting physiotherapists${hospitalId ? ` for hospital: ${hospitalId}` : ''}`
+      `Getting physiotherapists${effectiveHospitalId ? ` for hospital: ${effectiveHospitalId}` : ''}`
     );
     const physiotherapists = await this.patientService.getPhysiotherapists(
-      hospitalId,
+      effectiveHospitalId,
       includeInactive === 'true'
     );
     return {
@@ -344,9 +611,18 @@ export class PatientController {
     description: 'Physiotherapist status updated successfully',
   })
   async updatePhysiotherapistStatus(
+    @Request() req: any,
     @Param('id') id: string,
     @Body() body: UpdatePatientStatusDto
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only update physiotherapists in your hospital');
+      }
+    }
+
     this.logger.log(`Updating physiotherapist status: ${id} -> ${body.isActive}`);
     const physiotherapist = await this.patientService.setPhysiotherapistStatus(
       id,
@@ -360,6 +636,28 @@ export class PatientController {
   }
 
   /**
+   * Update physiotherapist real-time availability status
+   */
+  @Put('locations/physiotherapists/:id/availability')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update physiotherapist availability status (AVAILABLE | IN_WORK | NOT_AVAILABLE)' })
+  async updatePhysioAvailability(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { status: 'AVAILABLE' | 'IN_WORK' | 'NOT_AVAILABLE'; note?: string }
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only update physiotherapists in your hospital');
+      }
+    }
+    const data = await this.patientService.setPhysioAvailability(id, body.status, body.note);
+    return { success: true, data, message: 'Availability updated' };
+  }
+
+  /**
    * Create physiotherapist
    */
   @Post('locations/physiotherapists')
@@ -369,14 +667,73 @@ export class PatientController {
     status: 201,
     description: 'Physiotherapist created successfully',
   })
-  async createPhysiotherapist(@Body() body: CreatePhysiotherapistDto) {
+  async createPhysiotherapist(@Request() req: any, @Body() body: CreatePhysiotherapistDto) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const payload: CreatePhysiotherapistDto = scopedHospitalId
+      ? { ...body, hospitalId: scopedHospitalId }
+      : body;
     this.logger.log(`Creating physiotherapist: ${body.name}`);
-    const physiotherapist = await this.patientService.createPhysiotherapist(body);
+    const physiotherapist = await this.patientService.createPhysiotherapist(payload);
     return {
       success: true,
       data: physiotherapist,
       message: 'Physiotherapist created successfully',
     };
+  }
+
+  /**
+   * Get upcoming unavailable dates for a physiotherapist
+   */
+  @Get('locations/physiotherapists/:id/unavailable-dates')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get upcoming unavailable dates for a physiotherapist' })
+  async getPhysioUnavailableDates(@Param('id') id: string) {
+    const dates = await this.patientService.getPhysioUnavailableDates(id);
+    return { success: true, data: dates };
+  }
+
+  /**
+   * Add an unavailable date for a physiotherapist
+   */
+  @Post('locations/physiotherapists/:id/unavailable-dates')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Schedule a future unavailable date for a physiotherapist' })
+  async addPhysioUnavailableDate(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { date: string; reason?: string }
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only manage physiotherapists in your hospital');
+      }
+    }
+    const data = await this.patientService.addPhysioUnavailableDate(id, new Date(body.date), body.reason);
+    return { success: true, data };
+  }
+
+  /**
+   * Remove a scheduled unavailable date
+   */
+  @Delete('locations/physiotherapists/:id/unavailable-dates/:dateId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a scheduled unavailable date' })
+  async removePhysioUnavailableDate(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Param('dateId') dateId: string
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only manage physiotherapists in your hospital');
+      }
+    }
+    await this.patientService.removePhysioUnavailableDate(dateId);
+    return { success: true, message: 'Unavailable date removed' };
   }
 
   /**
@@ -390,11 +747,24 @@ export class PatientController {
     description: 'Physiotherapist updated successfully',
   })
   async updatePhysiotherapist(
+    @Request() req: any,
     @Param('id') id: string,
     @Body() body: UpdatePhysiotherapistDto
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only update physiotherapists in your hospital');
+      }
+    }
+
+    const payload: UpdatePhysiotherapistDto = scopedHospitalId
+      ? { ...body, hospitalId: scopedHospitalId }
+      : body;
+
     this.logger.log(`Updating physiotherapist: ${id}`);
-    const physiotherapist = await this.patientService.updatePhysiotherapist(id, body);
+    const physiotherapist = await this.patientService.updatePhysiotherapist(id, payload);
     return {
       success: true,
       data: physiotherapist,
@@ -413,9 +783,18 @@ export class PatientController {
     description: 'Physiotherapist deleted successfully',
   })
   async deletePhysiotherapist(
+    @Request() req: any,
     @Param('id') id: string,
     @Query('mode') mode?: 'inactive' | 'permanent'
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only delete physiotherapists in your hospital');
+      }
+    }
+
     const normalizedMode = mode === 'inactive' ? 'inactive' : 'permanent';
     this.logger.log(
       `Deleting physiotherapist: ${id} with mode ${normalizedMode}`
@@ -442,9 +821,15 @@ export class PatientController {
     status: 200,
     description: 'Admission tracking options retrieved successfully',
   })
-  async getAdmissionTrackingOptions(@Query('hospitalId') hospitalId?: string) {
+  async getAdmissionTrackingOptions(
+    @Request() req: any,
+    @Query('hospitalId') hospitalId?: string
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
     this.logger.log('Getting admission tracking options');
-    const data = await this.patientService.getAdmissionTrackingOptions(hospitalId);
+    const data = await this.patientService.getAdmissionTrackingOptions(
+      scopedHospitalId || hospitalId
+    );
     return {
       success: true,
       data,
@@ -462,16 +847,20 @@ export class PatientController {
     description: 'Admission tracking records retrieved successfully',
   })
   async getAdmissionTrackings(
+    @Request() req: any,
     @Query('hospitalId') hospitalId?: string,
     @Query('childId') childId?: string,
     @Query('physiotherapistId') physiotherapistId?: string,
+    @Query('admissionType') admissionType?: string,
     @Query('status') status?: string,
     @Query('search') search?: string
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
     const data = await this.patientService.getAdmissionTrackings({
-      hospitalId,
+      hospitalId: scopedHospitalId || hospitalId,
       childId,
       physiotherapistId,
+      admissionType,
       status,
       search,
     });
@@ -492,9 +881,16 @@ export class PatientController {
     status: 201,
     description: 'Admission tracking created successfully',
   })
-  async createAdmissionTracking(@Body() body: CreateAdmissionTrackingDto) {
+  async createAdmissionTracking(
+    @Request() req: any,
+    @Body() body: CreateAdmissionTrackingDto
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const payload: CreateAdmissionTrackingDto = scopedHospitalId
+      ? { ...body, hospitalId: scopedHospitalId }
+      : body;
     this.logger.log(`Creating admission tracking for child: ${body.childId}`);
-    const data = await this.patientService.createAdmissionTracking(body);
+    const data = await this.patientService.createAdmissionTracking(payload);
     return {
       success: true,
       data,
@@ -513,11 +909,26 @@ export class PatientController {
     description: 'Admission tracking updated successfully',
   })
   async updateAdmissionTracking(
+    @Request() req: any,
     @Param('id') id: string,
     @Body() body: UpdateAdmissionTrackingDto
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const records = await this.patientService.getAdmissionTrackings({
+        hospitalId: scopedHospitalId,
+      });
+      if (!records.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only update admissions in your hospital');
+      }
+    }
+
+    const payload: UpdateAdmissionTrackingDto = scopedHospitalId
+      ? { ...body, hospitalId: scopedHospitalId }
+      : body;
+
     this.logger.log(`Updating admission tracking: ${id}`);
-    const data = await this.patientService.updateAdmissionTracking(id, body);
+    const data = await this.patientService.updateAdmissionTracking(id, payload);
     return {
       success: true,
       data,
@@ -536,9 +947,20 @@ export class PatientController {
     description: 'Admission tracking status updated successfully',
   })
   async updateAdmissionTrackingStatus(
+    @Request() req: any,
     @Param('id') id: string,
     @Body() body: { status: string }
   ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const records = await this.patientService.getAdmissionTrackings({
+        hospitalId: scopedHospitalId,
+      });
+      if (!records.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only update admissions in your hospital');
+      }
+    }
+
     const data = await this.patientService.updateAdmissionTrackingStatus(
       id,
       body?.status
@@ -560,11 +982,22 @@ export class PatientController {
     status: 200,
     description: 'Admission tracking deleted successfully',
   })
-  async deleteAdmissionTracking(@Param('id') id: string) {
+  async deleteAdmissionTracking(@Request() req: any, @Param('id') id: string) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const records = await this.patientService.getAdmissionTrackings({
+        hospitalId: scopedHospitalId,
+      });
+      if (!records.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only delete admissions in your hospital');
+      }
+    }
+
     const result = await this.patientService.deleteAdmissionTracking(id);
     return {
       success: true,
       message: result.message,
     };
   }
+
 }

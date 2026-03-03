@@ -1,61 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle,
-  BedSingle,
-  Briefcase,
-  Building2,
-  CalendarClock,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Filter,
-  Mail,
-  MoreHorizontal,
-  Pencil,
-  Phone,
+  ClipboardList,
+  Download,
+  FileText,
   Plus,
   Search,
-  Stethoscope,
   Trash2,
-  UserCircle,
-  XCircle,
+  Upload,
+  X,
+  Building2,
+  Stethoscope,
+  User2,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -63,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -72,1122 +42,858 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ApiClient } from "@/lib/api/api-client";
+import { useAuthStore } from "@/stores/auth-store";
+import { toast } from "sonner";
 
-type AssignmentStatus = "active" | "inactive";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Doctor {
+interface Hospital {
+  id: string;
+  name: string;
+}
+
+interface Physiotherapist {
+  id: string;
+  name: string;
+  role?: string;
+  specialization?: string;
+  hospitalId?: string;
+  hospital?: Hospital | null;
+}
+
+interface Child {
   id: string;
   firstName: string;
   lastName: string;
-  employeeId: string;
-  email: string;
-  phone: string;
-  specialty: string;
-  avatar?: string;
-}
-
-interface ServiceLine {
-  id: string;
-  name: string;
-  focus: string;
-}
-
-interface Unit {
-  id: string;
-  name: string;
-  location: string;
-}
-
-interface Shift {
-  id: string;
-  label: string;
-  window: string;
+  age?: number;
+  diagnosis?: string;
+  hospitalId?: string;
+  hospital?: Hospital | null;
 }
 
 interface Assignment {
   id: string;
-  doctorId: string;
-  serviceLineId: string;
-  unitId: string;
-  shiftId: string;
-  maxDailyPatients: number;
-  status: AssignmentStatus;
+  title: string;
+  description?: string;
+  assignmentPdf?: string;
+  assignmentPdfName?: string;
+  status: string;
+  createdAt: string;
+  hospital?: Hospital | null;
+  physiotherapist?: Physiotherapist | null;
+  child: Child;
+  createdBy?: { id: string; firstName: string; lastName: string } | null;
 }
 
-interface DoctorGroup {
-  doctor: Doctor;
-  assignments: Assignment[];
-  activeCount: number;
-  inactiveCount: number;
-  serviceLines: Set<string>;
-  units: Set<string>;
-}
+// ─── Default form ─────────────────────────────────────────────────────────────
 
-const doctors: Doctor[] = [
-  {
-    id: "doc-1",
-    firstName: "Malithi",
-    lastName: "Jayasinghe",
-    employeeId: "EMP-2210",
-    email: "malithi.j@cityhospital.lk",
-    phone: "+94 77 123 4567",
-    specialty: "Pediatric Neurology",
-  },
-  {
-    id: "doc-2",
-    firstName: "Nuwan",
-    lastName: "Samarasinghe",
-    employeeId: "EMP-1875",
-    email: "nuwan.s@cityhospital.lk",
-    phone: "+94 76 987 6543",
-    specialty: "Orthopedic Surgery",
-  },
-  {
-    id: "doc-3",
-    firstName: "Ishara",
-    lastName: "Peris",
-    employeeId: "EMP-1992",
-    email: "ishara.p@cityhospital.lk",
-    phone: "+94 71 222 3344",
-    specialty: "Emergency Medicine",
-  },
-];
+const EMPTY_FORM = {
+  hospitalId: "",
+  physiotherapistId: "",
+  childId: "",
+  title: "",
+  description: "",
+};
 
-const serviceLines: ServiceLine[] = [
-  { id: "svc-1", name: "Neurology", focus: "Stroke and rehab" },
-  { id: "svc-2", name: "Orthopedics", focus: "Trauma and joints" },
-  { id: "svc-3", name: "Emergency", focus: "Acute care" },
-];
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-const units: Unit[] = [
-  { id: "unit-1", name: "Neuro Ward", location: "Level 5" },
-  { id: "unit-2", name: "Ortho Ward", location: "Level 4" },
-  { id: "unit-3", name: "Emergency Unit", location: "Ground" },
-];
+export default function PhysiotherapyAssignmentsPage() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
 
-const shifts: Shift[] = [
-  { id: "shift-1", label: "Morning", window: "07:00 - 13:00" },
-  { id: "shift-2", label: "Evening", window: "13:00 - 19:00" },
-  { id: "shift-3", label: "Night", window: "19:00 - 07:00" },
-];
+  // Role detection
+  const userRoles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : ([user?.role].filter(Boolean) as string[]);
+  const isHospitalScoped =
+    userRoles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
 
-const initialAssignments: Assignment[] = [
-  {
-    id: "asg-1",
-    doctorId: "doc-1",
-    serviceLineId: "svc-1",
-    unitId: "unit-1",
-    shiftId: "shift-1",
-    maxDailyPatients: 12,
-    status: "active",
-  },
-  {
-    id: "asg-2",
-    doctorId: "doc-2",
-    serviceLineId: "svc-2",
-    unitId: "unit-2",
-    shiftId: "shift-2",
-    maxDailyPatients: 10,
-    status: "active",
-  },
-  {
-    id: "asg-3",
-    doctorId: "doc-3",
-    serviceLineId: "svc-3",
-    unitId: "unit-3",
-    shiftId: "shift-3",
-    maxDailyPatients: 18,
-    status: "inactive",
-  },
-];
+  // ── List filters ──
+  const [search, setSearch] = useState("");
+  const [filterHospitalId, setFilterHospitalId] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
 
-export default function DoctorAssignmentsPage() {
-  const [assignments, setAssignments] =
-    useState<Assignment[]>(initialAssignments);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] =
-    useState<Assignment | null>(null);
-  const [expandedDoctors, setExpandedDoctors] = useState<Set<string>>(
-    new Set()
-  );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "active" | "inactive"
-  >("all");
-  const [serviceFilter, setServiceFilter] = useState<string>("all");
-  const [unitFilter, setUnitFilter] = useState<string>("all");
-  const [shiftFilter, setShiftFilter] = useState<string>("all");
-  const [formData, setFormData] = useState({
-    doctorId: "",
-    serviceLineId: "",
-    unitId: "",
-    shiftId: "",
-    maxDailyPatients: 12,
-    status: "active" as AssignmentStatus,
+  // ── Dialog state ──
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Assignment | null>(null);
+
+  // ── Form state ──
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [uploadedPdfUrl, setUploadedPdfUrl] = useState("");
+  const [uploadedPdfName, setUploadedPdfName] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── Queries ──────────────────────────────────────────────────────────────
+
+  /**
+   * Cascading options: hospitals → physiotherapists → children.
+   * Backend scopes automatically for HOSPITAL_ADMIN users.
+   */
+  const { data: options } = useQuery({
+    queryKey: [
+      "physio-assignments",
+      "options",
+      form.hospitalId,
+      form.physiotherapistId,
+    ],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (form.hospitalId) params.hospitalId = form.hospitalId;
+      if (form.physiotherapistId)
+        params.physiotherapistId = form.physiotherapistId;
+      const resp = await ApiClient.get<any>("/patients/assignments/options", {
+        params,
+      });
+      const d = resp?.data ?? resp ?? {};
+      return (d.data || d) as {
+        hospitals: Hospital[];
+        physiotherapists: Physiotherapist[];
+        children: Child[];
+      };
+    },
+    staleTime: 30_000,
+    enabled: createOpen, // only fetch when dialog is open
   });
 
-  const isLoading = false;
+  const hospitals: Hospital[] = options?.hospitals ?? [];
+  const physiotherapists: Physiotherapist[] = options?.physiotherapists ?? [];
+  const children: Child[] = options?.children ?? [];
 
-  const filteredAssignments = useMemo(() => {
-    return assignments.filter((assignment) => {
-      const matchesStatus =
-        statusFilter === "all" ? true : assignment.status === statusFilter;
-      const matchesService =
-        serviceFilter === "all"
-          ? true
-          : assignment.serviceLineId === serviceFilter;
-      const matchesUnit =
-        unitFilter === "all" ? true : assignment.unitId === unitFilter;
-      const matchesShift =
-        shiftFilter === "all" ? true : assignment.shiftId === shiftFilter;
-      return matchesStatus && matchesService && matchesUnit && matchesShift;
-    });
-  }, [assignments, statusFilter, serviceFilter, unitFilter, shiftFilter]);
+  /** Hospitals for the list-level filter bar (super admin only) */
+  const { data: allHospitals = [] } = useQuery<Hospital[]>({
+    queryKey: ["physio-assignments", "all-hospitals"],
+    queryFn: async () => {
+      const resp = await ApiClient.get<any>("/patients/locations/hospitals");
+      const d = resp?.data ?? resp ?? {};
+      return (d.data || d || []) as Hospital[];
+    },
+    enabled: !isHospitalScoped,
+  });
 
-  const doctorGroups = useMemo(() => {
-    const groups: Map<string, DoctorGroup> = new Map();
+  /** Existing assignment list */
+  const { data: assignments = [], isLoading, isError: listError } = useQuery<Assignment[]>({
+    queryKey: [
+      "physio-assignments",
+      "list",
+      filterHospitalId,
+      filterStatus,
+      search,
+    ],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (filterHospitalId !== "all") params.hospitalId = filterHospitalId;
+      if (filterStatus !== "all") params.status = filterStatus;
+      if (search.trim()) params.search = search.trim();
+      // ApiClient already unwraps { success, data } → returns the array directly
+      const resp = await ApiClient.get<any>("/patients/assignments", { params });
+      if (Array.isArray(resp)) return resp as Assignment[];
+      return ((resp as any)?.data ?? []) as Assignment[];
+    },
+  });
 
-    filteredAssignments.forEach((assignment) => {
-      const doctor = doctors.find((d) => d.id === assignment.doctorId);
-      if (!doctor) return;
-
-      if (!groups.has(doctor.id)) {
-        groups.set(doctor.id, {
-          doctor,
-          assignments: [],
-          activeCount: 0,
-          inactiveCount: 0,
-          serviceLines: new Set(),
-          units: new Set(),
-        });
-      }
-
-      const group = groups.get(doctor.id);
-      if (!group) return;
-      group.assignments.push(assignment);
-      if (assignment.status === "active") group.activeCount += 1;
-      else group.inactiveCount += 1;
-
-      const service = serviceLines.find(
-        (s) => s.id === assignment.serviceLineId
-      );
-      const unit = units.find((u) => u.id === assignment.unitId);
-      if (service) group.serviceLines.add(service.name);
-      if (unit) group.units.add(unit.name);
-    });
-
-    let result = Array.from(groups.values());
-
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter((group) => {
-        const name =
-          `${group.doctor.firstName} ${group.doctor.lastName}`.toLowerCase();
-        const employeeId = group.doctor.employeeId.toLowerCase();
-        const email = group.doctor.email.toLowerCase();
-        const phone = group.doctor.phone.toLowerCase();
-        return (
-          name.includes(query) ||
-          employeeId.includes(query) ||
-          email.includes(query) ||
-          phone.includes(query) ||
-          group.doctor.specialty.toLowerCase().includes(query)
-        );
-      });
+  // ── Pre-fill hospital for hospital-admin as soon as options load ──
+  useEffect(() => {
+    if (createOpen && isHospitalScoped && hospitals.length === 1 && !form.hospitalId) {
+      setForm((prev) => ({ ...prev, hospitalId: hospitals[0].id }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createOpen, hospitals, isHospitalScoped]);
 
-    return result.sort((a, b) => {
-      const nameA = `${a.doctor.firstName} ${a.doctor.lastName}`.toLowerCase();
-      const nameB = `${b.doctor.firstName} ${b.doctor.lastName}`.toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
-  }, [filteredAssignments, searchQuery]);
+  // ── Cascade resets ──
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, childId: "" }));
+  }, [form.physiotherapistId]);
 
-  const stats = useMemo(() => {
-    const total = assignments.length;
-    const active = assignments.filter((a) => a.status === "active").length;
-    const inactive = assignments.filter((a) => a.status === "inactive").length;
-    const uniqueDoctors = new Set(assignments.map((a) => a.doctorId)).size;
-    return { total, active, inactive, doctors: uniqueDoctors };
-  }, [assignments]);
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, physiotherapistId: "", childId: "" }));
+  }, [form.hospitalId]);
 
-  const toggleDoctor = (doctorId: string) => {
-    setExpandedDoctors((prev) => {
-      const next = new Set(prev);
-      if (next.has(doctorId)) next.delete(doctorId);
-      else next.add(doctorId);
-      return next;
-    });
-  };
+  // ─── PDF handlers ─────────────────────────────────────────────────────────
 
-  const expandAll = () =>
-    setExpandedDoctors(new Set(doctorGroups.map((g) => g.doctor.id)));
-  const collapseAll = () => setExpandedDoctors(new Set());
-
-  const handleOpenDialog = (assignment?: Assignment, doctorId?: string) => {
-    if (assignment) {
-      setSelectedAssignment(assignment);
-      setFormData({
-        doctorId: assignment.doctorId,
-        serviceLineId: assignment.serviceLineId,
-        unitId: assignment.unitId,
-        shiftId: assignment.shiftId,
-        maxDailyPatients: assignment.maxDailyPatients,
-        status: assignment.status,
-      });
-    } else {
-      setSelectedAssignment(null);
-      setFormData({
-        doctorId: doctorId || "",
-        serviceLineId: "",
-        unitId: "",
-        shiftId: "",
-        maxDailyPatients: 12,
-        status: "active",
-      });
-    }
-    setDialogOpen(true);
-  };
-
-  const resetDialog = () => {
-    setDialogOpen(false);
-    setSelectedAssignment(null);
-    setFormData({
-      doctorId: "",
-      serviceLineId: "",
-      unitId: "",
-      shiftId: "",
-      maxDailyPatients: 12,
-      status: "active",
-    });
-  };
-
-  const handleSubmit = () => {
-    if (
-      !formData.doctorId ||
-      !formData.serviceLineId ||
-      !formData.unitId ||
-      !formData.shiftId
-    ) {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.type !== "application/pdf") {
+      toast.error("Only PDF files are allowed");
       return;
     }
-
-    if (selectedAssignment) {
-      setAssignments((prev) =>
-        prev.map((assignment) =>
-          assignment.id === selectedAssignment.id
-            ? { ...assignment, ...formData }
-            : assignment
-        )
-      );
-    } else {
-      setAssignments((prev) => [
-        ...prev,
-        {
-          id: `asg-${Date.now()}`,
-          ...formData,
-        },
-      ]);
+    if (f.size > 50 * 1024 * 1024) {
+      toast.error("File size must be under 50 MB");
+      return;
     }
-
-    resetDialog();
+    setPdfFile(f);
+    setUploadedPdfUrl("");
+    setUploadedPdfName("");
   };
 
-  const handleDelete = () => {
-    if (!selectedAssignment) return;
-    setAssignments((prev) =>
-      prev.filter((assignment) => assignment.id !== selectedAssignment.id)
-    );
-    setDeleteDialogOpen(false);
-    setSelectedAssignment(null);
+  const handleUploadPdf = async () => {
+    if (!pdfFile) return;
+    setIsUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", pdfFile);
+      const resp = await ApiClient.uploadFile<any>(
+        "/patients/assignments/upload",
+        fd
+      );
+      const d = resp?.data ?? resp ?? {};
+      const url = (d.data || d)?.url ?? d?.url ?? "";
+      const name = (d.data || d)?.filename ?? pdfFile.name;
+      setUploadedPdfUrl(url);
+      setUploadedPdfName(name);
+      toast.success("PDF uploaded successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const duplicateAssignment = (assignment: Assignment) => {
-    setSelectedAssignment(null);
-    setFormData({
-      doctorId: assignment.doctorId,
-      serviceLineId: assignment.serviceLineId,
-      unitId: assignment.unitId,
-      shiftId: "",
-      maxDailyPatients: assignment.maxDailyPatients,
-      status: "active",
-    });
-    setDialogOpen(true);
+  // ─── Create mutation ──────────────────────────────────────────────────────
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const payload: Record<string, any> = {
+        childId: form.childId,
+        title: form.title.trim(),
+      };
+      if (form.hospitalId) payload.hospitalId = form.hospitalId;
+      if (form.physiotherapistId) payload.physiotherapistId = form.physiotherapistId;
+      if (form.description.trim()) payload.description = form.description.trim();
+      if (uploadedPdfUrl) {
+        payload.assignmentPdf = uploadedPdfUrl;
+        payload.assignmentPdfName = uploadedPdfName;
+      }
+      return ApiClient.post<any>("/patients/assignments", payload);
+    },
+    onSuccess: async () => {
+      toast.success("Assignment created successfully");
+      await queryClient.invalidateQueries({
+        queryKey: ["physio-assignments", "list"],
+      });
+      handleCloseCreate();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to create assignment");
+    },
+  });
+
+  // ─── Delete mutation ──────────────────────────────────────────────────────
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      ApiClient.delete<any>(`/patients/assignments/${id}`),
+    onSuccess: async () => {
+      toast.success("Assignment deleted");
+      await queryClient.invalidateQueries({
+        queryKey: ["physio-assignments", "list"],
+      });
+      setDeleteTarget(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to delete assignment");
+    },
+  });
+
+  // ─── Dialog helpers ───────────────────────────────────────────────────────
+
+  const handleOpenCreate = () => {
+    setForm({ ...EMPTY_FORM });
+    setPdfFile(null);
+    setUploadedPdfUrl("");
+    setUploadedPdfName("");
+    setCreateOpen(true);
   };
 
-  const toggleStatus = (assignment: Assignment, status: AssignmentStatus) => {
-    setAssignments((prev) =>
-      prev.map((a) => (a.id === assignment.id ? { ...a, status } : a))
-    );
+  const handleCloseCreate = () => {
+    setCreateOpen(false);
+    setPdfFile(null);
+    setUploadedPdfUrl("");
+    setUploadedPdfName("");
+    setForm({ ...EMPTY_FORM });
   };
 
-  const getInitials = (firstName?: string, lastName?: string) => {
-    return `${firstName?.charAt(0) || ""}${lastName?.charAt(0) || ""}`.toUpperCase();
+  const canSubmit =
+    !!form.childId &&
+    !!form.title.trim() &&
+    !createMutation.isPending &&
+    !isUploading;
+
+  const statusBadgeVariant = (s: string) => {
+    if (s === "ACTIVE") return "default" as const;
+    if (s === "COMPLETED") return "secondary" as const;
+    return "outline" as const;
   };
 
-  const findService = (id: string) => serviceLines.find((s) => s.id === id);
-  const findUnit = (id: string) => units.find((u) => u.id === id);
-  const findShift = (id: string) => shifts.find((s) => s.id === id);
+  // ─── Stats ────────────────────────────────────────────────────────────────
 
-  const handleCloseDialog = () => {
-    resetDialog();
+  const stats = {
+    total: assignments.length,
+    active: assignments.filter((a) => a.status === "ACTIVE").length,
+    completed: assignments.filter((a) => a.status === "COMPLETED").length,
+    withPdf: assignments.filter((a) => !!a.assignmentPdf).length,
   };
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <TooltipProvider>
-      <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <ClipboardList className="h-5 w-5 text-primary" />
+          </div>
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Building2 className="h-8 w-8 text-primary" />
-              Doctor Assignments
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Map doctors to service lines, wards, and shifts with capacity
-              controls.
+            <h1 className="text-2xl font-semibold">Physiotherapy Assignments</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Assign exercise plans and PDF documents to children
             </p>
           </div>
-          <Button onClick={() => handleOpenDialog()} size="lg">
-            <Plus className="mr-2 h-5 w-5" />
-            Create Assignment
-          </Button>
         </div>
+        <Button onClick={handleOpenCreate}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Assignment
+        </Button>
+      </div>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Total Assignments
-                  </p>
-                  <p className="text-3xl font-bold">{stats.total}</p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Briefcase className="h-6 w-6 text-primary" />
-                </div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {(
+          [
+            { label: "Total", value: stats.total, color: "blue" },
+            { label: "Active", value: stats.active, color: "green" },
+            { label: "Completed", value: stats.completed, color: "purple" },
+            { label: "With PDF", value: stats.withPdf, color: "orange" },
+          ] as const
+        ).map((s) => (
+          <Card
+            key={s.label}
+            className={`border-0 shadow-sm ${CARD_COLORS[s.color].card}`}
+          >
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${CARD_COLORS[s.color].icon}`}>
+                <ClipboardList
+                  className={`h-4 w-4 ${CARD_COLORS[s.color].text}`}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+                <p className="text-2xl font-semibold">{s.value}</p>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Active Assignments
-                  </p>
-                  <p className="text-3xl font-bold text-green-600">
-                    {stats.active}
-                  </p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                  <CheckCircle2 className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Inactive Assignments
-                  </p>
-                  <p className="text-3xl font-bold text-gray-500">
-                    {stats.inactive}
-                  </p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
-                  <XCircle className="h-6 w-6 text-gray-500" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Assigned Doctors
-                  </p>
-                  <p className="text-3xl font-bold text-blue-600">
-                    {stats.doctors}
-                  </p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                  <UserCircle className="h-6 w-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        ))}
+      </div>
 
-        {/* Filters and Controls */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                <div className="flex flex-1 gap-4 w-full sm:w-auto">
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search doctors by name, ID, specialty, email, or phone"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={expandAll}>
-                    Expand All
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={collapseAll}>
-                    Collapse All
-                  </Button>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Select
-                  value={statusFilter}
-                  onValueChange={(v) =>
-                    setStatusFilter(v as "all" | "active" | "inactive")
-                  }
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={serviceFilter}
-                  onValueChange={(v) => setServiceFilter(v)}
-                >
-                  <SelectTrigger className="w-[160px]">
-                    <Briefcase className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="All Services" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Services</SelectItem>
-                    {serviceLines.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={unitFilter}
-                  onValueChange={(v) => setUnitFilter(v)}
-                >
-                  <SelectTrigger className="w-[150px]">
-                    <BedSingle className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="All Units" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Units</SelectItem>
-                    {units.map((unit) => (
-                      <SelectItem key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={shiftFilter}
-                  onValueChange={(v) => setShiftFilter(v)}
-                >
-                  <SelectTrigger className="w-[150px]">
-                    <CalendarClock className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="All Shifts" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Shifts</SelectItem>
-                    {shifts.map((shift) => (
-                      <SelectItem key={shift.id} value={shift.id}>
-                        {shift.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {(statusFilter !== "all" ||
-                  serviceFilter !== "all" ||
-                  unitFilter !== "all" ||
-                  shiftFilter !== "all") && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setStatusFilter("all");
-                      setServiceFilter("all");
-                      setUnitFilter("all");
-                      setShiftFilter("all");
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                )}
-              </div>
+      {/* Filters */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by title, child or physiotherapist…"
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Teacher-wise Assignment List */}
-        <div className="space-y-4">
-          {isLoading ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                  <p className="text-muted-foreground">
-                    Loading assignments...
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : doctorGroups.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center">
-                  <Briefcase className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">
-                    No Assignments Found
-                  </h3>
-                  <p className="text-muted-foreground mb-4">
-                    {searchQuery ||
-                    statusFilter !== "all" ||
-                    serviceFilter !== "all" ||
-                    unitFilter !== "all" ||
-                    shiftFilter !== "all"
-                      ? "No assignments match your search criteria"
-                      : "Get started by creating your first doctor assignment"}
-                  </p>
-                  {!searchQuery &&
-                    statusFilter === "all" &&
-                    serviceFilter === "all" &&
-                    unitFilter === "all" &&
-                    shiftFilter === "all" && (
-                      <Button onClick={() => handleOpenDialog()}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create First Assignment
-                      </Button>
-                    )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            doctorGroups.map((group) => (
-              <Collapsible
-                key={group.doctor.id}
-                open={expandedDoctors.has(group.doctor.id)}
-                onOpenChange={() => toggleDoctor(group.doctor.id)}
+            {!isHospitalScoped && (
+              <Select
+                value={filterHospitalId}
+                onValueChange={setFilterHospitalId}
               >
-                <Card className="overflow-hidden">
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            {expandedDoctors.has(group.doctor.id) ? (
-                              <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                            )}
-                            <Avatar className="h-12 w-12">
-                              <AvatarImage src={group.doctor.avatar} />
-                              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                                {getInitials(
-                                  group.doctor.firstName,
-                                  group.doctor.lastName
-                                )}
-                              </AvatarFallback>
-                            </Avatar>
-                          </div>
-                          <div>
-                            <CardTitle className="text-xl flex items-center gap-2">
-                              {group.doctor.firstName} {group.doctor.lastName}
-                              {group.doctor.employeeId && (
-                                <Badge
-                                  variant="outline"
-                                  className="font-mono text-xs"
-                                >
-                                  {group.doctor.employeeId}
-                                </Badge>
-                              )}
-                            </CardTitle>
-                            <CardDescription className="flex flex-wrap items-center gap-2 mt-1">
-                              {group.doctor.email && (
-                                <span className="flex items-center gap-1 text-xs">
-                                  <Mail className="h-3 w-3" />
-                                  {group.doctor.email}
-                                </span>
-                              )}
-                              {group.doctor.phone && (
-                                <span className="flex items-center gap-1 text-xs">
-                                  <Phone className="h-3 w-3" />
-                                  {group.doctor.phone}
-                                </span>
-                              )}
-                              {group.doctor.specialty && (
-                                <Badge variant="secondary" className="text-xs">
-                                  <Stethoscope className="h-3 w-3 mr-1" />
-                                  {group.doctor.specialty}
-                                </Badge>
-                              )}
-                            </CardDescription>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="hidden md:flex flex-wrap gap-1 max-w-xs">
-                            {Array.from(group.serviceLines)
-                              .slice(0, 3)
-                              .map((service) => (
-                                <Badge
-                                  key={service}
-                                  variant="outline"
-                                  className="text-xs"
-                                >
-                                  {service}
-                                </Badge>
-                              ))}
-                            {group.serviceLines.size > 3 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{group.serviceLines.size - 3} more
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <Badge
-                              variant="default"
-                              className="bg-green-100 text-green-700 hover:bg-green-100"
-                            >
-                              {group.activeCount} Active
-                            </Badge>
-                            {group.inactiveCount > 0 && (
-                              <Badge variant="secondary">
-                                {group.inactiveCount} Inactive
-                              </Badge>
-                            )}
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDialog(undefined, group.doctor.id);
-                            }}
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Assign
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <Separator />
-                    <CardContent className="pt-4">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Service Line</TableHead>
-                            <TableHead>Unit / Ward</TableHead>
-                            <TableHead>Shift</TableHead>
-                            <TableHead>Max Daily Patients</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">
-                              Actions
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {group.assignments.map((assignment) => {
-                            const service = findService(
-                              assignment.serviceLineId
-                            );
-                            const unit = findUnit(assignment.unitId);
-                            const shift = findShift(assignment.shiftId);
-                            return (
-                              <TableRow
-                                key={assignment.id}
-                                className={cn(
-                                  assignment.status === "inactive" &&
-                                    "opacity-60"
-                                )}
-                              >
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                                    <div>
-                                      <div className="font-medium">
-                                        {service?.name}
-                                      </div>
-                                      <p className="text-xs text-muted-foreground">
-                                        {service?.focus}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <BedSingle className="h-4 w-4 text-muted-foreground" />
-                                    <div>
-                                      <div className="font-medium">
-                                        {unit?.name}
-                                      </div>
-                                      <p className="text-xs text-muted-foreground">
-                                        {unit?.location}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <CalendarClock className="h-4 w-4 text-muted-foreground" />
-                                    <div>
-                                      <div className="font-medium">
-                                        {shift?.label}
-                                      </div>
-                                      <p className="text-xs text-muted-foreground">
-                                        {shift?.window}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <UserCircle className="h-4 w-4 text-muted-foreground" />
-                                    {assignment.maxDailyPatients}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Switch
-                                      checked={assignment.status === "active"}
-                                      onCheckedChange={(checked) =>
-                                        toggleStatus(
-                                          assignment,
-                                          checked ? "active" : "inactive"
-                                        )
-                                      }
-                                    />
-                                    <span className="text-sm text-muted-foreground">
-                                      {assignment.status === "active"
-                                        ? "Active"
-                                        : "Inactive"}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="icon">
-                                        <MoreHorizontal className="h-4 w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          handleOpenDialog(assignment)
-                                        }
-                                      >
-                                        <Pencil className="h-4 w-4 mr-2" />
-                                        Edit Assignment
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          duplicateAssignment(assignment)
-                                        }
-                                      >
-                                        <Copy className="h-4 w-4 mr-2" />
-                                        Duplicate for Another Unit
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        className="text-red-600"
-                                        onClick={() => {
-                                          setSelectedAssignment(assignment);
-                                          setDeleteDialogOpen(true);
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Delete
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            ))
-          )}
-        </div>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All hospitals" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All hospitals</SelectItem>
+                  {allHospitals.map((h) => (
+                    <SelectItem key={h.id} value={h.id}>
+                      {h.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
-        {/* Create/Edit Dialog */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5" />
-                {selectedAssignment
-                  ? "Edit Assignment"
-                  : "Create New Assignment"}
-              </DialogTitle>
-              <DialogDescription>
-                {selectedAssignment
-                  ? "Update the assignment details below"
-                  : "Assign a doctor to a service line, unit, and shift combination"}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>
-                  Doctor <span className="text-red-500">*</span>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+                <SelectItem value="INACTIVE">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {(search || filterHospitalId !== "all" || filterStatus !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setFilterHospitalId("all");
+                  setFilterStatus("all");
+                }}
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Assignment list */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Assignments{" "}
+            <span className="text-muted-foreground font-normal text-sm">
+              ({assignments.length})
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="py-16 text-center text-muted-foreground">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+              Loading assignments…
+            </div>
+          ) : listError ? (
+            <div className="py-16 text-center">
+              <p className="text-sm text-destructive">Failed to load assignments. Check the browser console for details.</p>
+            </div>
+          ) : assignments.length === 0 ? (
+            <div className="py-16 text-center">
+              <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="font-medium text-lg">No assignments yet</p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Create the first physiotherapy assignment
+              </p>
+              <Button onClick={handleOpenCreate}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Assignment
+              </Button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-b-xl">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>Title</TableHead>
+                    <TableHead>Child</TableHead>
+                    <TableHead>Physiotherapist</TableHead>
+                    {!isHospitalScoped && <TableHead>Hospital</TableHead>}
+                    <TableHead>Status</TableHead>
+                    <TableHead>PDF</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assignments.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell>
+                        <div className="font-medium">{a.title}</div>
+                        {a.description && (
+                          <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                            {a.description}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium">
+                          {a.child?.firstName} {a.child?.lastName}
+                        </span>
+                        {a.child?.diagnosis && (
+                          <div className="text-xs text-muted-foreground">
+                            {a.child.diagnosis}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {a.physiotherapist?.name ?? (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                      {!isHospitalScoped && (
+                        <TableCell>
+                          {a.hospital?.name ?? (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <Badge variant={statusBadgeVariant(a.status)}>
+                          {a.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {a.assignmentPdf ? (
+                          <a
+                            href={a.assignmentPdf}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            View PDF
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">
+                            No file
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTarget(a)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create assignment dialog */}
+      <Dialog open={createOpen} onOpenChange={(v) => !v && handleCloseCreate()}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" />
+              New Physiotherapy Assignment
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Hospital selector — super admin only */}
+            {!isHospitalScoped && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  Hospital
                 </Label>
                 <Select
-                  value={formData.doctorId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, doctorId: value })
+                  value={form.hospitalId}
+                  onValueChange={(v) =>
+                    setForm((p) => ({ ...p, hospitalId: v }))
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select doctor" />
+                    <SelectValue placeholder="Select hospital" />
                   </SelectTrigger>
                   <SelectContent>
-                    {doctors.map((doctor) => (
-                      <SelectItem key={doctor.id} value={doctor.id}>
-                        <div className="flex items-center gap-2">
-                          <span>
-                            {doctor.firstName} {doctor.lastName}
-                          </span>
-                          {doctor.employeeId && (
-                            <span className="text-muted-foreground text-xs">
-                              ({doctor.employeeId})
-                            </span>
-                          )}
-                        </div>
+                    {hospitals.map((h) => (
+                      <SelectItem key={h.id} value={h.id}>
+                        {h.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>
-                    Service Line <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={formData.serviceLineId}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, serviceLineId: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select service line" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {serviceLines.map((service) => (
-                        <SelectItem key={service.id} value={service.id}>
-                          <div>
-                            <div>{service.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {service.focus}
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>
-                    Unit/Ward <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={formData.unitId}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, unitId: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select unit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {units.map((unit) => (
-                        <SelectItem key={unit.id} value={unit.id}>
-                          <div>
-                            <div>{unit.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {unit.location}
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* Hospital name badge when scoped */}
+            {isHospitalScoped && form.hospitalId && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Building2 className="h-4 w-4" />
+                <span>Hospital:</span>
+                <Badge variant="secondary">
+                  {hospitals.find((h) => h.id === form.hospitalId)?.name ??
+                    "Your Hospital"}
+                </Badge>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>
-                    Shift <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={formData.shiftId}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, shiftId: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select shift" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {shifts.map((shift) => (
-                        <SelectItem key={shift.id} value={shift.id}>
-                          <div>
-                            <div>{shift.label}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {shift.window}
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Max Daily Patients</Label>
-                  <Input
-                    type="number"
-                    value={formData.maxDailyPatients}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        maxDailyPatients: parseInt(e.target.value) || 20,
-                      })
-                    }
-                    placeholder="20"
-                    min={1}
-                    max={100}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/50">
-                <div className="space-y-0.5">
-                  <Label className="font-medium">Active Status</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Inactive assignments won't be available for patient
-                    scheduling
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.status === "active"}
-                  onCheckedChange={(checked) =>
-                    setFormData({
-                      ...formData,
-                      status: checked ? "active" : "inactive",
-                    })
-                  }
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={handleCloseDialog}>
-                Cancel
-              </Button>
-              <Button onClick={handleSubmit}>
-                {selectedAssignment ? "Update Assignment" : "Create Assignment"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-600">
-                <AlertCircle className="h-5 w-5" />
-                Delete Assignment
-              </DialogTitle>
-              <DialogDescription className="pt-2">
-                Are you sure you want to delete this assignment?
-                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-2">
-                  <p>
-                    <strong>Doctor:</strong>{" "}
-                    {
-                      doctors.find((d) => d.id === selectedAssignment?.doctorId)
-                        ?.firstName
-                    }{" "}
-                    {
-                      doctors.find((d) => d.id === selectedAssignment?.doctorId)
-                        ?.lastName
-                    }
-                  </p>
-                  <p>
-                    <strong>Service Line:</strong>{" "}
-                    {
-                      serviceLines.find(
-                        (s) => s.id === selectedAssignment?.serviceLineId
-                      )?.name
-                    }
-                  </p>
-                  <p>
-                    <strong>Unit/Ward:</strong>{" "}
-                    {
-                      units.find((u) => u.id === selectedAssignment?.unitId)
-                        ?.name
-                    }
-                  </p>
-                  <p>
-                    <strong>Shift:</strong>{" "}
-                    {
-                      shifts.find((s) => s.id === selectedAssignment?.shiftId)
-                        ?.label
-                    }
-                  </p>
-                </div>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  This action cannot be undone.
-                </p>
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setDeleteDialogOpen(false);
-                  setSelectedAssignment(null);
-                }}
+            {/* Physiotherapist selector */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <Stethoscope className="h-4 w-4 text-muted-foreground" />
+                Physiotherapist
+              </Label>
+              <Select
+                value={form.physiotherapistId}
+                onValueChange={(v) =>
+                  setForm((p) => ({ ...p, physiotherapistId: v }))
+                }
               >
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleDelete}>
-                Delete Assignment
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </TooltipProvider>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select physiotherapist" />
+                </SelectTrigger>
+                <SelectContent>
+                  {physiotherapists.length === 0 ? (
+                    <SelectItem value="__none__" disabled>
+                      {form.hospitalId || isHospitalScoped
+                        ? "No physiotherapists found"
+                        : "Select a hospital first"}
+                    </SelectItem>
+                  ) : (
+                    physiotherapists.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                        {p.specialization ? ` — ${p.specialization}` : ""}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Child selector */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <User2 className="h-4 w-4 text-muted-foreground" />
+                Child <span className="text-destructive ml-0.5">*</span>
+              </Label>
+              <Select
+                value={form.childId}
+                onValueChange={(v) => setForm((p) => ({ ...p, childId: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select child" />
+                </SelectTrigger>
+                <SelectContent>
+                  {children.length === 0 ? (
+                    <SelectItem value="__none__" disabled>
+                      {form.physiotherapistId
+                        ? "No children found for this physiotherapist"
+                        : form.hospitalId || isHospitalScoped
+                        ? "Select a physiotherapist to filter children"
+                        : "Select a hospital first"}
+                    </SelectItem>
+                  ) : (
+                    children.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.firstName} {c.lastName}
+                        {c.age ? ` (${c.age}y)` : ""}
+                        {c.diagnosis ? ` — ${c.diagnosis}` : ""}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label htmlFor="a-title">
+                Assignment Title{" "}
+                <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="a-title"
+                value={form.title}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, title: e.target.value }))
+                }
+                placeholder="e.g., Week 4 Finger Extension Exercises"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1.5">
+              <Label htmlFor="a-desc">Description</Label>
+              <Textarea
+                id="a-desc"
+                value={form.description}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, description: e.target.value }))
+                }
+                placeholder="Instructions, goals, frequency…"
+                rows={3}
+              />
+            </div>
+
+            {/* PDF upload */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                Assignment PDF
+              </Label>
+
+              {uploadedPdfUrl ? (
+                /* Uploaded successfully */
+                <div className="flex items-center gap-2 p-3 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-800 text-sm">
+                  <FileText className="h-4 w-4 text-green-600 shrink-0" />
+                  <span className="text-green-700 dark:text-green-400 flex-1 truncate">
+                    {uploadedPdfName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadedPdfUrl("");
+                      setUploadedPdfName("");
+                      setPdfFile(null);
+                    }}
+                    className="ml-auto text-green-500 hover:text-green-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : pdfFile ? (
+                /* File selected, pending upload */
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0 p-2.5 rounded-lg border text-sm truncate">
+                    {pdfFile.name}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleUploadPdf}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white mr-2" />
+                        Uploading…
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-3.5 w-3.5 mr-1.5" />
+                        Upload
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      setPdfFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                /* Drop zone */
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center w-full rounded-lg border-2 border-dashed border-muted-foreground/30 p-6 hover:border-primary/50 hover:bg-muted/40 transition-colors cursor-pointer"
+                >
+                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  <span className="text-sm font-medium">Click to select PDF</span>
+                  <span className="text-xs text-muted-foreground mt-1">
+                    PDF files only · max 50 MB
+                  </span>
+                </button>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={handleCloseCreate}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createMutation.mutate()}
+              disabled={!canSubmit}
+            >
+              {createMutation.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white mr-2" />
+                  Saving…
+                </>
+              ) : (
+                "Create Assignment"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => !v && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Assignment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete{" "}
+              <strong>&ldquo;{deleteTarget?.title}&rdquo;</strong>? This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() =>
+                deleteTarget && deleteMutation.mutate(deleteTarget.id)
+              }
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
+
+// ─── Color config ─────────────────────────────────────────────────────────────
+
+const CARD_COLORS = {
+  blue: {
+    card: "bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20",
+    icon: "bg-blue-100 dark:bg-blue-900/40",
+    text: "text-blue-600 dark:text-blue-400",
+  },
+  green: {
+    card: "bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20",
+    icon: "bg-emerald-100 dark:bg-emerald-900/40",
+    text: "text-emerald-600 dark:text-emerald-400",
+  },
+  purple: {
+    card: "bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-950/40 dark:to-violet-900/20",
+    icon: "bg-violet-100 dark:bg-violet-900/40",
+    text: "text-violet-600 dark:text-violet-400",
+  },
+  orange: {
+    card: "bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/40 dark:to-orange-900/20",
+    icon: "bg-orange-100 dark:bg-orange-900/40",
+    text: "text-orange-600 dark:text-orange-400",
+  },
+} as const;

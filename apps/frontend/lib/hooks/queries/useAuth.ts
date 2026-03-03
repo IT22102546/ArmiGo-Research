@@ -103,6 +103,10 @@ export function useLogoutMutation() {
       return "/admin/sign-in";
     }
 
+    if (user.role === "HOSPITAL_ADMIN") {
+      return "/hospital/sign-in";
+    }
+
     // Teachers and students redirect to regular sign-in
     return "/sign-in";
   };

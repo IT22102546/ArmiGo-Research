@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { randomInt } from 'crypto';
 import * as bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { UpdatePatientDto } from './dtos/update-patient.dto';
@@ -14,6 +15,16 @@ import {
   CreateAdmissionTrackingDto,
   UpdateAdmissionTrackingDto,
 } from './dtos/admission-tracking.dto';
+
+const ADMISSION_LIFECYCLE_STATUSES = [
+  'SCHEDULED',
+  'ONGOING',
+  'FINISHED',
+  'ATTENDED_COMPLETE',
+  'ABSENT_INCOMPLETE',
+] as const;
+
+type AdmissionLifecycleStatus = (typeof ADMISSION_LIFECYCLE_STATUSES)[number];
 
 @Injectable()
 export class PatientService {
@@ -33,10 +44,20 @@ export class PatientService {
 
       const hospital = await this.prisma.hospital.findUnique({
         where: { id: data.hospitalId },
+        select: {
+          id: true,
+          status: true,
+        },
       });
 
       if (!hospital) {
         throw new BadRequestException(`Hospital with ID ${data.hospitalId} not found`);
+      }
+
+      if (hospital.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          `Hospital with ID ${data.hospitalId} is inactive and cannot be assigned`
+        );
       }
 
       if (data.districtId || data.zoneId) {
@@ -172,6 +193,14 @@ export class PatientService {
               duration: true,
             },
           },
+          admissionTrackings: {
+            select: {
+              admissionDate: true,
+              startTime: true,
+              endTime: true,
+              status: true,
+            },
+          },
         },
       });
 
@@ -229,6 +258,14 @@ export class PatientService {
           select: {
             sessionDate: true,
             duration: true,
+          },
+        },
+        admissionTrackings: {
+          select: {
+            admissionDate: true,
+            startTime: true,
+            endTime: true,
+            status: true,
           },
         },
       },
@@ -324,6 +361,14 @@ export class PatientService {
             select: {
               sessionDate: true,
               duration: true,
+            },
+          },
+          admissionTrackings: {
+            select: {
+              admissionDate: true,
+              startTime: true,
+              endTime: true,
+              status: true,
             },
           },
         },
@@ -446,6 +491,14 @@ export class PatientService {
             duration: true,
           },
         },
+        admissionTrackings: {
+          select: {
+            admissionDate: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -500,6 +553,14 @@ export class PatientService {
             duration: true,
           },
         },
+        admissionTrackings: {
+          select: {
+            admissionDate: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -545,6 +606,75 @@ export class PatientService {
       await tx.progressRecord.deleteMany({ where: { childId: id } });
       await tx.therapyProgram.deleteMany({ where: { childId: id } });
       await tx.child.delete({ where: { id } });
+
+      const parentId = patient.parentId;
+      if (!parentId) {
+        return;
+      }
+
+      const remainingChildrenCount = await tx.child.count({
+        where: { parentId },
+      });
+
+      if (remainingChildrenCount > 0) {
+        return;
+      }
+
+      const parentUser = await tx.user.findUnique({
+        where: { id: parentId },
+        select: { id: true, role: true },
+      });
+
+      if (!parentUser || parentUser.role !== 'PARENT') {
+        return;
+      }
+
+      const hospitalCount = await tx.hospital.count({
+        where: { createdById: parentId },
+      });
+
+      if (hospitalCount > 0) {
+        return;
+      }
+
+      const parentSessionIds = (
+        await tx.therapySession.findMany({
+          where: { createdById: parentId },
+          select: { id: true },
+        })
+      ).map((session) => session.id);
+
+      if (parentSessionIds.length > 0) {
+        await tx.movementLog.deleteMany({
+          where: { sessionId: { in: parentSessionIds } },
+        });
+
+        await tx.therapySession.deleteMany({
+          where: { id: { in: parentSessionIds } },
+        });
+      }
+
+      await tx.progressRecord.deleteMany({
+        where: { recordedById: parentId },
+      });
+
+      await tx.deviceAssignment.deleteMany({
+        where: { assignedBy: parentId },
+      });
+
+      await tx.appointment.deleteMany({
+        where: {
+          OR: [{ parentId }, { createdById: parentId }],
+        },
+      });
+
+      await tx.auditLog.deleteMany({ where: { userId: parentId } });
+      await tx.credentialLog.deleteMany({ where: { generatedById: parentId } });
+      await tx.parentProfile.deleteMany({ where: { userId: parentId } });
+
+      await tx.$executeRaw(
+        Prisma.sql`DELETE FROM "users" WHERE "id" = ${parentId}`
+      );
     });
 
     return { message: `Patient ${id} has been permanently deleted` };
@@ -856,6 +986,9 @@ export class PatientService {
         email: true,
         isActive: true,
         hospitalId: true,
+        availabilityStatus: true,
+        availabilityNote: true,
+        availabilityUpdatedAt: true,
         hospital: {
           select: {
             id: true,
@@ -869,9 +1002,68 @@ export class PatientService {
             },
           },
         },
+        unavailableDates: {
+          where: { date: { gte: new Date() } },
+          orderBy: { date: 'asc' },
+          select: { id: true, date: true, reason: true },
+        },
       },
       orderBy: { name: 'asc' },
     });
+  }
+
+  /** Update physiotherapist availability status */
+  async setPhysioAvailability(
+    id: string,
+    status: 'AVAILABLE' | 'IN_WORK' | 'NOT_AVAILABLE',
+    note?: string
+  ) {
+    const staff = await this.prisma.hospitalStaff.findUnique({ where: { id } });
+    if (!staff) throw new NotFoundException(`Physiotherapist ${id} not found`);
+    return this.prisma.hospitalStaff.update({
+      where: { id },
+      data: {
+        availabilityStatus: status,
+        availabilityNote: note ?? null,
+        availabilityUpdatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        availabilityStatus: true,
+        availabilityNote: true,
+        availabilityUpdatedAt: true,
+      },
+    });
+  }
+
+  /** Get upcoming unavailable dates for a physiotherapist */
+  async getPhysioUnavailableDates(staffId: string) {
+    return this.prisma.physioUnavailableDate.findMany({
+      where: { staffId, date: { gte: new Date() } },
+      orderBy: { date: 'asc' },
+      select: { id: true, date: true, reason: true },
+    });
+  }
+
+  /** Add a future unavailable date for a physiotherapist */
+  async addPhysioUnavailableDate(staffId: string, date: Date, reason?: string) {
+    const staff = await this.prisma.hospitalStaff.findUnique({ where: { id: staffId } });
+    if (!staff) throw new NotFoundException(`Physiotherapist ${staffId} not found`);
+    return this.prisma.physioUnavailableDate.upsert({
+      where: { staffId_date: { staffId, date } },
+      create: { staffId, date, reason: reason ?? null },
+      update: { reason: reason ?? null },
+      select: { id: true, date: true, reason: true },
+    });
+  }
+
+  /** Remove a scheduled unavailable date by record ID */
+  async removePhysioUnavailableDate(id: string): Promise<{ message: string }> {
+    const record = await this.prisma.physioUnavailableDate.findUnique({ where: { id } });
+    if (!record) throw new NotFoundException(`Unavailable date record ${id} not found`);
+    await this.prisma.physioUnavailableDate.delete({ where: { id } });
+    return { message: `Unavailable date ${id} removed` };
   }
 
   /**
@@ -886,12 +1078,21 @@ export class PatientService {
   }) {
     const hospital = await this.prisma.hospital.findUnique({
       where: { id: data.hospitalId },
-      select: { id: true },
+      select: {
+        id: true,
+        status: true,
+      },
     });
 
     if (!hospital) {
       throw new BadRequestException(
         `Hospital with ID ${data.hospitalId} not found`
+      );
+    }
+
+    if (hospital.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        `Hospital with ID ${data.hospitalId} is inactive and cannot be used for physiotherapist assignment`
       );
     }
 
@@ -961,11 +1162,19 @@ export class PatientService {
     if (data.hospitalId && data.hospitalId !== existing.hospitalId) {
       const hospital = await this.prisma.hospital.findUnique({
         where: { id: data.hospitalId },
-        select: { id: true },
+        select: {
+          id: true,
+          status: true,
+        },
       });
       if (!hospital) {
         throw new BadRequestException(
           `Hospital with ID ${data.hospitalId} not found`
+        );
+      }
+      if (hospital.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          `Hospital with ID ${data.hospitalId} is inactive and cannot be assigned`
         );
       }
     }
@@ -1101,6 +1310,7 @@ export class PatientService {
       this.prisma.child.findMany({
         where: {
           ...(hospitalId ? { hospitalId } : {}),
+          isActive: true,
         },
         select: {
           id: true,
@@ -1120,10 +1330,11 @@ export class PatientService {
         },
         orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       }),
-      this.getPhysiotherapists(hospitalId, true),
+      this.getPhysiotherapists(hospitalId, false),
       this.prisma.hospital.findMany({
         where: {
           ...(hospitalId ? { id: hospitalId } : {}),
+          status: 'ACTIVE',
         },
         select: {
           id: true,
@@ -1169,6 +1380,7 @@ export class PatientService {
     hospitalId?: string;
     childId?: string;
     physiotherapistId?: string;
+    admissionType?: string;
     status?: string;
     search?: string;
   }) {
@@ -1178,8 +1390,8 @@ export class PatientService {
       ...(filters?.physiotherapistId
         ? { physiotherapistId: filters.physiotherapistId }
         : {}),
-      ...(filters?.status && filters.status !== 'ALL'
-        ? { status: filters.status }
+      ...(filters?.admissionType
+        ? { admissionType: filters.admissionType }
         : {}),
     };
 
@@ -1210,7 +1422,7 @@ export class PatientService {
       ];
     }
 
-    return await this.prisma.admissionTracking.findMany({
+    const records = await this.prisma.admissionTracking.findMany({
       where: whereClause,
       include: {
         child: {
@@ -1251,10 +1463,51 @@ export class PatientService {
       },
       orderBy: [{ admissionDate: 'desc' }, { createdAt: 'desc' }],
     });
+
+    const recordsWithLifecycle = records.map((record) => {
+      const lifecycleStatus = this.resolveAdmissionLifecycleStatus(
+        record.status,
+        record.admissionDate,
+        record.startTime,
+        record.endTime
+      );
+
+      return {
+        ...record,
+        status: lifecycleStatus,
+      };
+    });
+
+    const statusUpdates = recordsWithLifecycle.filter(
+      (record) =>
+        record.status !== records.find((item) => item.id === record.id)?.status &&
+        !['ATTENDED_COMPLETE', 'ABSENT_INCOMPLETE'].includes(
+          records.find((item) => item.id === record.id)?.status || ''
+        )
+    );
+
+    if (statusUpdates.length > 0) {
+      await this.prisma.$transaction(
+        statusUpdates.map((item) =>
+          this.prisma.admissionTracking.update({
+            where: { id: item.id },
+            data: { status: item.status },
+          })
+        )
+      );
+    }
+
+    if (filters?.status && filters.status !== 'ALL') {
+      return recordsWithLifecycle.filter((record) => record.status === filters.status);
+    }
+
+    return recordsWithLifecycle;
   }
 
   async createAdmissionTracking(data: CreateAdmissionTrackingDto) {
     this.validateSessionTimeRange(data.startTime, data.endTime);
+
+    let selectedPhysioHospitalId: string | null = null;
 
     const child = await this.prisma.child.findUnique({
       where: { id: data.childId },
@@ -1272,7 +1525,12 @@ export class PatientService {
     if (data.physiotherapistId) {
       const physio = await this.prisma.hospitalStaff.findUnique({
         where: { id: data.physiotherapistId },
-        select: { id: true, role: true },
+        select: {
+          id: true,
+          role: true,
+          isActive: true,
+          hospitalId: true,
+        },
       });
 
       if (!physio) {
@@ -1284,16 +1542,29 @@ export class PatientService {
       if (!['THERAPIST', 'PHYSIOTHERAPIST'].includes(physio.role)) {
         throw new BadRequestException('Selected staff member is not a physiotherapist');
       }
+
+      if (!physio.isActive) {
+        throw new BadRequestException('Selected physiotherapist is inactive');
+      }
+
+      selectedPhysioHospitalId = physio.hospitalId || null;
     }
 
     if (data.hospitalId) {
       const hospital = await this.prisma.hospital.findUnique({
         where: { id: data.hospitalId },
-        select: { id: true },
+        select: {
+          id: true,
+          status: true,
+        },
       });
 
       if (!hospital) {
         throw new NotFoundException(`Hospital with ID ${data.hospitalId} not found`);
+      }
+
+      if (hospital.status !== 'ACTIVE') {
+        throw new BadRequestException('Selected hospital is inactive');
       }
     }
 
@@ -1313,6 +1584,7 @@ export class PatientService {
     if (!resolvedPhysiotherapistId && child.assignedDoctor?.trim()) {
       const matchedPhysio = await this.prisma.hospitalStaff.findFirst({
         where: {
+          isActive: true,
           role: {
             in: ['THERAPIST', 'PHYSIOTHERAPIST'],
           },
@@ -1322,13 +1594,61 @@ export class PatientService {
           },
           ...(child.hospitalId ? { hospitalId: child.hospitalId } : {}),
         },
-        select: { id: true },
+        select: { id: true, hospitalId: true },
       });
 
       resolvedPhysiotherapistId = matchedPhysio?.id || null;
+      selectedPhysioHospitalId = matchedPhysio?.hospitalId || null;
     }
 
     const resolvedHospitalId = data.hospitalId || child.hospitalId || null;
+
+    if (resolvedHospitalId) {
+      const resolvedHospital = await this.prisma.hospital.findUnique({
+        where: { id: resolvedHospitalId },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      if (!resolvedHospital) {
+        throw new NotFoundException(
+          `Hospital with ID ${resolvedHospitalId} not found`
+        );
+      }
+
+      if (resolvedHospital.status !== 'ACTIVE') {
+        throw new BadRequestException('Selected hospital is inactive');
+      }
+
+      if (child.hospitalId && child.hospitalId !== resolvedHospitalId) {
+        throw new BadRequestException(
+          'Selected child does not belong to the selected hospital'
+        );
+      }
+    }
+
+    if (resolvedPhysiotherapistId && selectedPhysioHospitalId === null) {
+      const selectedPhysio = await this.prisma.hospitalStaff.findUnique({
+        where: { id: resolvedPhysiotherapistId },
+        select: {
+          hospitalId: true,
+        },
+      });
+      selectedPhysioHospitalId = selectedPhysio?.hospitalId || null;
+    }
+
+    if (
+      resolvedHospitalId &&
+      selectedPhysioHospitalId &&
+      selectedPhysioHospitalId !== resolvedHospitalId
+    ) {
+      throw new BadRequestException(
+        'Selected physiotherapist does not belong to the selected hospital'
+      );
+    }
+
     const admissionDate = new Date(data.admissionDate);
 
     await this.ensureNoAdmissionSessionOverlap({
@@ -1338,6 +1658,22 @@ export class PatientService {
       endTime: data.endTime,
     });
 
+    if (resolvedPhysiotherapistId) {
+      await this.ensureNoPhysiotherapistSessionOverlap({
+        physiotherapistId: resolvedPhysiotherapistId,
+        admissionDate,
+        startTime: data.startTime,
+        endTime: data.endTime,
+      });
+    }
+
+    const lifecycleStatus = this.resolveAdmissionLifecycleStatus(
+      data.status,
+      admissionDate,
+      data.startTime,
+      data.endTime
+    );
+
     return await this.prisma.admissionTracking.create({
       data: {
         childId: data.childId,
@@ -1345,7 +1681,7 @@ export class PatientService {
         hospitalId: resolvedHospitalId,
         deviceId: data.deviceId || null,
         admissionType: data.admissionType || 'REHAB',
-        status: data.status || 'ACTIVE',
+        status: lifecycleStatus,
         admissionDate,
         startTime: data.startTime,
         endTime: data.endTime,
@@ -1359,6 +1695,7 @@ export class PatientService {
         manualDeviceName: data.manualDeviceName,
         manualDeviceType: data.manualDeviceType,
         manualDeviceSerial: data.manualDeviceSerial,
+        treatmentPlanPdf: data.treatmentPlanPdf,
       },
       include: {
         child: {
@@ -1401,6 +1738,7 @@ export class PatientService {
       select: {
         id: true,
         childId: true,
+        physiotherapistId: true,
         hospitalId: true,
         admissionDate: true,
         startTime: true,
@@ -1412,10 +1750,12 @@ export class PatientService {
       throw new NotFoundException(`Admission tracking with ID ${id} not found`);
     }
 
+    let selectedPhysioHospitalId: string | null = null;
+
     if (data.childId) {
       const child = await this.prisma.child.findUnique({
         where: { id: data.childId },
-        select: { id: true },
+        select: { id: true, hospitalId: true },
       });
       if (!child) {
         throw new NotFoundException(`Child with ID ${data.childId} not found`);
@@ -1425,7 +1765,12 @@ export class PatientService {
     if (data.physiotherapistId) {
       const physio = await this.prisma.hospitalStaff.findUnique({
         where: { id: data.physiotherapistId },
-        select: { id: true, role: true },
+        select: {
+          id: true,
+          role: true,
+          isActive: true,
+          hospitalId: true,
+        },
       });
 
       if (!physio) {
@@ -1437,16 +1782,29 @@ export class PatientService {
       if (!['THERAPIST', 'PHYSIOTHERAPIST'].includes(physio.role)) {
         throw new BadRequestException('Selected staff member is not a physiotherapist');
       }
+
+      if (!physio.isActive) {
+        throw new BadRequestException('Selected physiotherapist is inactive');
+      }
+
+      selectedPhysioHospitalId = physio.hospitalId || null;
     }
 
     if (data.hospitalId) {
       const hospital = await this.prisma.hospital.findUnique({
         where: { id: data.hospitalId },
-        select: { id: true },
+        select: {
+          id: true,
+          status: true,
+        },
       });
 
       if (!hospital) {
         throw new NotFoundException(`Hospital with ID ${data.hospitalId} not found`);
+      }
+
+      if (hospital.status !== 'ACTIVE') {
+        throw new BadRequestException('Selected hospital is inactive');
       }
     }
 
@@ -1462,11 +1820,71 @@ export class PatientService {
     }
 
     const resolvedChildId = data.childId || existing.childId;
+    const resolvedPhysiotherapistId =
+      data.physiotherapistId !== undefined
+        ? data.physiotherapistId || null
+        : existing.physiotherapistId || null;
+    const resolvedHospitalId = data.hospitalId || existing.hospitalId || null;
     const resolvedAdmissionDate = data.admissionDate
       ? new Date(data.admissionDate)
       : existing.admissionDate;
     const resolvedStartTime = data.startTime ?? existing.startTime;
     const resolvedEndTime = data.endTime ?? existing.endTime;
+
+    const resolvedChild = await this.prisma.child.findUnique({
+      where: { id: resolvedChildId },
+      select: {
+        id: true,
+        hospitalId: true,
+      },
+    });
+
+    if (!resolvedChild) {
+      throw new NotFoundException(`Child with ID ${resolvedChildId} not found`);
+    }
+
+    if (resolvedHospitalId && resolvedChild.hospitalId && resolvedChild.hospitalId !== resolvedHospitalId) {
+      throw new BadRequestException(
+        'Selected child does not belong to the selected hospital'
+      );
+    }
+
+    if (resolvedPhysiotherapistId && selectedPhysioHospitalId === null) {
+      const selectedPhysio = await this.prisma.hospitalStaff.findUnique({
+        where: { id: resolvedPhysiotherapistId },
+        select: {
+          hospitalId: true,
+          role: true,
+          isActive: true,
+        },
+      });
+
+      if (!selectedPhysio) {
+        throw new NotFoundException(
+          `Physiotherapist with ID ${resolvedPhysiotherapistId} not found`
+        );
+      }
+
+      if (!['THERAPIST', 'PHYSIOTHERAPIST'].includes(selectedPhysio.role)) {
+        throw new BadRequestException('Selected staff member is not a physiotherapist');
+      }
+
+      if (!selectedPhysio.isActive) {
+        throw new BadRequestException('Selected physiotherapist is inactive');
+      }
+
+      selectedPhysioHospitalId = selectedPhysio.hospitalId || null;
+    }
+
+    if (
+      resolvedHospitalId &&
+      selectedPhysioHospitalId &&
+      selectedPhysioHospitalId !== resolvedHospitalId
+    ) {
+      throw new BadRequestException(
+        'Selected physiotherapist does not belong to the selected hospital'
+      );
+    }
 
     if (resolvedStartTime && resolvedEndTime) {
       this.validateSessionTimeRange(resolvedStartTime, resolvedEndTime);
@@ -1477,7 +1895,24 @@ export class PatientService {
         endTime: resolvedEndTime,
         excludeId: id,
       });
+
+      if (resolvedPhysiotherapistId) {
+        await this.ensureNoPhysiotherapistSessionOverlap({
+          physiotherapistId: resolvedPhysiotherapistId,
+          admissionDate: resolvedAdmissionDate,
+          startTime: resolvedStartTime,
+          endTime: resolvedEndTime,
+          excludeId: id,
+        });
+      }
     }
+
+    const lifecycleStatus = this.resolveAdmissionLifecycleStatus(
+      data.status,
+      resolvedAdmissionDate,
+      resolvedStartTime,
+      resolvedEndTime
+    );
 
     return await this.prisma.admissionTracking.update({
       where: { id },
@@ -1493,7 +1928,9 @@ export class PatientService {
         ...(data.admissionType !== undefined
           ? { admissionType: data.admissionType }
           : {}),
-        ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.status !== undefined || data.startTime !== undefined || data.endTime !== undefined || data.admissionDate !== undefined
+          ? { status: lifecycleStatus }
+          : {}),
         ...(data.admissionDate !== undefined
           ? { admissionDate: new Date(data.admissionDate) }
           : {}),
@@ -1524,6 +1961,9 @@ export class PatientService {
           : {}),
         ...(data.manualDeviceSerial !== undefined
           ? { manualDeviceSerial: data.manualDeviceSerial }
+          : {}),
+        ...(data.treatmentPlanPdf !== undefined
+          ? { treatmentPlanPdf: data.treatmentPlanPdf }
           : {}),
       },
       include: {
@@ -1564,16 +2004,42 @@ export class PatientService {
   async updateAdmissionTrackingStatus(id: string, status: string) {
     const existing = await this.prisma.admissionTracking.findUnique({
       where: { id },
-      select: { id: true },
+      select: {
+        id: true,
+        status: true,
+        admissionDate: true,
+        startTime: true,
+        endTime: true,
+      },
     });
 
     if (!existing) {
       throw new NotFoundException(`Admission tracking with ID ${id} not found`);
     }
 
+    const normalizedStatus = (status || '').trim().toUpperCase();
+    if (!['ATTENDED_COMPLETE', 'ABSENT_INCOMPLETE'].includes(normalizedStatus)) {
+      throw new BadRequestException(
+        'Status must be ATTENDED_COMPLETE or ABSENT_INCOMPLETE'
+      );
+    }
+
+    const lifecycleStatus = this.resolveAdmissionLifecycleStatus(
+      existing.status,
+      existing.admissionDate,
+      existing.startTime,
+      existing.endTime
+    );
+
+    if (lifecycleStatus !== 'FINISHED') {
+      throw new BadRequestException(
+        'Session outcome can only be marked after the session is finished'
+      );
+    }
+
     return await this.prisma.admissionTracking.update({
       where: { id },
-      data: { status },
+      data: { status: normalizedStatus },
     });
   }
 
@@ -1601,6 +2067,15 @@ export class PatientService {
 
     const startMinutes = this.parseTimeToMinutes(startTime);
     const endMinutes = this.parseTimeToMinutes(endTime);
+    const latestAllowedMinutes = 21 * 60;
+
+    if (startMinutes >= latestAllowedMinutes) {
+      throw new BadRequestException('Session start time must be before 09:00 PM');
+    }
+
+    if (endMinutes > latestAllowedMinutes) {
+      throw new BadRequestException('Session end time cannot be after 09:00 PM');
+    }
 
     if (endMinutes <= startMinutes) {
       throw new BadRequestException('Session end time must be after start time');
@@ -1678,6 +2153,58 @@ export class PatientService {
     }
   }
 
+  private async ensureNoPhysiotherapistSessionOverlap(params: {
+    physiotherapistId: string;
+    admissionDate: Date;
+    startTime: string;
+    endTime: string;
+    excludeId?: string;
+  }) {
+    const dayStart = new Date(params.admissionDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(params.admissionDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const sessions = await this.prisma.admissionTracking.findMany({
+      where: {
+        physiotherapistId: params.physiotherapistId,
+        admissionDate: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
+        status: {
+          notIn: ['INACTIVE', 'DISCHARGED'],
+        },
+        ...(params.excludeId ? { id: { not: params.excludeId } } : {}),
+      },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    const requestedStart = this.parseTimeToMinutes(params.startTime);
+    const requestedEnd = this.parseTimeToMinutes(params.endTime);
+
+    const hasOverlap = sessions.some((session) => {
+      if (!session.startTime || !session.endTime) {
+        return false;
+      }
+
+      const existingStart = this.parseTimeToMinutes(session.startTime);
+      const existingEnd = this.parseTimeToMinutes(session.endTime);
+
+      return requestedStart < existingEnd && requestedEnd > existingStart;
+    });
+
+    if (hasOverlap) {
+      throw new BadRequestException(
+        'This physiotherapist already has a session in the selected time range'
+      );
+    }
+  }
+
   /**
    * Private helper method to map Child model to PatientResponseDto
    */
@@ -1694,6 +2221,10 @@ export class PatientService {
       ? child.therapySessions
       : [];
 
+    const admissionTrackings = Array.isArray(child.admissionTrackings)
+      ? child.admissionTrackings
+      : [];
+
     const firstProgressRecord = progressRecords[0];
     const lastProgressRecord = progressRecords[progressRecords.length - 1];
 
@@ -1702,17 +2233,48 @@ export class PatientService {
     const currentProgress =
       lastProgressRecord?.currentValue ?? lastProgressRecord?.baselineValue ?? 0;
 
-    const playTimeMinutes = therapySessions.reduce(
+    const admissionPlayTimeMinutes = admissionTrackings
+      .filter(
+        (tracking: any) =>
+          tracking?.status === 'ATTENDED_COMPLETE' || tracking?.status === 'COMPLETED'
+      )
+      .reduce((sum: number, tracking: any) => {
+        if (!tracking?.startTime || !tracking?.endTime) {
+          return sum;
+        }
+
+        const duration =
+          this.parseTimeToMinutes(tracking.endTime) -
+          this.parseTimeToMinutes(tracking.startTime);
+
+        return duration > 0 ? sum + duration : sum;
+      }, 0);
+
+    const therapyPlayTimeMinutes = therapySessions.reduce(
       (sum: number, session: any) => sum + (session?.duration || 0),
       0
     );
 
+    const playTimeMinutes = therapyPlayTimeMinutes + admissionPlayTimeMinutes;
+
     const playedDays = new Set(
-      therapySessions
-        .filter((session: any) => session?.sessionDate)
-        .map((session: any) =>
-          new Date(session.sessionDate).toISOString().split('T')[0]
-        )
+      [
+        ...therapySessions
+          .filter((session: any) => session?.sessionDate)
+          .map((session: any) =>
+            new Date(session.sessionDate).toISOString().split('T')[0]
+          ),
+        ...admissionTrackings
+          .filter(
+            (tracking: any) =>
+              (tracking?.status === 'ATTENDED_COMPLETE' ||
+                tracking?.status === 'COMPLETED') &&
+              tracking?.admissionDate
+          )
+          .map((tracking: any) =>
+            new Date(tracking.admissionDate).toISOString().split('T')[0]
+          ),
+      ]
     ).size;
 
     return {
@@ -1799,4 +2361,253 @@ export class PatientService {
       updatedAt: child.enrolledAt,
     };
   }
+
+  private resolveAdmissionLifecycleStatus(
+    status: string | undefined | null,
+    admissionDate: Date,
+    startTime?: string | null,
+    endTime?: string | null
+  ): AdmissionLifecycleStatus {
+    const normalizedStatus = (status || '').trim().toUpperCase();
+
+    if (normalizedStatus === 'ATTENDED_COMPLETE') {
+      return 'ATTENDED_COMPLETE';
+    }
+
+    if (normalizedStatus === 'ABSENT_INCOMPLETE') {
+      return 'ABSENT_INCOMPLETE';
+    }
+
+    if (!startTime || !endTime) {
+      return 'SCHEDULED';
+    }
+
+    const now = new Date();
+    const sessionStart = this.mergeDateAndTime(admissionDate, startTime);
+    const sessionEnd = this.mergeDateAndTime(admissionDate, endTime);
+
+    if (now < sessionStart) {
+      return 'SCHEDULED';
+    }
+
+    if (now >= sessionStart && now < sessionEnd) {
+      return 'ONGOING';
+    }
+
+    return 'FINISHED';
+  }
+
+  private mergeDateAndTime(dateValue: Date, timeValue: string): Date {
+    const [hoursText, minutesText] = (timeValue || '').split(':');
+    const hours = Number(hoursText);
+    const minutes = Number(minutesText);
+
+    const date = new Date(dateValue);
+    date.setHours(hours || 0, minutes || 0, 0, 0);
+    return date;
+  }
+
+  // ============================================================
+  // PHYSIOTHERAPY ASSIGNMENTS
+  // ============================================================
+
+  /**
+   * Return dropdown options for the Create Assignment form.
+   * - hospitals: all active (or scoped to hospitalId)
+   * - physiotherapists: staff of the selected hospital
+   * - childrenByPhysio: children who have an admission tracking record for the selected physiotherapist
+   */
+  async getPhysioAssignmentOptions(hospitalId?: string, physiotherapistId?: string) {
+    const [hospitals, physiotherapists] = await Promise.all([
+      this.prisma.hospital.findMany({
+        where: { ...(hospitalId ? { id: hospitalId } : {}), status: 'ACTIVE' },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.hospitalStaff.findMany({
+        where: {
+          ...(hospitalId ? { hospitalId } : {}),
+          isActive: true,
+          role: { in: ['THERAPIST', 'PHYSIOTHERAPIST', 'DOCTOR'] },
+        },
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          specialization: true,
+          hospitalId: true,
+          hospital: { select: { id: true, name: true } },
+        },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    // Get children assigned to the chosen physiotherapist (via admission tracking)
+    let children: any[] = [];
+    if (physiotherapistId) {
+      const admissions = await this.prisma.admissionTracking.findMany({
+        where: { physiotherapistId },
+        select: {
+          childId: true,
+          child: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              age: true,
+              diagnosis: true,
+              hospitalId: true,
+              hospital: { select: { id: true, name: true } },
+            },
+          },
+        },
+      });
+      // Deduplicate children
+      const seen = new Set<string>();
+      children = admissions
+        .map((a) => a.child)
+        .filter((c) => {
+          if (seen.has(c.id)) return false;
+          seen.add(c.id);
+          return true;
+        });
+    } else if (hospitalId) {
+      // No physiotherapist selected yet – return all active children for the hospital
+      children = await this.prisma.child.findMany({
+        where: { hospitalId, isActive: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          age: true,
+          diagnosis: true,
+          hospitalId: true,
+          hospital: { select: { id: true, name: true } },
+        },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      });
+    }
+
+    return { hospitals, physiotherapists, children };
+  }
+
+  /** List physiotherapy assignments with optional filters */
+  async getPhysioAssignments(filters?: {
+    hospitalId?: string;
+    physiotherapistId?: string;
+    childId?: string;
+    status?: string;
+    search?: string;
+  }) {
+    const where: any = {
+      ...(filters?.hospitalId ? { hospitalId: filters.hospitalId } : {}),
+      ...(filters?.physiotherapistId ? { physiotherapistId: filters.physiotherapistId } : {}),
+      ...(filters?.childId ? { childId: filters.childId } : {}),
+      ...(filters?.status && filters.status !== 'all' ? { status: filters.status } : {}),
+    };
+
+    if (filters?.search?.trim()) {
+      const s = filters.search.trim();
+      where.OR = [
+        { title: { contains: s, mode: 'insensitive' } },
+        { child: { firstName: { contains: s, mode: 'insensitive' } } },
+        { child: { lastName: { contains: s, mode: 'insensitive' } } },
+        { physiotherapist: { name: { contains: s, mode: 'insensitive' } } },
+      ];
+    }
+
+    return this.prisma.physiotherapyAssignment.findMany({
+      where,
+      include: {
+        hospital: { select: { id: true, name: true } },
+        physiotherapist: { select: { id: true, name: true, role: true, specialization: true } },
+        child: { select: { id: true, firstName: true, lastName: true, age: true, diagnosis: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Create a new physiotherapy assignment */
+  async createPhysioAssignment(
+    data: {
+      hospitalId?: string;
+      physiotherapistId?: string;
+      childId: string;
+      title: string;
+      description?: string;
+      assignmentPdf?: string;
+      assignmentPdfName?: string;
+      status?: string;
+      dueDate?: string;
+    },
+    createdById: string
+  ) {
+    const child = await this.prisma.child.findUnique({ where: { id: data.childId } });
+    if (!child) throw new NotFoundException(`Child ${data.childId} not found`);
+
+    return this.prisma.physiotherapyAssignment.create({
+      data: {
+        hospitalId: data.hospitalId || null,
+        physiotherapistId: data.physiotherapistId || null,
+        childId: data.childId,
+        title: data.title,
+        description: data.description || null,
+        assignmentPdf: data.assignmentPdf || null,
+        assignmentPdfName: data.assignmentPdfName || null,
+        status: data.status || 'ACTIVE',
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        createdById,
+      },
+      include: {
+        hospital: { select: { id: true, name: true } },
+        physiotherapist: { select: { id: true, name: true, role: true } },
+        child: { select: { id: true, firstName: true, lastName: true, age: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  /** Update an existing physiotherapy assignment */
+  async updatePhysioAssignment(
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      assignmentPdf?: string;
+      assignmentPdfName?: string;
+      status?: string;
+      dueDate?: string;
+    }
+  ) {
+    const existing = await this.prisma.physiotherapyAssignment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Assignment ${id} not found`);
+
+    return this.prisma.physiotherapyAssignment.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.assignmentPdf !== undefined ? { assignmentPdf: data.assignmentPdf } : {}),
+        ...(data.assignmentPdfName !== undefined ? { assignmentPdfName: data.assignmentPdfName } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.dueDate !== undefined ? { dueDate: data.dueDate ? new Date(data.dueDate) : null } : {}),
+      },
+      include: {
+        hospital: { select: { id: true, name: true } },
+        physiotherapist: { select: { id: true, name: true, role: true } },
+        child: { select: { id: true, firstName: true, lastName: true, age: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  /** Delete a physiotherapy assignment */
+  async deletePhysioAssignment(id: string) {
+    const existing = await this.prisma.physiotherapyAssignment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Assignment ${id} not found`);
+    await this.prisma.physiotherapyAssignment.delete({ where: { id } });
+    return { message: 'Assignment deleted successfully' };
+  }
 }
+

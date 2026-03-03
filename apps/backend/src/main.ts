@@ -99,6 +99,9 @@ async function bootstrap() {
     }
     app.useStaticAssets(uploadsDir, {
       prefix: "/uploads/",
+      setHeaders: (res) => {
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      },
     });
     logger.log(`📁 Static file serving enabled for: ${uploadsDir}`);
   }

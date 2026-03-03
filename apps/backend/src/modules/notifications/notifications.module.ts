@@ -1,10 +1,15 @@
 // src/modules/notifications/notifications.module.ts
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
+import { PrismaService } from "@database/prisma.service";
+import { NotificationsController } from "./notifications.controller";
 import { NotificationsService } from "./notifications.service";
 import { EmailService } from "./services/email.service";
+import { UsersModule } from "@modules/users/users.module";
 
 @Module({
-  providers: [NotificationsService, EmailService],
+  imports: [forwardRef(() => UsersModule)],
+  controllers: [NotificationsController],
+  providers: [NotificationsService, EmailService, PrismaService],
   exports: [NotificationsService, EmailService],
 })
 export class NotificationsModule {}
