@@ -1,28 +1,28 @@
 "use client";
 
-import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  teacherAvailabilityApi,
-  TeacherAvailability,
-  LeaveType,
-  LeaveStatus,
-  CreateLeaveDto,
-  ApproveLeaveDto,
-  RejectLeaveDto,
-  AvailabilityFilterDto,
-} from "@/lib/api/teacher-availability";
-import { usersApi } from "@/lib/api/endpoints/users";
+  Activity,
+  Building2,
+  CalendarClock,
+  CalendarOff,
+  CalendarPlus,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  RefreshCw,
+  Search,
+  Stethoscope,
+  Trash2,
+  XCircle,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -30,888 +30,545 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Calendar,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Plus,
-  Filter,
-} from "lucide-react";
-import { format } from "date-fns";
+import { Separator } from "@/components/ui/separator";
+import { ApiClient } from "@/lib/api/api-client";
+import { useAuthStore } from "@/stores/auth-store";
+import { toast } from "sonner";
 
-export default function TeacherAvailabilityPage() {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type AvailabilityStatus = "AVAILABLE" | "IN_WORK" | "NOT_AVAILABLE";
+
+interface Hospital {
+  id: string;
+  name: string;
+}
+
+interface UnavailableDate {
+  id: string;
+  date: string;
+  reason?: string | null;
+}
+
+interface Physio {
+  id: string;
+  name: string;
+  role: string;
+  specialization?: string;
+  phone: string;
+  email?: string;
+  isActive: boolean;
+  hospitalId: string;
+  availabilityStatus?: string | null;
+  availabilityNote?: string | null;
+  availabilityUpdatedAt?: string | null;
+  hospital?: Hospital;
+  unavailableDates?: UnavailableDate[];
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<
+  AvailabilityStatus,
+  {
+    label: string;
+    textColor: string;
+    bgColor: string;
+    borderColor: string;
+    activeBg: string;
+    icon: React.ElementType;
+  }
+> = {
+  AVAILABLE: {
+    label: "Available",
+    textColor: "text-emerald-700",
+    bgColor: "bg-emerald-50",
+    borderColor: "border-emerald-200",
+    activeBg: "bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white",
+    icon: CheckCircle2,
+  },
+  IN_WORK: {
+    label: "In Work",
+    textColor: "text-blue-700",
+    bgColor: "bg-blue-50",
+    borderColor: "border-blue-200",
+    activeBg: "bg-blue-600 hover:bg-blue-700 border-blue-600 text-white",
+    icon: Activity,
+  },
+  NOT_AVAILABLE: {
+    label: "Not Available",
+    textColor: "text-rose-700",
+    bgColor: "bg-rose-50",
+    borderColor: "border-rose-200",
+    activeBg: "bg-rose-600 hover:bg-rose-700 border-rose-600 text-white",
+    icon: XCircle,
+  },
+};
+
+function resolveStatus(raw?: string | null): AvailabilityStatus {
+  if (raw === "IN_WORK" || raw === "NOT_AVAILABLE") return raw;
+  return "AVAILABLE";
+}
+
+function timeAgo(dateStr?: string | null): string {
+  if (!dateStr) return "Never updated today";
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+// ─── Physio Card ──────────────────────────────────────────────────────────────
+
+function PhysioCard({
+  physio,
+  isHospitalScoped,
+  onStatusChange,
+  statusPending,
+}: {
+  physio: Physio;
+  isHospitalScoped: boolean;
+  onStatusChange: (id: string, status: AvailabilityStatus) => void;
+  statusPending: boolean;
+}) {
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<AvailabilityFilterDto>({
-    page: 1,
-    limit: 10,
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [addingDate, setAddingDate] = useState(false);
+  const [newDate, setNewDate] = useState("");
+  const [newReason, setNewReason] = useState("");
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  const status = resolveStatus(physio.availabilityStatus);
+  const cfg = STATUS_CONFIG[status];
+  const StatusIcon = cfg.icon;
+  const upcomingDates = physio.unavailableDates ?? [];
+
+  // Today in YYYY-MM-DD for min date
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const addDateMutation = useMutation({
+    mutationFn: () =>
+      ApiClient.post<any>(`/patients/locations/physiotherapists/${physio.id}/unavailable-dates`, {
+        date: newDate,
+        reason: newReason.trim() || undefined,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["physio-avail", "list"] });
+      toast.success(`Scheduled off: ${formatDate(newDate)}`);
+      setNewDate("");
+      setNewReason("");
+      setAddingDate(false);
+    },
+    onError: (err: any) => toast.error(err?.message || "Failed to add date"),
   });
 
-  // Dialog states
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [selectedLeave, setSelectedLeave] =
-    useState<TeacherAvailability | null>(null);
-
-  // Form states
-  const [createForm, setCreateForm] = useState<CreateLeaveDto>({
-    teacherId: "",
-    leaveType: LeaveType.SICK_LEAVE,
-    startDate: "",
-    endDate: "",
-    reason: "",
-  });
-  const [approveForm, setApproveForm] = useState<ApproveLeaveDto>({});
-  const [rejectForm, setRejectForm] = useState<RejectLeaveDto>({
-    rejectionReason: "",
+  const removeDateMutation = useMutation({
+    mutationFn: (dateId: string) =>
+      ApiClient.delete<any>(
+        `/patients/locations/physiotherapists/${physio.id}/unavailable-dates/${dateId}`
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["physio-avail", "list"] });
+      toast.success("Removed scheduled off day");
+    },
+    onError: (err: any) => toast.error(err?.message || "Failed to remove date"),
   });
 
-  // Queries
-  const { data: availabilityData, isLoading: isLoadingAvailability } = useQuery(
-    {
-      queryKey: ["teacher-availability", filters],
-      queryFn: () => teacherAvailabilityApi.getAvailabilityList(filters),
-    }
+  return (
+    <Card className={`border transition-all ${cfg.borderColor} ${cfg.bgColor}`}>
+      {/* Card header */}
+      <CardHeader className="pb-2 pt-4 px-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="shrink-0 rounded-full bg-white border shadow-sm p-1.5">
+              <Stethoscope className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="text-base leading-tight truncate">{physio.name}</CardTitle>
+              {physio.specialization && (
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {physio.specialization}
+                </p>
+              )}
+            </div>
+          </div>
+          <Badge
+            className={`shrink-0 gap-1 text-xs ${cfg.textColor} ${cfg.bgColor} border ${cfg.borderColor}`}
+            variant="outline"
+          >
+            <StatusIcon className="h-3 w-3" />
+            {cfg.label}
+          </Badge>
+        </div>
+      </CardHeader>
+
+      <CardContent className="px-4 pb-4 space-y-3">
+        {/* Hospital */}
+        {!isHospitalScoped && physio.hospital && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{physio.hospital.name}</span>
+          </div>
+        )}
+
+        {/* Last updated */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock className="h-3.5 w-3.5 shrink-0" />
+          {physio.availabilityUpdatedAt
+            ? `Updated ${timeAgo(physio.availabilityUpdatedAt)}`
+            : "Never updated today"}
+        </div>
+
+        {/* Status buttons */}
+        <div className="flex gap-1.5">
+          {(["AVAILABLE", "IN_WORK", "NOT_AVAILABLE"] as AvailabilityStatus[]).map((s) => {
+            const c = STATUS_CONFIG[s];
+            const BtnIcon = c.icon;
+            const isActive = status === s;
+            return (
+              <Button
+                key={s}
+                size="sm"
+                variant={isActive ? "default" : "outline"}
+                disabled={statusPending}
+                className={`flex-1 gap-1 text-xs h-8 ${isActive ? c.activeBg : ""}`}
+                onClick={() => !isActive && onStatusChange(physio.id, s)}
+              >
+                <BtnIcon className="h-3 w-3 shrink-0" />
+                <span className="hidden sm:inline">{c.label}</span>
+                <span className="sm:hidden">
+                  {s === "AVAILABLE" ? "Avail" : s === "IN_WORK" ? "Work" : "Off"}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
+
+        <Separator className="opacity-50" />
+
+        {/* Scheduled off section */}
+        <button
+          className="flex items-center justify-between w-full text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setShowSchedule((v) => !v)}
+        >
+          <span className="flex items-center gap-1.5">
+            <CalendarOff className="h-3.5 w-3.5" />
+            Scheduled Off Days
+            {upcomingDates.length > 0 && (
+              <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">
+                {upcomingDates.length}
+              </Badge>
+            )}
+          </span>
+          {showSchedule ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+
+        {showSchedule && (
+          <div className="space-y-2 pt-0.5">
+            {/* Existing dates */}
+            {upcomingDates.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No upcoming off days scheduled</p>
+            ) : (
+              <div className="space-y-1.5">
+                {upcomingDates.map((d) => (
+                  <div
+                    key={d.id}
+                    className="flex items-center justify-between bg-white/70 rounded-md px-2.5 py-1.5 text-xs border border-rose-100"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-medium text-rose-700">{formatDate(d.date)}</span>
+                      {d.reason && (
+                        <span className="ml-1.5 text-muted-foreground truncate">— {d.reason}</span>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 shrink-0 text-muted-foreground hover:text-rose-600"
+                      disabled={removeDateMutation.isPending}
+                      onClick={() => removeDateMutation.mutate(d.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add date form */}
+            {addingDate ? (
+              <div className="space-y-2 pt-1 bg-white/60 rounded-lg p-2.5 border border-dashed border-rose-200">
+                <div className="space-y-1">
+                  <Label className="text-xs">Date</Label>
+                  <Input
+                    ref={dateInputRef}
+                    type="date"
+                    min={todayStr}
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Reason (optional)</Label>
+                  <Input
+                    placeholder="e.g. Training, Leave..."
+                    value={newReason}
+                    onChange={(e) => setNewReason(e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    className="flex-1 h-7 text-xs"
+                    disabled={!newDate || addDateMutation.isPending}
+                    onClick={() => addDateMutation.mutate()}
+                  >
+                    {addDateMutation.isPending ? "Saving…" : "Save"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setAddingDate(false);
+                      setNewDate("");
+                      setNewReason("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full h-7 text-xs gap-1.5 border-dashed"
+                onClick={() => {
+                  setAddingDate(true);
+                  setTimeout(() => dateInputRef.current?.focus(), 50);
+                }}
+              >
+                <CalendarPlus className="h-3.5 w-3.5" />
+                Add Off Day
+              </Button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function PhysioAvailabilityPage() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const userRoles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : ([user?.role].filter(Boolean) as string[]);
+  const isHospitalScoped =
+    userRoles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
+
+  const [hospitalFilter, setHospitalFilter] = useState("all");
+  const [search, setSearch] = useState("");
+
+  // ─── Hospitals ────────────────────────────────────────────────────────────
+
+  const { data: hospitals = [] } = useQuery<Hospital[]>({
+    queryKey: ["physio-avail", "hospitals"],
+    queryFn: async () => {
+      const resp = await ApiClient.get<any>("/patients/locations/hospitals");
+      const d = resp?.data ?? resp ?? {};
+      const list = d.data || d || [];
+      return Array.isArray(list) ? list : [];
+    },
+    enabled: !isHospitalScoped,
+  });
+
+  // ─── Physio list ──────────────────────────────────────────────────────────
+
+  const queryHospitalId =
+    isHospitalScoped ? undefined : hospitalFilter === "all" ? undefined : hospitalFilter;
+
+  const { data: physios = [], isLoading, refetch } = useQuery<Physio[]>({
+    queryKey: ["physio-avail", "list", queryHospitalId],
+    queryFn: async () => {
+      const params: Record<string, string> = { includeInactive: "false" };
+      if (queryHospitalId) params.hospitalId = queryHospitalId;
+      const resp = await ApiClient.get<any>("/patients/locations/physiotherapists", { params });
+      const d = resp?.data ?? resp ?? {};
+      const list = d.data || d || [];
+      return Array.isArray(list) ? list : [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  // Auto-refetch on window focus
+  useEffect(() => {
+    const onFocus = () => refetch();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refetch]);
+
+  // ─── Status mutation (optimistic) ─────────────────────────────────────────
+
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const availMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: AvailabilityStatus }) =>
+      ApiClient.put<any>(`/patients/locations/physiotherapists/${id}/availability`, { status }),
+    onMutate: ({ id }) => setPendingId(id),
+    onSuccess: async (_, vars) => {
+      await queryClient.invalidateQueries({ queryKey: ["physio-avail", "list"] });
+      toast.success(`${STATUS_CONFIG[vars.status].label} — updated`);
+    },
+    onError: (err: any) => toast.error(err?.message || "Failed to update status"),
+    onSettled: () => setPendingId(null),
+  });
+
+  // ─── Filtered + stats ─────────────────────────────────────────────────────
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return physios.filter((p) => {
+      if (!q) return true;
+      return (
+        p.name.toLowerCase().includes(q) ||
+        (p.specialization ?? "").toLowerCase().includes(q) ||
+        (p.hospital?.name ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [physios, search]);
+
+  const stats = useMemo(
+    () => ({
+      total: filtered.length,
+      available: filtered.filter((p) => resolveStatus(p.availabilityStatus) === "AVAILABLE").length,
+      inWork: filtered.filter((p) => resolveStatus(p.availabilityStatus) === "IN_WORK").length,
+      notAvailable: filtered.filter(
+        (p) => resolveStatus(p.availabilityStatus) === "NOT_AVAILABLE"
+      ).length,
+    }),
+    [filtered]
   );
 
-  const { data: statistics } = useQuery({
-    queryKey: ["teacher-availability-statistics"],
-    queryFn: () => teacherAvailabilityApi.getStatistics(),
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 
-  const { data: teachersData } = useQuery({
-    queryKey: ["users", { role: "INTERNAL_TEACHER" }],
-    queryFn: () => usersApi.getAll({ role: "INTERNAL_TEACHER", limit: 1000 }),
-  });
-
-  const { data: replacementSuggestions } = useQuery({
-    queryKey: [
-      "replacement-suggestions",
-      createForm.teacherId,
-      createForm.startDate,
-      createForm.endDate,
-    ],
-    queryFn: () =>
-      teacherAvailabilityApi.getReplacementSuggestions(
-        createForm.teacherId,
-        createForm.startDate,
-        createForm.endDate
-      ),
-    enabled:
-      !!createForm.teacherId && !!createForm.startDate && !!createForm.endDate,
-  });
-
-  // Mutations
-  const createMutation = useMutation({
-    mutationFn: teacherAvailabilityApi.createLeaveRequest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teacher-availability"] });
-      queryClient.invalidateQueries({
-        queryKey: ["teacher-availability-statistics"],
-      });
-      setCreateDialogOpen(false);
-      resetCreateForm();
-    },
-  });
-
-  const approveMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: ApproveLeaveDto }) =>
-      teacherAvailabilityApi.approveLeave(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teacher-availability"] });
-      queryClient.invalidateQueries({
-        queryKey: ["teacher-availability-statistics"],
-      });
-      setApproveDialogOpen(false);
-      setSelectedLeave(null);
-      setApproveForm({});
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: RejectLeaveDto }) =>
-      teacherAvailabilityApi.rejectLeave(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teacher-availability"] });
-      queryClient.invalidateQueries({
-        queryKey: ["teacher-availability-statistics"],
-      });
-      setRejectDialogOpen(false);
-      setSelectedLeave(null);
-      setRejectForm({ rejectionReason: "" });
-    },
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: (id: string) => teacherAvailabilityApi.cancelLeave(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teacher-availability"] });
-      queryClient.invalidateQueries({
-        queryKey: ["teacher-availability-statistics"],
-      });
-    },
-  });
-
-  // Handlers
-  const resetCreateForm = () => {
-    setCreateForm({
-      teacherId: "",
-      leaveType: LeaveType.SICK_LEAVE,
-      startDate: "",
-      endDate: "",
-      reason: "",
-    });
-  };
-
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createMutation.mutate(createForm);
-  };
-
-  const handleApproveSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedLeave) {
-      approveMutation.mutate({ id: selectedLeave.id, data: approveForm });
-    }
-  };
-
-  const handleRejectSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedLeave) {
-      rejectMutation.mutate({ id: selectedLeave.id, data: rejectForm });
-    }
-  };
-
-  const handleCancel = (leave: TeacherAvailability) => {
-    if (confirm("Are you sure you want to cancel this leave request?")) {
-      cancelMutation.mutate(leave.id);
-    }
-  };
-
-  const openApproveDialog = (leave: TeacherAvailability) => {
-    setSelectedLeave(leave);
-    setApproveDialogOpen(true);
-  };
-
-  const openRejectDialog = (leave: TeacherAvailability) => {
-    setSelectedLeave(leave);
-    setRejectDialogOpen(true);
-  };
-
-  const getStatusBadge = (status: LeaveStatus) => {
-    const variants: Record<
-      LeaveStatus,
-      "default" | "secondary" | "destructive" | "outline"
-    > = {
-      [LeaveStatus.PENDING]: "secondary",
-      [LeaveStatus.APPROVED]: "default",
-      [LeaveStatus.REJECTED]: "destructive",
-      [LeaveStatus.CANCELLED]: "outline",
-    };
-    return <Badge variant={variants[status]}>{status}</Badge>;
-  };
-
-  const getLeaveTypeLabel = (type: LeaveType) => {
-    return type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-  };
-
-  const teachers = teachersData?.users || [];
-  const leaves = availabilityData?.data || [];
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-primary/10">
-            <Calendar className="h-6 w-6 text-primary" />
+            <CalendarClock className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold">
-              Physiotherapy Availability
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Manage physiotherapy staff leaves, replacements, and scheduling
-            </p>
+            <h1 className="text-2xl font-semibold">Physiotherapy Availability</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{today}</p>
           </div>
         </div>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Leave Request
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create Leave Request</DialogTitle>
-              <DialogDescription>
-                Submit a new leave request for physiotherapy staff
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="teacherId">Physiotherapy Staff *</Label>
-                <Select
-                  value={createForm.teacherId}
-                  onValueChange={(value) =>
-                    setCreateForm((prev) => ({ ...prev, teacherId: value }))
-                  }
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select physiotherapy staff" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teachers.map((teacher) => (
-                      <SelectItem key={teacher.id} value={teacher.id}>
-                        {teacher.firstName} {teacher.lastName} ({teacher.email})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="leaveType">Leave Type *</Label>
-                <Select
-                  value={createForm.leaveType}
-                  onValueChange={(value) =>
-                    setCreateForm((prev) => ({
-                      ...prev,
-                      leaveType: value as LeaveType,
-                    }))
-                  }
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.values(LeaveType).map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {getLeaveTypeLabel(type)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date *</Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={createForm.startDate}
-                    onChange={(e) =>
-                      setCreateForm((prev) => ({
-                        ...prev,
-                        startDate: e.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date *</Label>
-                  <Input
-                    id="endDate"
-                    type="date"
-                    value={createForm.endDate}
-                    onChange={(e) =>
-                      setCreateForm((prev) => ({
-                        ...prev,
-                        endDate: e.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="reason">Reason *</Label>
-                <Textarea
-                  id="reason"
-                  value={createForm.reason}
-                  onChange={(e) =>
-                    setCreateForm((prev) => ({
-                      ...prev,
-                      reason: e.target.value,
-                    }))
-                  }
-                  placeholder="Please provide a reason for the leave"
-                  required
-                  rows={3}
-                />
-              </div>
-
-              {replacementSuggestions && replacementSuggestions.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Replacement Physiotherapy Staff Suggestions</Label>
-                  <div className="border rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
-                    {replacementSuggestions.map((suggestion) => (
-                      <div
-                        key={suggestion.id}
-                        className="flex items-center justify-between p-2 hover:bg-accent rounded cursor-pointer"
-                        onClick={() =>
-                          setCreateForm((prev) => ({
-                            ...prev,
-                            replacementTeacherId: suggestion.id,
-                          }))
-                        }
-                      >
-                        <div>
-                          <div className="font-medium">
-                            {suggestion.firstName} {suggestion.lastName}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {suggestion.email} • {suggestion.commonSubjects}{" "}
-                            common subjects
-                          </div>
-                          {suggestion.subjects &&
-                            suggestion.subjects.length > 0 && (
-                              <div className="text-xs text-muted-foreground">
-                                {suggestion.subjects.join(", ")}
-                              </div>
-                            )}
-                        </div>
-                        {createForm.replacementTeacherId === suggestion.id && (
-                          <CheckCircle className="h-5 w-5 text-primary" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCreateDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending
-                    ? "Creating..."
-                    : "Create Leave Request"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5 self-start">
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
       </div>
 
-      {/* Statistics Cards */}
-      {statistics && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
-            <CardContent className="pt-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
-                  <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Total Leaves</p>
-                  <p className="text-2xl font-bold">{statistics.total}</p>
-                </div>
-              </div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Total", value: stats.total, textColor: "text-foreground", bg: "bg-muted/40" },
+          { label: "Available", value: stats.available, textColor: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
+          { label: "In Work", value: stats.inWork, textColor: "text-blue-700", bg: "bg-blue-50 border-blue-100" },
+          { label: "Not Available", value: stats.notAvailable, textColor: "text-rose-700", bg: "bg-rose-50 border-rose-100" },
+        ].map((s) => (
+          <Card key={s.label} className={`border shadow-sm ${s.bg}`}>
+            <CardContent className="pt-4 pb-3 px-4">
+              <p className="text-xs text-muted-foreground">{s.label}</p>
+              <p className={`text-3xl font-bold mt-0.5 ${s.textColor}`}>{s.value}</p>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20">
-            <CardContent className="pt-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40">
-                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Pending</p>
-                  <p className="text-2xl font-bold text-amber-600">{statistics.byStatus[LeaveStatus.PENDING] || 0}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
-            <CardContent className="pt-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
-                  <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Approved</p>
-                  <p className="text-2xl font-bold text-emerald-600">{statistics.byStatus[LeaveStatus.APPROVED] || 0}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20">
-            <CardContent className="pt-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40">
-                  <XCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Rejected</p>
-                  <p className="text-2xl font-bold text-rose-600">{statistics.byStatus[LeaveStatus.REJECTED] || 0}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+        ))}
+      </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Filter className="mr-2 h-4 w-4" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Physiotherapy Staff</Label>
-              <Select
-                value={filters.teacherId || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    teacherId: value === "all" ? undefined : value,
-                    page: 1,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All physiotherapy staff" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All physiotherapy staff</SelectItem>
-                  {teachers.map((teacher) => (
-                    <SelectItem key={teacher.id} value={teacher.id}>
-                      {teacher.firstName} {teacher.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select
-                value={filters.status || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    status:
-                      value === "all" ? undefined : (value as LeaveStatus),
-                    page: 1,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  {Object.values(LeaveStatus).map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Leave Type</Label>
-              <Select
-                value={filters.leaveType || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    leaveType:
-                      value === "all" ? undefined : (value as LeaveType),
-                    page: 1,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All types</SelectItem>
-                  {Object.values(LeaveType).map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {getLeaveTypeLabel(type)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>&nbsp;</Label>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setFilters({ page: 1, limit: 10 })}
-              >
-                Clear Filters
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Leaves Table */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle>Leave Requests</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoadingAvailability ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search by name or specialization…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {!isHospitalScoped && (
+          <Select value={hospitalFilter} onValueChange={setHospitalFilter}>
+            <SelectTrigger className="w-56">
+              <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="All Hospitals" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Hospitals</SelectItem>
+              {hospitals.map((h) => (
+                <SelectItem key={h.id} value={h.id}>
+                  {h.name}
+                </SelectItem>
               ))}
-            </div>
-          ) : leaves.length === 0 ? (
-            <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
-              <div className="p-3 rounded-full bg-muted">
-                <Calendar className="h-6 w-6" />
-              </div>
-              <p className="font-medium">No leave requests found</p>
-              <p className="text-xs">Create a leave request or adjust your filters</p>
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Teacher</TableHead>
-                    <TableHead>Leave Type</TableHead>
-                    <TableHead>Date Range</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Replacement</TableHead>
-                    <TableHead>Affected Classes</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {leaves.map((leave) => (
-                    <TableRow key={leave.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">
-                            {leave.teacher
-                              ? `${leave.teacher.firstName} ${leave.teacher.lastName}`
-                              : "Unknown"}
-                          </div>
-                          {leave.teacher?.email && (
-                            <div className="text-sm text-muted-foreground">
-                              {leave.teacher.email}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {getLeaveTypeLabel(leave.leaveType)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div>
-                            {format(new Date(leave.startDate), "MMM dd, yyyy")}
-                          </div>
-                          <div className="text-muted-foreground">
-                            to {format(new Date(leave.endDate), "MMM dd, yyyy")}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(leave.status)}</TableCell>
-                      <TableCell>
-                        {leave.replacementTeacher ? (
-                          <div className="text-sm">
-                            <div className="font-medium">
-                              {leave.replacementTeacher.firstName}{" "}
-                              {leave.replacementTeacher.lastName}
-                            </div>
-                            {leave.replacementApproved ? (
-                              <Badge variant="default" className="text-xs">
-                                Approved
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" className="text-xs">
-                                Pending
-                              </Badge>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">
-                            None
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {leave.affectedClassIds.length}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          {leave.status === LeaveStatus.PENDING && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => openApproveDialog(leave)}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => openRejectDialog(leave)}
-                              >
-                                Reject
-                              </Button>
-                            </>
-                          )}
-                          {(leave.status === LeaveStatus.PENDING ||
-                            leave.status === LeaveStatus.APPROVED) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleCancel(leave)}
-                            >
-                              Cancel
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            </SelectContent>
+          </Select>
+        )}
+      </div>
 
-              {/* Pagination */}
-              {availabilityData && availabilityData.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-muted-foreground">
-                    Showing{" "}
-                    {(availabilityData.page - 1) * availabilityData.limit + 1}{" "}
-                    to{" "}
-                    {Math.min(
-                      availabilityData.page * availabilityData.limit,
-                      availabilityData.total
-                    )}{" "}
-                    of {availabilityData.total} results
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          page: (prev.page || 1) - 1,
-                        }))
-                      }
-                      disabled={availabilityData.page === 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          page: (prev.page || 1) + 1,
-                        }))
-                      }
-                      disabled={
-                        availabilityData.page >= availabilityData.totalPages
-                      }
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Approve Dialog */}
-      <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Approve Leave Request</DialogTitle>
-            <DialogDescription>
-              Approve this leave request. Optionally assign a replacement
-              teacher.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedLeave && (
-            <form onSubmit={handleApproveSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <div className="text-sm">
-                  <strong>Teacher:</strong>{" "}
-                  {selectedLeave.teacher
-                    ? `${selectedLeave.teacher.firstName} ${selectedLeave.teacher.lastName}`
-                    : "Unknown"}
-                </div>
-                <div className="text-sm">
-                  <strong>Leave Type:</strong>{" "}
-                  {getLeaveTypeLabel(selectedLeave.leaveType)}
-                </div>
-                <div className="text-sm">
-                  <strong>Period:</strong>{" "}
-                  {format(new Date(selectedLeave.startDate), "MMM dd, yyyy")} -{" "}
-                  {format(new Date(selectedLeave.endDate), "MMM dd, yyyy")}
-                </div>
-                <div className="text-sm">
-                  <strong>Reason:</strong> {selectedLeave.reason}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="replacementTeacherId">
-                  Replacement Teacher (Optional)
-                </Label>
-                <Select
-                  value={approveForm.replacementTeacherId || "none"}
-                  onValueChange={(value) =>
-                    setApproveForm({
-                      replacementTeacherId:
-                        value === "none" ? undefined : value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {teachers
-                      .filter((t) => t.id !== selectedLeave.teacherId)
-                      .map((teacher) => (
-                        <SelectItem key={teacher.id} value={teacher.id}>
-                          {teacher.firstName} {teacher.lastName}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setApproveDialogOpen(false);
-                    setSelectedLeave(null);
-                    setApproveForm({});
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={approveMutation.isPending}>
-                  {approveMutation.isPending ? "Approving..." : "Approve Leave"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Reject Dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject Leave Request</DialogTitle>
-            <DialogDescription>
-              Provide a reason for rejecting this leave request.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedLeave && (
-            <form onSubmit={handleRejectSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <div className="text-sm">
-                  <strong>Teacher:</strong>{" "}
-                  {selectedLeave.teacher
-                    ? `${selectedLeave.teacher.firstName} ${selectedLeave.teacher.lastName}`
-                    : "Unknown"}
-                </div>
-                <div className="text-sm">
-                  <strong>Leave Type:</strong>{" "}
-                  {getLeaveTypeLabel(selectedLeave.leaveType)}
-                </div>
-                <div className="text-sm">
-                  <strong>Period:</strong>{" "}
-                  {format(new Date(selectedLeave.startDate), "MMM dd, yyyy")} -{" "}
-                  {format(new Date(selectedLeave.endDate), "MMM dd, yyyy")}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="rejectionReason">Rejection Reason *</Label>
-                <Textarea
-                  id="rejectionReason"
-                  value={rejectForm.rejectionReason}
-                  onChange={(e) =>
-                    setRejectForm({ rejectionReason: e.target.value })
-                  }
-                  placeholder="Please provide a reason for rejection"
-                  required
-                  rows={4}
-                />
-              </div>
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setRejectDialogOpen(false);
-                    setSelectedLeave(null);
-                    setRejectForm({ rejectionReason: "" });
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="destructive"
-                  disabled={rejectMutation.isPending}
-                >
-                  {rejectMutation.isPending ? "Rejecting..." : "Reject Leave"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Cards */}
+      {isLoading ? (
+        <div className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          Loading physiotherapists…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-16 text-center">
+          <Stethoscope className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="font-medium text-lg">No physiotherapists found</p>
+          <p className="text-sm text-muted-foreground">
+            {search
+              ? "Try adjusting your search"
+              : "No physiotherapists for the selected hospital"}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((p) => (
+            <PhysioCard
+              key={p.id}
+              physio={p}
+              isHospitalScoped={isHospitalScoped}
+              onStatusChange={(id, status) => availMutation.mutate({ id, status })}
+              statusPending={pendingId === p.id}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

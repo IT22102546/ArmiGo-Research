@@ -636,6 +636,28 @@ export class PatientController {
   }
 
   /**
+   * Update physiotherapist real-time availability status
+   */
+  @Put('locations/physiotherapists/:id/availability')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update physiotherapist availability status (AVAILABLE | IN_WORK | NOT_AVAILABLE)' })
+  async updatePhysioAvailability(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { status: 'AVAILABLE' | 'IN_WORK' | 'NOT_AVAILABLE'; note?: string }
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only update physiotherapists in your hospital');
+      }
+    }
+    const data = await this.patientService.setPhysioAvailability(id, body.status, body.note);
+    return { success: true, data, message: 'Availability updated' };
+  }
+
+  /**
    * Create physiotherapist
    */
   @Post('locations/physiotherapists')
@@ -657,6 +679,61 @@ export class PatientController {
       data: physiotherapist,
       message: 'Physiotherapist created successfully',
     };
+  }
+
+  /**
+   * Get upcoming unavailable dates for a physiotherapist
+   */
+  @Get('locations/physiotherapists/:id/unavailable-dates')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get upcoming unavailable dates for a physiotherapist' })
+  async getPhysioUnavailableDates(@Param('id') id: string) {
+    const dates = await this.patientService.getPhysioUnavailableDates(id);
+    return { success: true, data: dates };
+  }
+
+  /**
+   * Add an unavailable date for a physiotherapist
+   */
+  @Post('locations/physiotherapists/:id/unavailable-dates')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Schedule a future unavailable date for a physiotherapist' })
+  async addPhysioUnavailableDate(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { date: string; reason?: string }
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only manage physiotherapists in your hospital');
+      }
+    }
+    const data = await this.patientService.addPhysioUnavailableDate(id, new Date(body.date), body.reason);
+    return { success: true, data };
+  }
+
+  /**
+   * Remove a scheduled unavailable date
+   */
+  @Delete('locations/physiotherapists/:id/unavailable-dates/:dateId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a scheduled unavailable date' })
+  async removePhysioUnavailableDate(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Param('dateId') dateId: string
+  ) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    if (scopedHospitalId) {
+      const staff = await this.patientService.getPhysiotherapists(scopedHospitalId, true);
+      if (!staff.some((item: any) => item.id === id)) {
+        throw new ForbiddenException('You can only manage physiotherapists in your hospital');
+      }
+    }
+    await this.patientService.removePhysioUnavailableDate(dateId);
+    return { success: true, message: 'Unavailable date removed' };
   }
 
   /**

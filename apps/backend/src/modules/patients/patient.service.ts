@@ -986,6 +986,9 @@ export class PatientService {
         email: true,
         isActive: true,
         hospitalId: true,
+        availabilityStatus: true,
+        availabilityNote: true,
+        availabilityUpdatedAt: true,
         hospital: {
           select: {
             id: true,
@@ -999,9 +1002,68 @@ export class PatientService {
             },
           },
         },
+        unavailableDates: {
+          where: { date: { gte: new Date() } },
+          orderBy: { date: 'asc' },
+          select: { id: true, date: true, reason: true },
+        },
       },
       orderBy: { name: 'asc' },
     });
+  }
+
+  /** Update physiotherapist availability status */
+  async setPhysioAvailability(
+    id: string,
+    status: 'AVAILABLE' | 'IN_WORK' | 'NOT_AVAILABLE',
+    note?: string
+  ) {
+    const staff = await this.prisma.hospitalStaff.findUnique({ where: { id } });
+    if (!staff) throw new NotFoundException(`Physiotherapist ${id} not found`);
+    return this.prisma.hospitalStaff.update({
+      where: { id },
+      data: {
+        availabilityStatus: status,
+        availabilityNote: note ?? null,
+        availabilityUpdatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        availabilityStatus: true,
+        availabilityNote: true,
+        availabilityUpdatedAt: true,
+      },
+    });
+  }
+
+  /** Get upcoming unavailable dates for a physiotherapist */
+  async getPhysioUnavailableDates(staffId: string) {
+    return this.prisma.physioUnavailableDate.findMany({
+      where: { staffId, date: { gte: new Date() } },
+      orderBy: { date: 'asc' },
+      select: { id: true, date: true, reason: true },
+    });
+  }
+
+  /** Add a future unavailable date for a physiotherapist */
+  async addPhysioUnavailableDate(staffId: string, date: Date, reason?: string) {
+    const staff = await this.prisma.hospitalStaff.findUnique({ where: { id: staffId } });
+    if (!staff) throw new NotFoundException(`Physiotherapist ${staffId} not found`);
+    return this.prisma.physioUnavailableDate.upsert({
+      where: { staffId_date: { staffId, date } },
+      create: { staffId, date, reason: reason ?? null },
+      update: { reason: reason ?? null },
+      select: { id: true, date: true, reason: true },
+    });
+  }
+
+  /** Remove a scheduled unavailable date by record ID */
+  async removePhysioUnavailableDate(id: string): Promise<{ message: string }> {
+    const record = await this.prisma.physioUnavailableDate.findUnique({ where: { id } });
+    if (!record) throw new NotFoundException(`Unavailable date record ${id} not found`);
+    await this.prisma.physioUnavailableDate.delete({ where: { id } });
+    return { message: `Unavailable date ${id} removed` };
   }
 
   /**

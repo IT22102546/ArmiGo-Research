@@ -352,8 +352,11 @@ model HospitalStaff {
   experience      Int?            // years
   
   // Status
-  isActive        Boolean         @default(true)
-  joinedAt        DateTime        @default(now())
+  isActive            Boolean         @default(true)
+  availabilityStatus  String?         @default("AVAILABLE") // AVAILABLE | IN_WORK | NOT_AVAILABLE
+  availabilityNote    String?
+  availabilityUpdatedAt DateTime?
+  joinedAt            DateTime        @default(now())
   leftAt          DateTime?
   
   // Relations
@@ -364,6 +367,7 @@ model HospitalStaff {
   appointments    Appointment[]   @relation("StaffAppointments")
   admissionTrackings AdmissionTracking[] @relation("AdmissionPhysiotherapist")
   physioAssignments   PhysiotherapyAssignment[] @relation("PhysioStaffAssignments")
+  unavailableDates    PhysioUnavailableDate[]  @relation("PhysioUnavailableDates")
 
   @@index([hospitalId])
   @@index([subHospitalId])
@@ -927,4 +931,23 @@ model CredentialLog {
   @@index([hospitalId])
   @@index([generatedAt])
   @@map("credential_logs")
+}
+
+// ============================================
+// PHYSIO SCHEDULED UNAVAILABILITY
+// ============================================
+
+model PhysioUnavailableDate {
+  id        String        @id @default(cuid())
+  staffId   String
+  date      DateTime      @db.Date
+  reason    String?
+  createdAt DateTime      @default(now())
+
+  staff     HospitalStaff @relation("PhysioUnavailableDates", fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date])
+  @@index([staffId])
+  @@index([date])
+  @@map("physio_unavailable_dates")
 }
