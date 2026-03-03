@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ import { Progress } from "@/components/ui/progress";
 import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
+import { useAuthStore } from "@/stores/auth-store";
 
 type Hospital = {
   id: string;
@@ -156,6 +157,13 @@ const initialForm: PatientForm = {
 
 export default function StudentManagement() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const userRoles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : ([user?.role].filter(Boolean) as string[]);
+  const isHospitalScopedUser =
+    userRoles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
+  const [scopedHospital, setScopedHospital] = useState<Hospital | null>(null);
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("all");
   const [physiotherapistFilter, setPhysiotherapistFilter] = useState("all");
@@ -171,6 +179,44 @@ export default function StudentManagement() {
   >(null);
   const [showParentPassword, setShowParentPassword] = useState(false);
   const [formData, setFormData] = useState<PatientForm>(initialForm);
+
+  useEffect(() => {
+    if (!isHospitalScopedUser) return;
+
+    let mounted = true;
+
+    const loadHospitalScope = async () => {
+      try {
+        const response = await ApiClient.get<any>("/users/profile");
+        const payload = response?.data ?? response ?? {};
+        const hospital = payload?.hospitalProfile?.hospital;
+        if (!mounted || !hospital?.id) return;
+
+        const resolvedHospital = {
+          id: hospital.id,
+          name: hospital.name || "Hospital",
+        };
+
+        setScopedHospital(resolvedHospital);
+        setHospitalFilter(hospital.id);
+        setFormData((prev) => ({
+          ...prev,
+          hospitalId: hospital.id,
+          physiotherapistId: "",
+        }));
+      } catch {
+        // Keep UI usable even if profile fetch fails.
+      }
+    };
+
+    loadHospitalScope();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isHospitalScopedUser]);
+
+  const scopedHospitalId = scopedHospital?.id || "";
 
   const generatePassword = () => {
     const lower = "abcdefghijklmnopqrstuvwxyz";
@@ -203,15 +249,21 @@ export default function StudentManagement() {
   };
 
   const { data: patients = [], isLoading: patientsLoading } = useQuery({
-    queryKey: ["patients-management", "patients"],
+    queryKey: ["patients-management", "patients", scopedHospitalId],
     queryFn: async () => {
       const response = await ApiClient.get<any>("/patients", {
-        params: { limit: 1000 },
+        params: {
+          limit: 1000,
+          ...(isHospitalScopedUser && scopedHospitalId
+            ? { hospitalId: scopedHospitalId }
+            : {}),
+        },
       });
       const payload = response?.data ?? response ?? {};
       const list = payload?.data || payload || [];
       return Array.isArray(list) ? list : [];
     },
+    enabled: !isHospitalScopedUser || !!scopedHospitalId,
   });
 
   const { data: hospitals = [], isLoading: hospitalsLoading } = useQuery({
@@ -228,12 +280,19 @@ export default function StudentManagement() {
 
   const { data: physiotherapists = [], isLoading: physiotherapistsLoading } =
     useQuery({
-      queryKey: ["patients-management", "physiotherapists"],
+      queryKey: ["patients-management", "physiotherapists", scopedHospitalId],
       refetchOnMount: "always",
       refetchOnWindowFocus: true,
       queryFn: async () => {
         const response = await ApiClient.get<any>(
-          "/patients/locations/physiotherapists"
+          "/patients/locations/physiotherapists",
+          {
+            params: {
+              ...(isHospitalScopedUser && scopedHospitalId
+                ? { hospitalId: scopedHospitalId }
+                : {}),
+            },
+          }
         );
         const payload = response?.data ?? response ?? {};
         const list = payload?.data || payload || [];
@@ -241,6 +300,7 @@ export default function StudentManagement() {
           ? list.filter((item: any) => item?.id && item?.name)
           : [];
       },
+      enabled: !isHospitalScopedUser || !!scopedHospitalId,
     });
 
   const { data: districts = [], isLoading: districtsLoading } = useQuery({
@@ -343,6 +403,12 @@ export default function StudentManagement() {
     },
   });
 
+  const availableHospitals = useMemo(() => {
+    if (!isHospitalScopedUser) return hospitals;
+    if (!scopedHospitalId) return [];
+    return hospitals.filter((hospital: Hospital) => hospital.id === scopedHospitalId);
+  }, [hospitals, isHospitalScopedUser, scopedHospitalId]);
+
   const filteredPhysiotherapists = useMemo(() => {
     if (!formData.hospitalId) return [];
     return physiotherapists.filter(
@@ -407,7 +473,10 @@ export default function StudentManagement() {
 
   const handleOpenAddDialog = () => {
     setEditingPatient(null);
-    setFormData(initialForm);
+    setFormData({
+      ...initialForm,
+      hospitalId: isHospitalScopedUser ? scopedHospitalId : "",
+    });
     setShowParentPassword(false);
     setDialogOpen(true);
   };
@@ -465,7 +534,7 @@ export default function StudentManagement() {
       !formData.dateOfBirth ||
       !formData.gender ||
       !formData.address.trim() ||
-      !formData.districtId ||
+      (!isHospitalScopedUser && !formData.districtId) ||
       !formData.parentName.trim() ||
       !formData.parentEmail.trim() ||
       !formData.parentPhone.trim() ||
@@ -486,6 +555,15 @@ export default function StudentManagement() {
       return;
     }
 
+    const resolvedHospitalId = isHospitalScopedUser
+      ? scopedHospitalId || formData.hospitalId
+      : formData.hospitalId;
+
+    if (!resolvedHospitalId) {
+      toast.error("Hospital is required");
+      return;
+    }
+
     const payload = {
       firstName: formData.firstName.trim(),
       lastName: formData.lastName.trim(),
@@ -493,15 +571,19 @@ export default function StudentManagement() {
       gender: formData.gender,
       diagnosis: formData.diagnosis.trim() || undefined,
       address: formData.address.trim(),
-      districtId: formData.districtId,
-      zoneId: formData.zoneId || undefined,
+      ...(isHospitalScopedUser
+        ? {}
+        : {
+            districtId: formData.districtId,
+            zoneId: formData.zoneId || undefined,
+          }),
       parentName: formData.parentName.trim(),
       parentEmail: formData.parentEmail.trim(),
       parentPhone: formData.parentPhone.trim(),
       ...(formData.parentPassword.trim()
         ? { parentPassword: formData.parentPassword.trim() }
         : {}),
-      hospitalId: formData.hospitalId,
+      hospitalId: resolvedHospitalId,
       assignedDoctor: selectedPhysio.name,
     };
 
@@ -529,6 +611,7 @@ export default function StudentManagement() {
   const selectedDistrict = districts.find(
     (item: District) => item.id === formData.districtId
   );
+  const tableColumnCount = isHospitalScopedUser ? 13 : 16;
 
   const toProgressValue = (value?: number) => {
     const parsed = Number(value ?? 0);
@@ -594,25 +677,27 @@ export default function StudentManagement() {
               />
             </div>
 
-            <Select
-              value={hospitalFilter}
-              onValueChange={(value) => {
-                setHospitalFilter(value);
-                setPhysiotherapistFilter("all");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by hospital" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Hospitals</SelectItem>
-                {hospitals.map((hospital: Hospital) => (
-                  <SelectItem key={hospital.id} value={hospital.id}>
-                    {hospital.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!isHospitalScopedUser ? (
+              <Select
+                value={hospitalFilter}
+                onValueChange={(value) => {
+                  setHospitalFilter(value);
+                  setPhysiotherapistFilter("all");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by hospital" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Hospitals</SelectItem>
+                  {hospitals.map((hospital: Hospital) => (
+                    <SelectItem key={hospital.id} value={hospital.id}>
+                      {hospital.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
 
             <Select
               value={physiotherapistFilter}
@@ -642,9 +727,9 @@ export default function StudentManagement() {
                   <TableHead>Parent Mobile</TableHead>
                   <TableHead>Hospital</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>Province</TableHead>
-                  <TableHead>District</TableHead>
-                  <TableHead>Zone</TableHead>
+                  {!isHospitalScopedUser ? <TableHead>Province</TableHead> : null}
+                  {!isHospitalScopedUser ? <TableHead>District</TableHead> : null}
+                  {!isHospitalScopedUser ? <TableHead>Zone</TableHead> : null}
                   <TableHead>Physiotherapist</TableHead>
                   <TableHead>Start Progress</TableHead>
                   <TableHead>Current Progress</TableHead>
@@ -657,13 +742,13 @@ export default function StudentManagement() {
               <TableBody>
                 {patientsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={16} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={tableColumnCount} className="py-8 text-center text-muted-foreground">
                       Loading children...
                     </TableCell>
                   </TableRow>
                 ) : filteredPatients.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={16} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={tableColumnCount} className="py-8 text-center text-muted-foreground">
                       No children found.
                     </TableCell>
                   </TableRow>
@@ -678,9 +763,9 @@ export default function StudentManagement() {
                       <TableCell>{patient.parentPhone || "-"}</TableCell>
                       <TableCell>{patient.hospital?.name || "-"}</TableCell>
                       <TableCell>{patient.address || "-"}</TableCell>
-                      <TableCell>{patient.province?.name || "-"}</TableCell>
-                      <TableCell>{patient.district?.name || "-"}</TableCell>
-                      <TableCell>{patient.zone?.name || "-"}</TableCell>
+                      {!isHospitalScopedUser ? <TableCell>{patient.province?.name || "-"}</TableCell> : null}
+                      {!isHospitalScopedUser ? <TableCell>{patient.district?.name || "-"}</TableCell> : null}
+                      {!isHospitalScopedUser ? <TableCell>{patient.zone?.name || "-"}</TableCell> : null}
                       <TableCell>{patient.assignedDoctor || "-"}</TableCell>
                       <TableCell className="min-w-[140px]">
                         <div className="space-y-1">
@@ -859,7 +944,8 @@ export default function StudentManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {!isHospitalScopedUser ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>District</Label>
                   <Select
@@ -938,6 +1024,7 @@ export default function StudentManagement() {
                   </Select>
                 </div>
               </div>
+              ) : null}
             </div>
 
             <div className="rounded-lg border p-4 space-y-4">
@@ -1044,21 +1131,26 @@ export default function StudentManagement() {
                       physiotherapistId: "",
                     }))
                   }
+                  disabled={isHospitalScopedUser}
                 >
                   <SelectTrigger>
                     <SelectValue
                       placeholder={
-                        hospitalsLoading ? "Loading hospitals..." : "Select hospital"
+                        isHospitalScopedUser
+                          ? scopedHospital?.name || "Loading hospital..."
+                          : hospitalsLoading
+                            ? "Loading hospitals..."
+                            : "Select hospital"
                       }
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {hospitals.length === 0 && !hospitalsLoading ? (
+                    {availableHospitals.length === 0 && !hospitalsLoading ? (
                       <SelectItem value="__NO_HOSPITALS__" disabled>
                         No hospitals available
                       </SelectItem>
                     ) : null}
-                    {hospitals.map((hospital: Hospital) => (
+                    {availableHospitals.map((hospital: Hospital) => (
                       <SelectItem key={hospital.id} value={hospital.id}>
                         {hospital.name}
                       </SelectItem>

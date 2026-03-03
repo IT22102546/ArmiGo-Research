@@ -154,6 +154,8 @@ model User {
   
   // Appointments created
   createdAppointments Appointment[] @relation("AppointmentCreatedBy")
+  notifications      Notification[]
+  createdPublications Publication[] @relation("UserCreatedPublications")
 
   @@index([deletedAt])
   @@index([role, status])
@@ -250,6 +252,7 @@ model Hospital {
   // Credential logs
   credentialLogs    CredentialLog[] @relation("HospitalCredentialLogs")
   admissionTrackings AdmissionTracking[]
+  publications      Publication[]
 
   @@index([status])
   @@index([isMainHospital])
@@ -650,6 +653,34 @@ model Appointment {
   @@map("appointments")
 }
 
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  message     String   @db.Text
+  type        String   @default("GENERAL")
+  status      String   @default("UNREAD")
+  isRead      Boolean  @default(false)
+  data        Json?
+  link        String?
+  metadata    Json?
+  sentAt      DateTime @default(now())
+  deliveredAt DateTime?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@index([sentAt])
+  @@index([deletedAt])
+  @@map("notifications")
+}
+
 model AdmissionTracking {
   id                 String         @id @default(cuid())
   childId            String
@@ -689,6 +720,44 @@ model AdmissionTracking {
   @@index([admissionDate])
   @@index([childId, admissionDate])
   @@map("admission_tracking")
+}
+
+model Publication {
+  id               String    @id @default(cuid())
+  title            String
+  description      String    @db.Text
+  shortDescription String?
+  coverImage       String?
+  price            Float
+  discountPrice    Float?
+  fileUrl          String
+  fileSize         Int?
+  fileType         String?
+  previewUrl       String?
+  gradeId          String?
+  subjectId        String?
+  mediumId         String?
+  author           String?
+  publisher        String?
+  status           String    @default("DRAFT")
+  publishedAt      DateTime?
+  downloads        Int       @default(0)
+  views            Int       @default(0)
+  createdById      String
+  hospitalId       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  createdBy        User      @relation("UserCreatedPublications", fields: [createdById], references: [id])
+  hospital         Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+  @@index([hospitalId])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([deletedAt])
+  @@map("publications")
 }
 
 // ============================================
@@ -747,6 +816,29 @@ model Zone {
 // ============================================
 // SYSTEM MODELS
 // ============================================
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  type        String   @default("GENERAL")
+  priority    String   @default("NORMAL")
+  targetRoles String[]
+  isActive    Boolean  @default(true)
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([isActive])
+  @@index([type])
+  @@index([priority])
+  @@index([publishedAt])
+  @@index([expiresAt])
+  @@index([deletedAt])
+  @@map("announcements")
+}
 
 model SystemSettings {
   id              String          @id @default(cuid())

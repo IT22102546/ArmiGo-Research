@@ -57,6 +57,8 @@ export class PrismaService
       "StudentProgress",
       "ChatMessage",
       "Question",
+      "Announcement",
+      "Notification",
     ]);
 
     this.$use(async (params, next) => {

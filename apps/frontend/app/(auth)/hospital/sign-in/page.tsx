@@ -2,17 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createLogger } from "@/lib/utils/logger";
 import { getErrorMessage } from "@/lib/error-handling";
-const logger = createLogger("AdminSignIn");
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mail, Lock, Shield } from "lucide-react";
+import { Mail, Lock, Building2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLoginMutation } from "@/lib/hooks/queries/useAuth";
-import Link from "next/link";
 
-export default function AdminSignIn() {
+const logger = createLogger("HospitalSignIn");
+
+export default function HospitalSignIn() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -25,31 +26,18 @@ export default function AdminSignIn() {
 
   const isAuthenticated = user !== null;
 
-  // Display session error if present (but only once, when component mounts)
   useEffect(() => {
     if (sessionError) {
       setError(sessionError);
-      // Clear session error after displaying
       useAuthStore.setState({ sessionError: null });
     }
-  }, []); // Empty deps - run only once on mount
+  }, []);
 
-  // Redirect if already authenticated (both for fresh logins and existing sessions)
   useEffect(() => {
     if (isAuthenticated && user) {
-      const userRole = user.role;
-      logger.log("✅ User authenticated, redirecting based on role...");
-
-      // Perform redirect based on role
-      if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
+      if (user.role === "HOSPITAL_ADMIN" || user.role === "SUPER_ADMIN") {
         router.replace("/admin");
-      } else if (
-        userRole === "INTERNAL_TEACHER" ||
-        userRole === "EXTERNAL_TEACHER"
-      ) {
-        router.replace("/teacher");
       } else {
-        // Non-admin users should not access admin portal - redirect to home
         router.replace("/");
       }
     }
@@ -59,60 +47,35 @@ export default function AdminSignIn() {
     e.preventDefault();
     setError("");
 
-    logger.log("📝 Form submitted, calling login...");
-
     try {
-      // Send allowedRoles to backend for admin portal validation
       login(
         {
           identifier,
           password,
-          allowedRoles: ["SUPER_ADMIN", "ADMIN"],
+          allowedRoles: ["HOSPITAL_ADMIN", "SUPER_ADMIN"],
         },
         {
-          onSuccess: () => {
-            console.log("✅ Login successful");
-            // Redirect will happen automatically via useEffect
-          },
           onError: (err: any) => {
-            logger.error("❌ Login failed:", getErrorMessage(err));
+            logger.error("❌ Hospital login failed:", getErrorMessage(err));
             const message = String(err?.message || "").toLowerCase();
             if (message.includes("account is inactive") || message.includes("inactive")) {
               setError("Account is inactive. Please contact administrator.");
-            } else
-            // Handle different error types with specific admin-focused messages
-            if (err.response?.status === 401) {
-              setError("Invalid credentials");
-            } else if (err.response?.status === 429) {
-              setError(
-                "Too many login attempts. Please wait a few minutes and try again."
-              );
-            } else if (err.response?.status === 403) {
-              setError("Invalid credentials");
-            } else if (err.response?.status >= 500) {
-              setError(
-                "Server error. Please try again later or contact support."
-              );
-            } else if (err.message?.toLowerCase().includes("credentials")) {
-              setError("Invalid credentials");
-            } else if (err.message?.toLowerCase().includes("network")) {
-              setError("Network error. Please check your internet connection.");
-            } else if (err.message) {
-              setError(err.message);
+              return;
+            }
+            if (err.response?.status === 401 || err.response?.status === 403) {
+              setError("Invalid hospital credentials");
             } else {
-              setError(
-                "Failed to sign in. Please try again or contact support."
-              );
+              setError(err.message || "Failed to sign in. Please try again.");
             }
           },
         }
       );
     } catch (err) {
-      logger.error("❌ Unexpected error:", getErrorMessage(err));
+      logger.error("❌ Unexpected hospital login error:", getErrorMessage(err));
+      setError("An unexpected error occurred. Please try again.");
     }
   };
 
-  // Show loading state while authenticating
   if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -130,10 +93,12 @@ export default function AdminSignIn() {
         <div className="w-full max-w-md space-y-8">
           <div className="space-y-2">
             <div className="flex items-center gap-2 mb-4">
-              <Shield className="h-8 w-8 text-primary" />
-              <h1 className="text-3xl font-bold text-primary">Admin Portal</h1>
+              <Building2 className="h-8 w-8 text-primary" />
+              <h1 className="text-3xl font-bold text-primary">Hospital Portal</h1>
             </div>
-            <p className="text-muted-foreground">Sign in to admin dashboard</p>
+            <p className="text-muted-foreground">
+              Sign in with hospital email and password set by super admin
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -148,14 +113,14 @@ export default function AdminSignIn() {
                 htmlFor="identifier"
                 className="text-sm font-medium text-foreground"
               >
-                Phone Number or Email
+                Email
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="identifier"
-                  type="text"
-                  placeholder="Enter Phone (+94712345678) or Email"
+                  type="email"
+                  placeholder="hospital@example.com"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="pl-10 h-12 rounded-lg border-input"
@@ -177,7 +142,7 @@ export default function AdminSignIn() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Enter Your Password"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 h-12 rounded-lg border-input"
@@ -196,13 +161,13 @@ export default function AdminSignIn() {
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              Hospital users should use Hospital Login.
+              Super admin users should use Admin Login.
             </p>
             <Link
-              href="/hospital/sign-in"
+              href="/admin/sign-in"
               className="flex items-center justify-center w-full h-10 text-sm font-medium text-muted-foreground hover:text-primary border border-border rounded-lg hover:border-primary transition-colors"
             >
-              Hospital Login
+              Admin Login
             </Link>
           </form>
         </div>
@@ -226,20 +191,19 @@ export default function AdminSignIn() {
         </div>
 
         <div className="relative z-10 text-center px-12">
-          <Shield className="h-24 w-24 text-white mx-auto mb-6" />
+          <Building2 className="h-24 w-24 text-white mx-auto mb-6" />
           <h2 className="text-4xl font-bold text-white mb-2">
             ArmiGo Platform
-            <span className="block mt-2">Admin Control Center</span>
+            <span className="block mt-2">Hospital Access Portal</span>
           </h2>
           <p className="text-white/90 text-lg mb-8">
-            Manage and Monitor the Entire Platform
+            Manage hospital operations and rehabilitation workflows
           </p>
 
           <div className="mt-8 flex justify-center">
             <div className="w-full max-w-2xl h-auto rounded-lg shadow-2xl bg-white/10 p-8">
               <p className="text-white text-lg">
-                Secure access to administrative functions and platform
-                management
+                Secure access for hospital administrators and therapy staff coordination
               </p>
             </div>
           </div>

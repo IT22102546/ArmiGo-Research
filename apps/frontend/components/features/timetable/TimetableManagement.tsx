@@ -1,38 +1,22 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar,
   dateFnsLocalizer,
-  Views,
   Event as RBCEvent,
+  Views,
 } from "react-big-calendar";
-import {
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  addDays,
-  startOfDay,
-  endOfDay,
-  setHours,
-  setMinutes,
-} from "date-fns";
-import styles from "./timetable-management.module.css";
-import { getDisplayName } from "@/lib/utils/display";
 import { enUS } from "date-fns/locale";
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  useDraggable,
-  useDroppable,
-  DragStartEvent,
-} from "@dnd-kit/core";
+import { format, getDay, parse, setHours, setMinutes, startOfWeek } from "date-fns";
+import { ApiClient } from "@/lib/api/api-client";
+import { useAuthStore } from "@/stores/auth-store";
+import styles from "./timetable-management.module.css";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -43,39 +27,153 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Calendar as CalendarIcon,
-  Grid3x3,
-  List,
-  Plus,
-  Edit,
-  Trash2,
-  Copy,
-  Loader2,
-  Download,
-  Upload,
-  Filter,
-  GripVertical,
-  Clock,
-} from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiClient } from "@/lib/api/api-client";
-import { toast } from "sonner";
 import {
-  handleApiError,
-  handleApiSuccess,
-  asApiError,
-} from "@/lib/error-handling";
-import { createLogger } from "@/lib/utils/logger";
-const logger = createLogger("TimetableManagement");
-import { cn } from "@/lib/utils";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Eye,
+  CalendarClock,
+  Building2,
+  Users,
+  Activity,
+} from "lucide-react";
 
-// Setup the localizer for react-big-calendar
+type Hospital = {
+  id: string;
+  name: string;
+};
+
+type Child = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  hospitalId?: string | null;
+};
+
+type Physiotherapist = {
+  id: string;
+  name: string;
+  hospitalId?: string | null;
+  isActive?: boolean;
+};
+
+type SessionRecord = {
+  id: string;
+  childId: string;
+  physiotherapistId?: string | null;
+  hospitalId?: string | null;
+  admissionDate: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  status: string;
+  notes?: string | null;
+  clinic?: string | null;
+  room?: string | null;
+  child?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
+  physiotherapist?: {
+    id: string;
+    name: string;
+  } | null;
+  hospital?: {
+    id: string;
+    name: string;
+  } | null;
+};
+
+type CalendarEvent = RBCEvent & {
+  id: string;
+  session: SessionRecord;
+};
+
+type SessionForm = {
+  hospitalId: string;
+  childId: string;
+  physiotherapistId: string;
+  admissionDate: string;
+  startTime: string;
+  endTime: string;
+  clinic: string;
+  room: string;
+  meetingLink: string;
+  notes: string;
+};
+
+const initialForm: SessionForm = {
+  hospitalId: "",
+  childId: "",
+  physiotherapistId: "",
+  admissionDate: new Date().toISOString().split("T")[0],
+  startTime: "",
+  endTime: "",
+  clinic: "",
+  room: "",
+  meetingLink: "",
+  notes: "",
+};
+
+const getStatusBadgeVariant = (status: string) => {
+  if (status === "ONGOING") return "default" as const;
+  if (status === "SCHEDULED") return "secondary" as const;
+  if (status === "ATTENDED_COMPLETE") return "default" as const;
+  if (status === "ABSENT_INCOMPLETE") return "destructive" as const;
+  return "outline" as const;
+};
+
+const formatStatus = (status: string) =>
+  status
+    .split("_")
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+
+const parseMeetingLinkFromNotes = (notes?: string | null) => {
+  if (!notes) return "";
+  const lines = notes.split("\n");
+  const line = lines.find((item) => item.startsWith("Meeting Link:"));
+  if (!line) return "";
+  return line.replace("Meeting Link:", "").trim();
+};
+
+const stripMeetingLinkFromNotes = (notes?: string | null) => {
+  if (!notes) return "";
+  return notes
+    .split("\n")
+    .filter((item) => !item.startsWith("Meeting Link:"))
+    .join("\n")
+    .trim();
+};
+
+const composeNotes = (meetingLink: string, notes: string) => {
+  const trimmedLink = meetingLink.trim();
+  const trimmedNotes = notes.trim();
+
+  if (trimmedLink && trimmedNotes) {
+    return `Meeting Link: ${trimmedLink}\n${trimmedNotes}`;
+  }
+  if (trimmedLink) {
+    return `Meeting Link: ${trimmedLink}`;
+  }
+  return trimmedNotes || undefined;
+};
+
 const locales = {
   "en-US": enUS,
 };
@@ -88,794 +186,885 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-interface TimetableEntry {
-  id: string;
-  grade: string;
-  academicYear: number;
-  term: number;
-  subject: string;
-  medium?: string;
-  teacherId: string;
-  teacher: {
-    firstName: string;
-    lastName: string;
-  };
-  classLink: string;
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  validFrom: string;
-  validUntil: string;
-  recurring: boolean;
-  recurrencePattern?: string;
-  roomNumber?: string;
-  color?: string;
-  notes?: string;
-  active: boolean;
-}
+const mergeDateAndTime = (admissionDate: string, timeValue?: string | null) => {
+  const base = new Date(admissionDate);
+  const [hourText, minuteText] = (timeValue || "00:00").split(":");
+  const hours = Number(hourText || 0);
+  const minutes = Number(minuteText || 0);
+  return setMinutes(setHours(base, hours), minutes);
+};
 
-interface Teacher {
-  id: string;
-  firstName: string;
-  lastName: string;
-}
+const timeToMinutes = (timeValue: string) => {
+  const [hourText, minuteText] = (timeValue || "").split(":");
+  const hours = Number(hourText || 0);
+  const minutes = Number(minuteText || 0);
+  return hours * 60 + minutes;
+};
 
-interface CalendarEvent extends RBCEvent {
-  id: string;
-  entry: TimetableEntry;
-  resourceId?: string;
-}
+const SessionCalendarEvent = ({ event }: { event: CalendarEvent }) => {
+  const childName = event.session.child
+    ? `${event.session.child.firstName} ${event.session.child.lastName}`
+    : "Child";
+  const physioName = event.session.physiotherapist?.name || "Physiotherapist";
+  const timeRange = `${format(event.start, "hh:mm a")} - ${format(event.end, "hh:mm a")}`;
+  const meetingLink = parseMeetingLinkFromNotes(event.session.notes);
 
-const DAYS_OF_WEEK = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
-const TIME_SLOTS = Array.from({ length: 16 }, (_, i) => {
-  const hour = i + 6;
-  return `${hour.toString().padStart(2, "0")}:00`;
-});
-
-const GRADES = ["6", "7", "8", "9", "10", "11", "12", "13"];
-const TERMS = [1, 2, 3];
-const SUBJECT_COLORS = [
-  "#3b82f6",
-  "#ef4444",
-  "#10b981",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ec4899",
-  "#06b6d4",
-  "#84cc16",
-  "#f97316",
-  "#6366f1",
-];
-
-type ViewMode = "calendar" | "gantt" | "list";
-
-const TimetableManagement: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  const [selectedGrade, setSelectedGrade] = useState<string>("10");
-  const [selectedYear, setSelectedYear] = useState<number>(
-    new Date().getFullYear()
+  return (
+    <div
+      className={styles.calendarEventCard}
+      title={`${childName} | ${physioName} | ${timeRange}${meetingLink ? ` | ${meetingLink}` : ""}`}
+    >
+      <div className={styles.calendarEventTime}>{timeRange}</div>
+      <div className={styles.calendarEventTitle}>{childName} • {physioName}</div>
+    </div>
   );
-  const [selectedTerm, setSelectedTerm] = useState<number>(1);
-  const [viewMode, setViewMode] = useState<ViewMode>("calendar");
-  const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<TimetableEntry | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+};
 
-  const [formData, setFormData] = useState({
-    grade: "10",
-    academicYear: new Date().getFullYear(),
-    term: 1,
-    subject: "",
-    medium: "English",
-    teacherId: "",
-    classLink: "",
-    dayOfWeek: 1,
-    startTime: "08:00",
-    endTime: "09:00",
-    validFrom: new Date().toISOString().split("T")[0],
-    validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0],
-    recurring: true,
-    recurrencePattern: "WEEKLY",
-    roomNumber: "",
-    color: SUBJECT_COLORS[0],
-    notes: "",
+export default function TimetableManagement() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const roles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : [user?.role].filter(Boolean);
+  const isHospitalScopedUser =
+    roles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [calendarInitialized, setCalendarInitialized] = useState(false);
+  const [calendarView, setCalendarView] = useState<
+    "week" | "day" | "agenda"
+  >(Views.WEEK);
+  const [selectedHospitalId, setSelectedHospitalId] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [selected, setSelected] = useState<SessionRecord | null>(null);
+  const [viewingSession, setViewingSession] = useState<SessionRecord | null>(null);
+  const [formData, setFormData] = useState<SessionForm>(initialForm);
+
+  const hospitalContextId = selectedHospitalId;
+
+  const { data: hospitals = [] } = useQuery({
+    queryKey: ["online-session-schedule", "hospitals"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients/locations/hospitals");
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
+  });
+
+  const { data: children = [] } = useQuery({
+    queryKey: ["online-session-schedule", "children", hospitalContextId],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients", {
+        params: {
+          limit: 1000,
+          hospitalId: hospitalContextId || undefined,
+        },
+      });
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
+  });
+
+  const { data: physiotherapists = [] } = useQuery({
+    queryKey: ["online-session-schedule", "physiotherapists", hospitalContextId],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients/locations/physiotherapists", {
+        params: {
+          hospitalId: hospitalContextId || undefined,
+        },
+      });
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
+  });
+
+  const { data: sessions = [], isLoading } = useQuery({
+    queryKey: [
+      "online-session-schedule",
+      "records",
+      search,
+      statusFilter,
+      hospitalContextId,
+    ],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients/management/admissions", {
+        params: {
+          hospitalId: hospitalContextId || undefined,
+          search: search || undefined,
+          status: statusFilter === "ALL" ? undefined : statusFilter,
+          admissionType: "ONLINE",
+        },
+      });
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
   });
 
   useEffect(() => {
-    fetchTimetable();
-    fetchTeachers();
-  }, [selectedGrade, selectedYear, selectedTerm]);
+    if (hospitals.length === 0) return;
 
-  const fetchTimetable = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams({
-        grade: selectedGrade,
-        academicYear: selectedYear.toString(),
-        term: selectedTerm.toString(),
-      });
-      const response = await ApiClient.get<TimetableEntry[]>(
-        `/timetable?${params.toString()}`
-      );
-      setTimetable(response);
-    } catch (error) {
-      console.error("Error fetching timetable:", error);
-      toast.error("Failed to load timetable");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTeachers = async () => {
-    try {
-      const response = await ApiClient.get<{ data: Teacher[] }>(
-        "/users?role=INTERNAL_TEACHER,EXTERNAL_TEACHER"
-      );
-      setTeachers(response.data || []);
-    } catch (error) {
-      console.error("Error fetching teachers:", error);
-    }
-  };
-
-  // Convert timetable entries to calendar events
-  const calendarEvents = useMemo<CalendarEvent[]>(() => {
-    return timetable.flatMap((entry) => {
-      const events: CalendarEvent[] = [];
-      const startDate = startOfWeek(selectedDate);
-
-      for (let i = 0; i < 7; i++) {
-        const date = addDays(startDate, i);
-        if (getDay(date) === entry.dayOfWeek) {
-          const [startHour, startMin] = entry.startTime.split(":").map(Number);
-          const [endHour, endMin] = entry.endTime.split(":").map(Number);
-
-          events.push({
-            id: entry.id,
-            title: `${getDisplayName(entry.subject)} - ${entry.teacher?.firstName || ""} ${entry.teacher?.lastName || "Unknown"}`,
-            start: setMinutes(setHours(date, startHour), startMin),
-            end: setMinutes(setHours(date, endHour), endMin),
-            entry,
-            resourceId: entry.roomNumber,
-          });
-        }
-      }
-
-      return events;
-    });
-  }, [timetable, selectedDate]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      if (editingEntry) {
-        await ApiClient.put(`/timetable/${editingEntry.id}`, formData);
-        handleApiSuccess("Timetable updated successfully");
-      } else {
-        await ApiClient.post("/timetable", formData);
-        handleApiSuccess("Timetable created successfully");
-      }
-      setIsFormOpen(false);
-      resetForm();
-      fetchTimetable();
-    } catch (error) {
-      logger.error("Error saving timetable:", error);
-      handleApiError(
-        error,
-        "TimetableManagement.handleSubmit",
-        "Failed to save timetable"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this timetable entry?"))
-      return;
-    try {
-      await ApiClient.delete(`/timetable/${id}`);
-      handleApiSuccess("Timetable deleted successfully");
-      fetchTimetable();
-    } catch (error) {
-      logger.error("Error deleting timetable:", error);
-      handleApiError(
-        error,
-        "TimetableManagement.handleDelete",
-        "Failed to delete timetable"
-      );
-    }
-  };
-
-  const handleEdit = (entry: TimetableEntry) => {
-    setEditingEntry(entry);
-    setFormData({
-      grade: entry.grade,
-      academicYear: entry.academicYear,
-      term: entry.term,
-      subject: entry.subject,
-      medium: entry.medium || "English",
-      teacherId: entry.teacherId,
-      classLink: entry.classLink,
-      dayOfWeek: entry.dayOfWeek,
-      startTime: entry.startTime,
-      endTime: entry.endTime,
-      validFrom: entry.validFrom.split("T")[0],
-      validUntil: entry.validUntil.split("T")[0],
-      recurring: entry.recurring,
-      recurrencePattern: entry.recurrencePattern || "WEEKLY",
-      roomNumber: entry.roomNumber || "",
-      color: entry.color || SUBJECT_COLORS[0],
-      notes: entry.notes || "",
-    });
-    setIsFormOpen(true);
-  };
-
-  const handleSelectSlot = useCallback(
-    ({ start, end }: { start: Date; end: Date }) => {
-      const dayOfWeek = getDay(start);
-      const startTime = format(start, "HH:mm");
-      const endTime = format(end, "HH:mm");
-
+    if (isHospitalScopedUser) {
+      const scopedHospital = hospitals[0]?.id || "";
+      setSelectedHospitalId(scopedHospital);
       setFormData((prev) => ({
         ...prev,
-        dayOfWeek,
-        startTime,
-        endTime,
+        hospitalId: scopedHospital || prev.hospitalId,
       }));
-      setIsFormOpen(true);
-    },
-    []
+      return;
+    }
+
+    if (!selectedHospitalId) {
+      setSelectedHospitalId("");
+    }
+  }, [hospitals, isHospitalScopedUser]);
+
+  const activePhysiotherapists = useMemo(
+    () =>
+      physiotherapists.filter(
+        (physio: Physiotherapist) => physio.isActive !== false
+      ),
+    [physiotherapists]
   );
 
-  const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    handleEdit(event.entry);
-  }, []);
+  const filteredChildren = useMemo(() => {
+    if (!formData.hospitalId) return children;
+    return children.filter((child: Child) => child.hospitalId === formData.hospitalId);
+  }, [children, formData.hospitalId]);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
+  const filteredPhysiotherapists = useMemo(() => {
+    if (!formData.hospitalId) return activePhysiotherapists;
+    return activePhysiotherapists.filter(
+      (physio: Physiotherapist) => physio.hospitalId === formData.hospitalId
+    );
+  }, [activePhysiotherapists, formData.hospitalId]);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
+  const stats = useMemo(() => {
+    return {
+      total: sessions.length,
+      scheduled: sessions.filter((item: SessionRecord) => item.status === "SCHEDULED")
+        .length,
+      ongoing: sessions.filter((item: SessionRecord) => item.status === "ONGOING").length,
+      physiotherapists: new Set(
+        sessions
+          .map((item: SessionRecord) => item.physiotherapistId)
+          .filter(Boolean)
+      ).size,
+    };
+  }, [sessions]);
 
-    if (!over) return;
+  useEffect(() => {
+    if (calendarInitialized || sessions.length === 0) return;
 
-    const entryId = active.id as string;
-    const entry = timetable.find((e) => e.id === entryId);
-    if (!entry) return;
+    const sortedByDate = [...sessions].sort(
+      (a: SessionRecord, b: SessionRecord) =>
+        new Date(a.admissionDate).getTime() - new Date(b.admissionDate).getTime()
+    );
 
-    // Handle drop logic here - update time/day based on where it was dropped
-    toast.info("Drag-and-drop update coming soon!");
-  };
+    const nextSession =
+      sortedByDate.find(
+        (item: SessionRecord) => new Date(item.admissionDate).getTime() >= new Date().setHours(0, 0, 0, 0)
+      ) || sortedByDate[0];
 
-  const resetForm = () => {
-    setEditingEntry(null);
-    setFormData({
-      grade: selectedGrade,
-      academicYear: selectedYear,
-      term: selectedTerm,
-      subject: "",
-      medium: "English",
-      teacherId: "",
-      classLink: "",
-      dayOfWeek: 1,
-      startTime: "08:00",
-      endTime: "09:00",
-      validFrom: new Date().toISOString().split("T")[0],
-      validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0],
-      recurring: true,
-      recurrencePattern: "WEEKLY",
-      roomNumber: "",
-      color: SUBJECT_COLORS[0],
-      notes: "",
-    });
-  };
+    if (nextSession?.admissionDate) {
+      setCalendarDate(new Date(nextSession.admissionDate));
+    }
+
+    setCalendarInitialized(true);
+  }, [sessions, calendarInitialized]);
+
+  const calendarEvents = useMemo<CalendarEvent[]>(() => {
+    return sessions
+      .filter((session: SessionRecord) => session.admissionDate && session.startTime && session.endTime)
+      .map((session: SessionRecord) => {
+        const childName = session.child
+          ? `${session.child.firstName} ${session.child.lastName}`
+          : "Child";
+        const physioName = session.physiotherapist?.name || "Physiotherapist";
+
+        return {
+          id: session.id,
+          title: `${childName} • ${physioName}`,
+          start: mergeDateAndTime(session.admissionDate, session.startTime),
+          end: mergeDateAndTime(session.admissionDate, session.endTime),
+          session,
+          allDay: false,
+        };
+      });
+  }, [sessions]);
 
   const eventStyleGetter = (event: CalendarEvent) => {
-    const style = {
-      backgroundColor: event.entry.color || "#3b82f6",
-      borderRadius: "5px",
-      opacity: 0.9,
-      color: "white",
-      border: "0px",
-      display: "block",
+    const status = event.session.status;
+    const backgroundColor =
+      status === "ONGOING"
+        ? "hsl(var(--primary))"
+        : status === "ATTENDED_COMPLETE"
+          ? "hsl(var(--secondary))"
+          : status === "ABSENT_INCOMPLETE"
+            ? "hsl(var(--destructive))"
+            : "hsl(var(--foreground))";
+
+    return {
+      style: {
+        backgroundColor,
+        borderRadius: "8px",
+        border: "1px solid hsl(var(--border))",
+        color: "hsl(var(--primary-foreground))",
+        fontSize: "12px",
+        padding: "6px 8px",
+        boxShadow: "0 1px 6px rgba(0,0,0,0.20)",
+        overflow: "hidden",
+      },
     };
-    return { style };
+  };
+
+  const createMutation = useMutation({
+    mutationFn: (payload: any) => ApiClient.post("/patients/management/admissions", payload),
+    onSuccess: () => {
+      toast.success("Online session scheduled successfully");
+      queryClient.invalidateQueries({ queryKey: ["online-session-schedule"] });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to schedule session");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) =>
+      ApiClient.put(`/patients/management/admissions/${id}`, payload),
+    onSuccess: () => {
+      toast.success("Online session updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["online-session-schedule"] });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update session");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => ApiClient.delete(`/patients/management/admissions/${id}`),
+    onSuccess: () => {
+      toast.success("Session deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["online-session-schedule"] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to delete session");
+    },
+  });
+
+  const handleOpenCreate = () => {
+    setSelected(null);
+    setFormData({
+      ...initialForm,
+      hospitalId: selectedHospitalId || "",
+    });
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (record: SessionRecord) => {
+    setSelected(record);
+    setFormData({
+      hospitalId: record.hospitalId || selectedHospitalId || "",
+      childId: record.childId || "",
+      physiotherapistId: record.physiotherapistId || "",
+      admissionDate: record.admissionDate
+        ? new Date(record.admissionDate).toISOString().split("T")[0]
+        : initialForm.admissionDate,
+      startTime: record.startTime || "",
+      endTime: record.endTime || "",
+      clinic: record.clinic || "",
+      room: record.room || "",
+      meetingLink: parseMeetingLinkFromNotes(record.notes),
+      notes: stripMeetingLinkFromNotes(record.notes),
+    });
+    setDialogOpen(true);
+  };
+
+  const handleOpenView = (record: SessionRecord) => {
+    setViewingSession(record);
+    setViewDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setSelected(null);
+    setFormData(initialForm);
+  };
+
+  const handleCloseView = () => {
+    setViewDialogOpen(false);
+    setViewingSession(null);
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (
+      !formData.hospitalId ||
+      !formData.childId ||
+      !formData.physiotherapistId ||
+      !formData.admissionDate ||
+      !formData.startTime ||
+      !formData.endTime
+    ) {
+      toast.error(
+        "Hospital, child, physiotherapist, date, start time and end time are required"
+      );
+      return;
+    }
+
+    const latestAllowedMinutes = 21 * 60;
+    const startMinutes = timeToMinutes(formData.startTime);
+    const endMinutes = timeToMinutes(formData.endTime);
+
+    if (startMinutes >= latestAllowedMinutes) {
+      toast.error("Start time must be before 09:00 PM");
+      return;
+    }
+
+    if (endMinutes > latestAllowedMinutes) {
+      toast.error("End time cannot be after 09:00 PM");
+      return;
+    }
+
+    const payload = {
+      childId: formData.childId,
+      physiotherapistId: formData.physiotherapistId,
+      hospitalId: formData.hospitalId,
+      admissionDate: formData.admissionDate,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      clinic: formData.clinic || "Online Session",
+      room: formData.room || undefined,
+      notes: composeNotes(formData.meetingLink, formData.notes),
+      admissionType: "ONLINE",
+      status: "SCHEDULED",
+    };
+
+    if (selected) {
+      updateMutation.mutate({ id: selected.id, payload });
+      return;
+    }
+
+    createMutation.mutate(payload);
   };
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-2xl">Timetable Management</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage class schedules with interactive calendar and Gantt chart
-                views
-              </p>
-            </div>
-            <Button onClick={() => setIsFormOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Entry
-            </Button>
-          </div>
-        </CardHeader>
-      </Card>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">Sessions & Scheduling</p>
+          <h1 className="text-2xl font-semibold">Online Physiotherapy Schedule</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Schedule online therapy sessions by hospital, physiotherapist, and child.
+          </p>
+        </div>
+        <Button onClick={handleOpenCreate}>
+          <Plus className="h-4 w-4 mr-2" /> Add Online Session
+        </Button>
+      </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div>
-              <Label>Grade</Label>
-              <Select value={selectedGrade} onValueChange={setSelectedGrade}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {GRADES.map((g) => (
-                    <SelectItem key={g} value={g}>
-                      Grade {g}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Academic Year</Label>
-              <Input
-                type="number"
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-              />
-            </div>
-            <div>
-              <Label>Term</Label>
-              <Select
-                value={selectedTerm.toString()}
-                onValueChange={(v) => setSelectedTerm(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TERMS.map((t) => (
-                    <SelectItem key={t} value={t.toString()}>
-                      Term {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-2">
-              <Label>View Mode</Label>
-              <div className="flex gap-2">
-                <Button
-                  variant={viewMode === "calendar" ? "default" : "outline"}
-                  onClick={() => setViewMode("calendar")}
-                  className="flex-1"
-                >
-                  <CalendarIcon className="h-4 w-4 mr-2" />
-                  Calendar
-                </Button>
-                <Button
-                  variant={viewMode === "gantt" ? "default" : "outline"}
-                  onClick={() => setViewMode("gantt")}
-                  className="flex-1"
-                >
-                  <Grid3x3 className="h-4 w-4 mr-2" />
-                  Gantt
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "outline"}
-                  onClick={() => setViewMode("list")}
-                  className="flex-1"
-                >
-                  <List className="h-4 w-4 mr-2" />
-                  List
-                </Button>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="text-2xl font-semibold">{stats.total}</p>
               </div>
+              <CalendarClock className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Scheduled</p>
+                <p className="text-2xl font-semibold">{stats.scheduled}</p>
+              </div>
+              <Activity className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Ongoing</p>
+                <p className="text-2xl font-semibold">{stats.ongoing}</p>
+              </div>
+              <CalendarClock className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Physiotherapists</p>
+                <p className="text-2xl font-semibold">{stats.physiotherapists}</p>
+              </div>
+              <Users className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Session Calendar</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <Select
+              value={selectedHospitalId || "ALL"}
+              onValueChange={(value) => setSelectedHospitalId(value === "ALL" ? "" : value)}
+              disabled={isHospitalScopedUser}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select hospital" />
+              </SelectTrigger>
+              <SelectContent>
+                {!isHospitalScopedUser ? <SelectItem value="ALL">All hospitals</SelectItem> : null}
+                {hospitals.map((hospital: Hospital) => (
+                  <SelectItem key={hospital.id} value={hospital.id}>
+                    {hospital.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search child, physiotherapist..."
+            />
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+                <SelectItem value="ONGOING">Ongoing</SelectItem>
+                <SelectItem value="FINISHED">Finished</SelectItem>
+                <SelectItem value="ATTENDED_COMPLETE">Attended + Complete</SelectItem>
+                <SelectItem value="ABSENT_INCOMPLETE">Absent + Incomplete</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="text-sm text-muted-foreground flex items-center md:justify-end">
+              {isHospitalScopedUser ? (
+                <span className="inline-flex items-center gap-1">
+                  <Building2 className="h-4 w-4" />
+                  Hospital scoped view
+                </span>
+              ) : (
+                <span>Super Admin View</span>
+              )}
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Main Content */}
-      <Card>
-        <CardContent className="pt-6">
-          {loading ? (
-            <div className="flex justify-center items-center h-96">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <div className="rounded-md border p-3 bg-background">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-3">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-secondary" /> Scheduled
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-primary" /> Ongoing
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-secondary" /> Attended
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-destructive" /> Absent
+              </span>
             </div>
-          ) : viewMode === "calendar" ? (
-            <div className="h-[700px]">
+            <div className={styles.calendarContainer}>
               <Calendar
                 localizer={localizer}
                 events={calendarEvents}
-                startAccessor="start"
-                endAccessor="end"
-                className="h-full"
-                onSelectSlot={handleSelectSlot}
-                onSelectEvent={handleSelectEvent}
-                selectable
-                eventPropGetter={eventStyleGetter}
+                date={calendarDate}
+                onNavigate={(date) => {
+                  setCalendarDate(date);
+                  setCalendarInitialized(true);
+                }}
+                view={calendarView}
+                onView={(nextView) =>
+                  setCalendarView(nextView as "week" | "day" | "agenda")
+                }
                 views={[Views.WEEK, Views.DAY, Views.AGENDA]}
                 defaultView={Views.WEEK}
+                startAccessor="start"
+                endAccessor="end"
+                components={{
+                  event: SessionCalendarEvent,
+                }}
+                eventPropGetter={eventStyleGetter}
+                onSelectEvent={(event) => handleOpenView((event as CalendarEvent).session)}
+                min={new Date(2025, 1, 1, 6, 0)}
+                max={new Date(2025, 1, 1, 21, 0)}
                 step={30}
-                showMultiDayTimes
-                min={new Date(2024, 0, 1, 6, 0)}
-                max={new Date(2024, 0, 1, 20, 0)}
+                timeslots={2}
               />
             </div>
-          ) : viewMode === "gantt" ? (
-            <GanttView
-              entries={timetable}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          ) : (
-            <ListView
-              entries={timetable}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Form Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingEntry ? "Edit Timetable Entry" : "Add Timetable Entry"}
-            </DialogTitle>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Session List</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Hospital</TableHead>
+                  <TableHead>Child</TableHead>
+                  <TableHead>Physiotherapist</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead>End</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      Loading sessions...
+                    </TableCell>
+                  </TableRow>
+                ) : sessions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      No sessions found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sessions.map((record: SessionRecord) => (
+                    <TableRow key={record.id}>
+                      <TableCell>{record.hospital?.name || "-"}</TableCell>
+                      <TableCell className="font-medium">
+                        {record.child
+                          ? `${record.child.firstName} ${record.child.lastName}`
+                          : "-"}
+                      </TableCell>
+                      <TableCell>{record.physiotherapist?.name || "-"}</TableCell>
+                      <TableCell>{new Date(record.admissionDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{record.startTime || "-"}</TableCell>
+                      <TableCell>{record.endTime || "-"}</TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(record.status)}>
+                          {formatStatus(record.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenView(record)}
+                            title="View"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(record)}
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteMutation.mutate(record.id)}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-3xl h-[90dvh] max-h-[90dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>{selected ? "Update Online Session" : "Add Online Session"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Subject *</Label>
-                <Input
-                  value={formData.subject}
-                  onChange={(e) =>
-                    setFormData({ ...formData, subject: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div>
-                <Label>Teacher *</Label>
-                <Select
-                  value={formData.teacherId}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, teacherId: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select teacher" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teachers
-                      .filter((t) => t.id)
-                      .map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.firstName} {t.lastName}
+
+          <form
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-6 pb-6 pt-4"
+            onSubmit={handleSubmit}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {!isHospitalScopedUser ? (
+                <div className="space-y-2">
+                  <Label>Hospital</Label>
+                  <Select
+                    value={formData.hospitalId}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        hospitalId: value,
+                        childId: "",
+                        physiotherapistId: "",
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select hospital" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hospitals.map((hospital: Hospital) => (
+                        <SelectItem key={hospital.id} value={hospital.id}>
+                          {hospital.name}
                         </SelectItem>
                       ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Day of Week *</Label>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Child</Label>
                 <Select
-                  value={formData.dayOfWeek.toString()}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, dayOfWeek: Number(v) })
+                  value={formData.childId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, childId: value }))
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select child" />
                   </SelectTrigger>
                   <SelectContent>
-                    {DAYS_OF_WEEK.map((day, idx) => (
-                      <SelectItem key={idx} value={idx.toString()}>
-                        {day}
+                    {filteredChildren.map((child: Child) => (
+                      <SelectItem key={child.id} value={child.id}>
+                        {child.firstName} {child.lastName}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Room Number</Label>
+
+              <div className="space-y-2">
+                <Label>Physiotherapist</Label>
+                <Select
+                  value={formData.physiotherapistId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, physiotherapistId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select physiotherapist" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredPhysiotherapists.map((physio: Physiotherapist) => (
+                      <SelectItem key={physio.id} value={physio.id}>
+                        {physio.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Date</Label>
                 <Input
-                  value={formData.roomNumber}
+                  type="date"
+                  value={formData.admissionDate}
                   onChange={(e) =>
-                    setFormData({ ...formData, roomNumber: e.target.value })
+                    setFormData((prev) => ({ ...prev, admissionDate: e.target.value }))
                   }
                 />
               </div>
-              <div>
-                <Label>Start Time *</Label>
-                <Select
-                  value={formData.startTime}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, startTime: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_SLOTS.map((time) => (
-                      <SelectItem key={time} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>End Time *</Label>
-                <Select
-                  value={formData.endTime}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, endTime: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_SLOTS.map((time) => (
-                      <SelectItem key={time} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Class Link</Label>
+
+              <div className="space-y-2">
+                <Label>Start Time</Label>
                 <Input
-                  value={formData.classLink}
+                  type="time"
+                  value={formData.startTime}
+                  max="20:59"
                   onChange={(e) =>
-                    setFormData({ ...formData, classLink: e.target.value })
+                    setFormData((prev) => ({ ...prev, startTime: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>End Time</Label>
+                <Input
+                  type="time"
+                  value={formData.endTime}
+                  max="21:00"
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, endTime: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Online Meeting Link</Label>
+                <Input
+                  value={formData.meetingLink}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, meetingLink: e.target.value }))
                   }
                   placeholder="https://meet.google.com/..."
                 />
               </div>
-              <div>
-                <Label>Color</Label>
-                <div className="flex gap-2">
-                  {SUBJECT_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      title={`Select color ${color}`}
-                      aria-label={`Select color ${color}`}
-                      className={cn(
-                        styles.colorButton,
-                        formData.color === color
-                          ? "border-black"
-                          : "border-gray-300"
-                      )}
-                      // Dynamic color value requires inline style
-                      style={{ backgroundColor: color }}
-                      onClick={() => setFormData({ ...formData, color })}
-                    />
-                  ))}
-                </div>
+
+              <div className="space-y-2">
+                <Label>Clinic / Session Type</Label>
+                <Input
+                  value={formData.clinic}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, clinic: e.target.value }))
+                  }
+                  placeholder="Online Neuro Rehab"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Room / Virtual Room</Label>
+                <Input
+                  value={formData.room}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, room: e.target.value }))
+                  }
+                  placeholder="Virtual Room A"
+                />
               </div>
             </div>
-            <div>
+
+            <div className="space-y-2">
               <Label>Notes</Label>
               <Textarea
                 value={formData.notes}
                 onChange={(e) =>
-                  setFormData({ ...formData, notes: e.target.value })
+                  setFormData((prev) => ({ ...prev, notes: e.target.value }))
                 }
-                rows={3}
+                placeholder="Additional therapy instructions"
+                rows={4}
               />
             </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsFormOpen(false)}
-              >
+
+            <DialogFooter className="pt-3 border-t bg-background">
+              <Button type="button" variant="outline" onClick={handleCloseDialog}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading}>
-                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {editingEntry ? "Update" : "Create"}
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                {selected ? "Update Session" : "Create Session"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-};
 
-// Gantt View Component
-const GanttView: React.FC<{
-  entries: TimetableEntry[];
-  onEdit: (entry: TimetableEntry) => void;
-  onDelete: (id: string) => void;
-}> = ({ entries, onEdit, onDelete }) => {
-  const entriesByDay = useMemo(() => {
-    const grouped: Record<number, TimetableEntry[]> = {};
-    entries.forEach((entry) => {
-      if (!grouped[entry.dayOfWeek]) {
-        grouped[entry.dayOfWeek] = [];
-      }
-      grouped[entry.dayOfWeek].push(entry);
-    });
-    Object.values(grouped).forEach((dayEntries) => {
-      dayEntries.sort((a, b) => a.startTime.localeCompare(b.startTime));
-    });
-    return grouped;
-  }, [entries]);
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-2xl h-[85dvh] max-h-[85dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>Online Session Details</DialogTitle>
+          </DialogHeader>
 
-  const timeToMinutes = (time: string) => {
-    const [hours, minutes] = time.split(":").map(Number);
-    return hours * 60 + minutes;
-  };
-
-  const calculatePosition = (startTime: string, endTime: string) => {
-    const dayStart = 6 * 60; // 6 AM
-    const dayEnd = 20 * 60; // 8 PM
-    const totalMinutes = dayEnd - dayStart;
-
-    const start = timeToMinutes(startTime) - dayStart;
-    const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
-
-    const left = (start / totalMinutes) * 100;
-    const width = (duration / totalMinutes) * 100;
-
-    return { left: `${left}%`, width: `${width}%` };
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground pb-2 border-b">
-        <Clock className="h-4 w-4" />
-        <span>Timeline: 6:00 AM - 8:00 PM</span>
-      </div>
-      {DAYS_OF_WEEK.map((day, idx) => (
-        <div key={idx} className="space-y-2">
-          <div className="font-semibold text-sm">{day}</div>
-          <div className="relative h-16 bg-muted rounded-lg border">
-            {/* Time markers */}
-            <div className="absolute inset-0 flex">
-              {Array.from({ length: 15 }, (_, i) => (
-                <div
-                  key={i}
-                  className="flex-1 border-r border-gray-200 text-xs text-gray-400 p-1"
-                >
-                  {i === 0 && "6AM"}
-                  {i === 7 && "1PM"}
-                  {i === 14 && "8PM"}
+          {viewingSession ? (
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 pb-6 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label>Hospital</Label>
+                  <p className="text-sm">{viewingSession.hospital?.name || "-"}</p>
                 </div>
-              ))}
-            </div>
-            {/* Entries */}
-            {entriesByDay[idx]?.map((entry) => {
-              const pos = calculatePosition(entry.startTime, entry.endTime);
-              return (
-                <div
-                  key={entry.id}
-                  className="absolute top-2 bottom-2 rounded px-2 py-1 text-white text-xs flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity"
-                  // Dynamic positioning and color require inline styles
-                  style={{
-                    left: pos.left,
-                    width: pos.width,
-                    backgroundColor: entry.color || "#3b82f6",
-                  }}
-                  onClick={() => onEdit(entry)}
-                >
-                  <span className="truncate">
-                    {getDisplayName(entry.subject)}
-                  </span>
-                  <span className="text-[10px] ml-1">{entry.startTime}</span>
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <div>
+                    <Badge variant={getStatusBadgeVariant(viewingSession.status)}>
+                      {formatStatus(viewingSession.status)}
+                    </Badge>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+                <div className="space-y-1">
+                  <Label>Child</Label>
+                  <p className="text-sm">
+                    {viewingSession.child
+                      ? `${viewingSession.child.firstName} ${viewingSession.child.lastName}`
+                      : "-"}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Physiotherapist</Label>
+                  <p className="text-sm">{viewingSession.physiotherapist?.name || "-"}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Date</Label>
+                  <p className="text-sm">
+                    {new Date(viewingSession.admissionDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Time</Label>
+                  <p className="text-sm">
+                    {viewingSession.startTime || "-"} - {viewingSession.endTime || "-"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Meeting Link</Label>
+                {parseMeetingLinkFromNotes(viewingSession.notes) ? (
+                  <a
+                    href={parseMeetingLinkFromNotes(viewingSession.notes)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-primary underline break-all"
+                  >
+                    {parseMeetingLinkFromNotes(viewingSession.notes)}
+                  </a>
+                ) : (
+                  <p className="text-sm">-</p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <Label>Notes</Label>
+                <p className="text-sm whitespace-pre-wrap">
+                  {stripMeetingLinkFromNotes(viewingSession.notes) || "-"}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter className="px-6 py-3 border-t bg-background">
+            <Button type="button" variant="outline" onClick={handleCloseView}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
-
-// List View Component
-const ListView: React.FC<{
-  entries: TimetableEntry[];
-  onEdit: (entry: TimetableEntry) => void;
-  onDelete: (id: string) => void;
-}> = ({ entries, onEdit, onDelete }) => {
-  const sortedEntries = useMemo(() => {
-    return [...entries].sort((a, b) => {
-      if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
-      return a.startTime.localeCompare(b.startTime);
-    });
-  }, [entries]);
-
-  return (
-    <div className="space-y-2">
-      {sortedEntries.map((entry) => (
-        <div
-          key={entry.id}
-          className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted transition-colors"
-        >
-          {/* Dynamic color value requires inline style */}
-          <div
-            className="w-1 h-16 rounded"
-            style={{ backgroundColor: entry.color || "#3b82f6" }}
-          />
-          <div className="flex-1 grid grid-cols-5 gap-4">
-            <div>
-              <div className="text-sm font-semibold">
-                {getDisplayName(entry.subject)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {entry.teacher?.firstName || ""}{" "}
-                {entry.teacher?.lastName || "Unknown"}
-              </div>
-            </div>
-            <div className="text-sm">
-              <div className="font-medium">{DAYS_OF_WEEK[entry.dayOfWeek]}</div>
-              <div className="text-xs text-muted-foreground">
-                {entry.startTime} - {entry.endTime}
-              </div>
-            </div>
-            <div className="text-sm">
-              <Badge variant="outline">{entry.roomNumber || "No Room"}</Badge>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              Grade {getDisplayName(entry.grade)} | Term {entry.term}
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => onEdit(entry)}>
-                <Edit className="h-3 w-3" />
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onDelete(entry.id)}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      ))}
-      {sortedEntries.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          No timetable entries found
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default TimetableManagement;
+}

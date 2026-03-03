@@ -5,7 +5,7 @@ import { StorageService } from "../../infrastructure/storage/storage.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { EmailService } from "../notifications/services/email.service";
 import { CreateUserDto, UpdateUserDto } from "./dto/user.dto";
-import { User, UserRole, UserStatus } from "@prisma/client";
+import { Prisma, User, UserRole, UserStatus } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import * as crypto from "crypto";
 import { AppException, ErrorCode } from "@common/errors";
@@ -14,6 +14,11 @@ import * as Papa from "papaparse";
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+
+  private isBcryptHash(value?: string): boolean {
+    if (!value) return false;
+    return /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(value);
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -851,6 +856,122 @@ async findByPhoneOrEmail(identifier: string): Promise<User | null> {
   return this.findByPhone(identifier);
 }
 
+  async ensureHospitalAdminAccountByEmail(email: string): Promise<User | null> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const hospital = await this.prisma.hospital.findFirst({
+      where: {
+        adminEmail: normalizedEmail,
+      },
+      include: {
+        adminProfile: {
+          select: {
+            userId: true,
+          },
+        },
+      },
+    });
+
+    if (!hospital) {
+      return null;
+    }
+
+    if (!hospital.adminPassword) {
+      this.logger.warn(
+        `Hospital ${hospital.id} has no admin password hash; cannot recover hospital admin account`
+      );
+      return null;
+    }
+
+    const normalizedPasswordHash = this.isBcryptHash(hospital.adminPassword)
+      ? hospital.adminPassword
+      : await bcrypt.hash(hospital.adminPassword, 12);
+
+    if (!this.isBcryptHash(hospital.adminPassword)) {
+      await this.prisma.hospital.update({
+        where: { id: hospital.id },
+        data: { adminPassword: normalizedPasswordHash },
+      });
+    }
+
+    if (hospital.adminProfile?.userId) {
+      const linkedUser = await this.prisma.user.findUnique({
+        where: { id: hospital.adminProfile.userId },
+        include: {
+          parentProfile: true,
+          hospitalProfile: {
+            include: {
+              hospital: true,
+            },
+          },
+        },
+      });
+
+      if (linkedUser) {
+        return linkedUser;
+      }
+
+      await this.prisma.hospitalProfile.deleteMany({
+        where: { hospitalId: hospital.id },
+      });
+    }
+
+    let phoneToUse = hospital.phone;
+    const phoneTaken = await this.prisma.user.findFirst({
+      where: { phone: phoneToUse },
+      select: { id: true },
+    });
+
+    if (phoneTaken) {
+      phoneToUse = `HOSP-RECOVER-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    }
+
+    const createdUser = await this.prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        phone: phoneToUse,
+        password: normalizedPasswordHash,
+        firstName: hospital.name,
+        lastName: "Admin",
+        role: UserRole.HOSPITAL_ADMIN,
+        status: UserStatus.ACTIVE,
+        address: hospital.address,
+        city: hospital.city,
+        emailVerified: true,
+      },
+      include: {
+        parentProfile: true,
+        hospitalProfile: {
+          include: {
+            hospital: true,
+          },
+        },
+      },
+    });
+
+    await this.prisma.hospitalProfile.create({
+      data: {
+        userId: createdUser.id,
+        hospitalId: hospital.id,
+        department: "Administration",
+        designation: "Hospital Admin",
+        qualifications: [],
+      },
+    });
+
+    return this.prisma.user.findUnique({
+      where: { id: createdUser.id },
+      include: {
+        parentProfile: true,
+        hospitalProfile: {
+          include: {
+            hospital: true,
+          },
+        },
+      },
+    });
+  }
+
   async updateLastLogin(id: string): Promise<void> {
     await this.prisma.user.update({
       where: { id },
@@ -1036,34 +1157,115 @@ async findByPhoneOrEmail(identifier: string): Promise<User | null> {
       });
     }
 
-    // Check for related records
-    const [childCount, hospitalCount] = await Promise.all([
-      this.prisma.child.count({ where: { parentId: id } }),
-      this.prisma.hospital.count({ where: { createdById: id } }),
-    ]);
+    const childIds = (
+      await this.prisma.child.findMany({
+        where: { parentId: id },
+        select: { id: true },
+      })
+    ).map((child) => child.id);
 
-    const relatedRecords = [];
-
-    if (childCount > 0) {
-      relatedRecords.push(`${childCount} child(ren)`);
-    }
-    if (hospitalCount > 0) {
-      relatedRecords.push(`${hospitalCount} hospital(s)`);
-    }
-
-    // If there are related records, throw an error
-    if (relatedRecords.length > 0) {
-      throw new AppException(
-        ErrorCode.BUSINESS_RULE_VIOLATION,
-        `Cannot delete user because they have ${relatedRecords.join(", ")}. ` +
-          `Please consider setting the user status to INACTIVE instead.`,
-        { userId: id, relatedRecords }
-      );
-    }
+    const hospitalCount = await this.prisma.hospital.count({
+      where: { createdById: id },
+    });
 
     try {
-      await this.prisma.user.delete({
-        where: { id },
+      await this.prisma.$transaction(async (tx) => {
+        if (hospitalCount > 0) {
+          await tx.hospital.updateMany({
+            where: { createdById: id },
+            data: { createdById: requesterId },
+          });
+        }
+
+        if (childIds.length > 0) {
+          await tx.movementLog.deleteMany({
+            where: {
+              session: {
+                childId: { in: childIds },
+              },
+            },
+          });
+
+          await tx.deviceAssignment.deleteMany({
+            where: { childId: { in: childIds } },
+          });
+
+          await tx.appointment.deleteMany({
+            where: { childId: { in: childIds } },
+          });
+
+          await tx.therapySession.deleteMany({
+            where: { childId: { in: childIds } },
+          });
+
+          await tx.progressRecord.deleteMany({
+            where: { childId: { in: childIds } },
+          });
+
+          await tx.therapyProgram.deleteMany({
+            where: { childId: { in: childIds } },
+          });
+
+          await tx.child.deleteMany({
+            where: { id: { in: childIds } },
+          });
+        }
+
+        const createdSessionIds = (
+          await tx.therapySession.findMany({
+            where: { createdById: id },
+            select: { id: true },
+          })
+        ).map((session) => session.id);
+
+        if (createdSessionIds.length > 0) {
+          await tx.movementLog.deleteMany({
+            where: { sessionId: { in: createdSessionIds } },
+          });
+
+          await tx.therapySession.deleteMany({
+            where: { id: { in: createdSessionIds } },
+          });
+        }
+
+        await tx.progressRecord.deleteMany({
+          where: { recordedById: id },
+        });
+
+        await tx.deviceAssignment.deleteMany({
+          where: { assignedBy: id },
+        });
+
+        await tx.appointment.deleteMany({
+          where: {
+            OR: [{ parentId: id }, { createdById: id }],
+          },
+        });
+
+        await tx.auditLog.deleteMany({
+          where: { userId: id },
+        });
+
+        await tx.credentialLog.deleteMany({
+          where: { generatedById: id },
+        });
+
+        await tx.$executeRaw(
+          Prisma.sql`DELETE FROM "users" WHERE "id" = ${id}`
+        );
+
+        const stillExists = await tx.user.findUnique({
+          where: { id },
+          select: { id: true },
+        });
+
+        if (stillExists) {
+          throw new AppException(
+            ErrorCode.CONSTRAINT_VIOLATION,
+            "Cannot permanently delete user due to existing related records.",
+            { userId: id }
+          );
+        }
       });
 
       this.logger.log(`User deleted: ${id}`);

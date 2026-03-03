@@ -18,14 +18,7 @@ export const publicationsApi = {
     if (params?.page) queryParams.append("page", params.page.toString());
     if (params?.limit) queryParams.append("limit", params.limit.toString());
     if (params?.search) queryParams.append("search", params.search);
-    if (params?.grade) queryParams.append("grade", params.grade);
-    if (params?.subject) queryParams.append("subject", params.subject);
-    if (params?.medium) queryParams.append("medium", params.medium);
     if (params?.status) queryParams.append("status", params.status);
-    if (params?.minPrice)
-      queryParams.append("minPrice", params.minPrice.toString());
-    if (params?.maxPrice)
-      queryParams.append("maxPrice", params.maxPrice.toString());
     if (params?.sortBy) queryParams.append("sortBy", params.sortBy);
 
     const queryString = queryParams.toString();
@@ -106,17 +99,13 @@ export const publicationsApi = {
     ApiClient.delete<{ message: string }>(`/publications/${id}`),
 
   // Upload file
-  uploadFile: (formData: FormData) =>
-    ApiClient.uploadFile<{
-      url: string;
-      key: string;
-      bucket: string;
-      filename: string;
-      size: number;
-      mimetype: string;
-    }>("/publications/upload", formData, {
+  uploadFile: async (formData: FormData) => {
+    const response = await ApiClient.uploadFile<any>("/publications/upload", formData, {
       method: "POST",
-    }),
+    });
+
+    return response?.data ? response.data : response;
+  },
 
   // Purchase publication
   purchase: (id: string) =>

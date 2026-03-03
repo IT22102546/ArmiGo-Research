@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,6 +58,68 @@ export default function ZonesPage() {
       return resp.data || resp.districts || resp || [];
     },
   });
+
+  const { data: hospitals } = useQuery({
+    queryKey: ["hospitals"],
+    queryFn: async () => {
+      const pageSize = 200;
+      let page = 1;
+      let totalPages = 1;
+      const allHospitals: any[] = [];
+
+      while (page <= totalPages) {
+        const response = await ApiClient.get<any>("/hospitals", {
+          params: {
+            page,
+            limit: pageSize,
+          },
+        });
+
+        const resp = response?.data ?? response ?? {};
+        const pageData = resp.data || resp.hospitals || [];
+        if (Array.isArray(pageData)) {
+          allHospitals.push(...pageData);
+        }
+
+        const pagesFromApi = Number(resp?.pagination?.pages || 1);
+        totalPages = Number.isFinite(pagesFromApi) && pagesFromApi > 0 ? pagesFromApi : 1;
+        page += 1;
+      }
+
+      return allHospitals;
+    },
+  });
+
+  const hospitalCountByZone = (zonesList: any[] = [], hospitalsList: any[] = []) => {
+    const map = new Map<string, number>();
+
+    zonesList.forEach((zone) => {
+      if (zone?.id) {
+        map.set(zone.id, 0);
+      }
+    });
+
+    const uniqueHospitalIds = new Set<string>();
+
+    hospitalsList.forEach((hospital: any) => {
+      if (!hospital?.id || uniqueHospitalIds.has(hospital.id)) {
+        return;
+      }
+      uniqueHospitalIds.add(hospital.id);
+
+      const resolvedZoneId = hospital?.zoneId || hospital?.zone?.id;
+      if (resolvedZoneId && map.has(resolvedZoneId)) {
+        map.set(resolvedZoneId, (map.get(resolvedZoneId) || 0) + 1);
+      }
+    });
+
+    return map;
+  };
+
+  const zoneHospitalCounts = useMemo(
+    () => hospitalCountByZone(sortedZones, hospitals || []),
+    [sortedZones, hospitals]
+  );
 
   const createMutation = useMutation({
     mutationFn: (data: any) => ApiClient.post("/geography/zones", data),
@@ -156,7 +218,7 @@ export default function ZonesPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Zone Management</h1>
-          <p className="text-muted-foreground">Manage educational zones</p>
+          <p className="text-muted-foreground">Manage hospital zones</p>
         </div>
         <Button onClick={() => handleOpenDialog()}>
           <Plus className="mr-2 h-4 w-4" />
@@ -188,7 +250,8 @@ export default function ZonesPage() {
                 {
                   key: "hospitals",
                   label: "Hospitals",
-                  render: (z: any) => z._count?.hospitals || 0,
+                  render: (z: any) =>
+                    zoneHospitalCounts.get(z.id) ?? z._count?.hospitals ?? z._count?.institutions ?? 0,
                 },
                 {
                   key: "actions",
@@ -242,7 +305,7 @@ export default function ZonesPage() {
             <DialogDescription>
               {selectedZone
                 ? "Update zone information"
-                : "Add a new educational zone to the system"}
+                : "Add a new hospital zone to the system"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -312,7 +375,7 @@ export default function ZonesPage() {
             <DialogTitle>Delete Zone</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete "{selectedZone?.name}"? This will
-              also affect all institutions under this zone.
+              also affect all hospitals under this zone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

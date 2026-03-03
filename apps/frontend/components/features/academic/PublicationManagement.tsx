@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import {
   Search,
-  ChevronDown,
   Plus,
   Edit2,
   Trash2,
@@ -10,7 +9,6 @@ import {
   Upload,
   FileText,
   Loader2,
-  Users,
   Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,16 +27,11 @@ import { createLogger } from "@/lib/utils/logger";
 import {
   handleApiError,
   handleApiSuccess,
-  asApiError,
 } from "@/lib/error-handling";
 const logger = createLogger("PublicationManagement");
 import { publicationsApi } from "@/lib/api/endpoints/publications";
-import { useAuthStore } from "@/stores/auth-store";
 import { CreatePublicationData, Publication } from "@/lib/api/types";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { GradeSelect } from "@/components/shared/selects/GradeSelect";
-import { SubjectSelect } from "@/components/shared/selects/SubjectSelect";
-import { MediumSelect } from "@/components/shared/selects/MediumSelect";
 
 // Badge component with proper typing
 interface BadgeProps {
@@ -60,19 +53,14 @@ const Badge: React.FC<BadgeProps> = ({ variant, className, children }) => {
 function PublicationManagement() {
   // const { toast } = useToast();
   const { subscribe } = useWebSocket();
-  const { user } = useAuthStore();
 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
-  const [showPurchasersModal, setShowPurchasersModal] =
-    useState<boolean>(false);
   const [selectedPublication, setSelectedPublication] =
     useState<Publication | null>(null);
-  const [purchasers, setPurchasers] = useState<any[]>([]);
-  const [loadingPurchasers, setLoadingPurchasers] = useState<boolean>(false);
   const [formError, setFormError] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -81,14 +69,8 @@ function PublicationManagement() {
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [shortDescription, setShortDescription] = useState<string>("");
-  const [price, setPrice] = useState<string>("");
-  const [discountPrice, setDiscountPrice] = useState<string>("");
-  const [gradeId, setGradeId] = useState<string>("");
-  const [subjectId, setSubjectId] = useState<string>("");
-  const [mediumId, setMediumId] = useState<string>("");
   const [author, setAuthor] = useState<string>("");
   const [publisher, setPublisher] = useState<string>("");
-  const [fileUrl, setFileUrl] = useState<string>("");
   const [coverImage, setCoverImage] = useState<string>("");
   const [status, setStatus] = useState<"DRAFT" | "PUBLISHED" | "ARCHIVED">(
     "DRAFT"
@@ -174,14 +156,8 @@ function PublicationManagement() {
     setTitle("");
     setDescription("");
     setShortDescription("");
-    setPrice("");
-    setDiscountPrice("");
-    setGradeId("");
-    setSubjectId("");
-    setMediumId("");
     setAuthor("");
     setPublisher("");
-    setFileUrl("");
     setCoverImage("");
     setStatus("DRAFT");
     setFile(null);
@@ -207,7 +183,17 @@ function PublicationManagement() {
 
       // Use the publications API upload method
       const response = await publicationsApi.uploadFile(formData);
-      return response.url;
+      const url =
+        (response as any)?.url ||
+        (response as any)?.data?.url ||
+        (response as any)?.fileUrl ||
+        "";
+
+      if (!url || typeof url !== "string") {
+        throw new Error("Upload succeeded but file URL was not returned");
+      }
+
+      return url;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to upload ${type}: ${message}`);
@@ -218,23 +204,10 @@ function PublicationManagement() {
     setFormError("");
 
     // Validation - Check if file is selected
-    if (!title.trim() || !description.trim() || !price || !file) {
+    if (!title.trim() || !description.trim() || !file) {
       setFormError(
-        "Please fill all required fields (Title, Description, Price, and File)"
+        "Please fill all required fields (Title, Description, and File)"
       );
-      return;
-    }
-
-    if (isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
-      setFormError("Price must be a valid positive number");
-      return;
-    }
-
-    if (
-      discountPrice &&
-      (isNaN(parseFloat(discountPrice)) || parseFloat(discountPrice) <= 0)
-    ) {
-      setFormError("Discount price must be a valid positive number");
       return;
     }
 
@@ -250,6 +223,11 @@ function PublicationManagement() {
         console.log("Uploaded file URL:", uploadedFileUrl); // Debug log
       }
 
+      if (!uploadedFileUrl) {
+        setFormError("Publication file upload failed. Please try again.");
+        return;
+      }
+
       if (coverFile) {
         uploadedCoverImage = await handleFileUpload(coverFile, "cover");
         console.log("Uploaded cover URL:", uploadedCoverImage); // Debug log
@@ -260,13 +238,9 @@ function PublicationManagement() {
         title: title.trim(),
         description: description.trim(),
         shortDescription: shortDescription.trim() || undefined,
-        price: parseFloat(price),
-        discountPrice: discountPrice ? parseFloat(discountPrice) : undefined,
+        price: 0,
         fileUrl: uploadedFileUrl, // THIS IS REQUIRED - make sure it's not empty
         coverImage: uploadedCoverImage || undefined,
-        gradeId: gradeId || undefined,
-        subjectId: subjectId || undefined,
-        mediumId: mediumId || undefined,
         author: author.trim() || undefined,
         publisher: publisher.trim() || undefined,
         status: status,
@@ -299,7 +273,7 @@ function PublicationManagement() {
 
     setFormError("");
 
-    if (!title.trim() || !description.trim() || !price) {
+    if (!title.trim() || !description.trim()) {
       setFormError("Please fill all required fields");
       return;
     }
@@ -318,12 +292,9 @@ function PublicationManagement() {
         title: title.trim(),
         description: description.trim(),
         shortDescription: shortDescription.trim() || undefined,
-        price: parseFloat(price),
-        discountPrice: discountPrice ? parseFloat(discountPrice) : undefined,
+        price: 0,
+        discountPrice: undefined,
         coverImage: uploadedCoverImage || undefined,
-        gradeId: gradeId || undefined,
-        subjectId: subjectId || undefined,
-        mediumId: mediumId || undefined,
         author: author.trim() || undefined,
         publisher: publisher.trim() || undefined,
         status: status,
@@ -374,43 +345,13 @@ function PublicationManagement() {
     }
   };
 
-  const handleViewPurchasers = async (
-    publication: Publication
-  ): Promise<void> => {
-    setSelectedPublication(publication);
-    setShowPurchasersModal(true);
-    setLoadingPurchasers(true);
-    try {
-      const response = await publicationsApi.getPublicationPurchasers(
-        publication.id
-      );
-      setPurchasers(response.purchasers || []);
-    } catch (error) {
-      logger.error("Failed to load purchasers:", error);
-      handleApiError(
-        error,
-        "PublicationManagement.handleViewPurchasers",
-        "Failed to load purchasers"
-      );
-      setPurchasers([]);
-    } finally {
-      setLoadingPurchasers(false);
-    }
-  };
-
   const openEditModal = (publication: Publication): void => {
     setSelectedPublication(publication);
     setTitle(publication.title);
     setDescription(publication.description);
     setShortDescription(publication.shortDescription || "");
-    setPrice(publication.price.toString());
-    setDiscountPrice(publication.discountPrice?.toString() || "");
-    setGradeId((publication as any).gradeId || "");
-    setSubjectId((publication as any).subjectId || "");
-    setMediumId((publication as any).mediumId || "");
     setAuthor(publication.author || "");
     setPublisher(publication.publisher || "");
-    setFileUrl(publication.fileUrl);
     setCoverImage(publication.coverImage || "");
     setStatus(publication.status);
     setFormError("");
@@ -434,6 +375,17 @@ function PublicationManagement() {
     const file = e.target.files?.[0];
     if (file) {
       if (type === "publication") {
+        const allowedPublicationTypes = [
+          "application/pdf",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ];
+
+        if (!allowedPublicationTypes.includes(file.type)) {
+          setFormError("Only PDF, DOC, and DOCX files are allowed for publication");
+          return;
+        }
+
         setFile(file);
       } else {
         setCoverFile(file);
@@ -475,46 +427,75 @@ function PublicationManagement() {
     }
   };
 
-  const formatPrice = (price: number, discountPrice?: number) => {
-    if (discountPrice) {
-      return (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium line-through text-muted-foreground">
-            LKR {price.toFixed(2)}
-          </span>
-          <span className="text-sm font-bold text-foreground">
-            LKR {discountPrice.toFixed(2)}
-          </span>
-        </div>
-      );
-    }
-    return <span className="text-sm font-medium">LKR {price.toFixed(2)}</span>;
-  };
+  const publishedCount = publications.filter(
+    (publication) => publication.status === "PUBLISHED"
+  ).length;
+  const draftCount = publications.filter(
+    (publication) => publication.status === "DRAFT"
+  ).length;
+  const archivedCount = publications.filter(
+    (publication) => publication.status === "ARCHIVED"
+  ).length;
 
   return (
-    <div className="min-h-screen bg-background p-8">
+    <div className="min-h-screen bg-background p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
           <button className="hover:text-foreground">Content</button>
           <span>/</span>
           <span className="text-foreground">Publications</span>
         </div>
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Publications
-          </h1>
-          <p className="text-muted-foreground">
-            Manage your publications and digital content
-          </p>
+        <div className="mb-6 rounded-xl border border-border bg-card p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">
+                Publications
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Manage and publish professional documents for your ArmiGo users.
+              </p>
+            </div>
+            <Button
+              onClick={openAddModal}
+              className="bg-primary hover:bg-primary/90"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4 mr-2" />
+              )}
+              Add Publication
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-2xl font-semibold text-foreground">{publications.length}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">Published</p>
+            <p className="text-2xl font-semibold text-foreground">{publishedCount}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">Drafts</p>
+            <p className="text-2xl font-semibold text-foreground">{draftCount}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">Archived</p>
+            <p className="text-2xl font-semibold text-foreground">{archivedCount}</p>
+          </div>
         </div>
 
         {/* Filters and Actions */}
-        <div className="flex items-center justify-between mb-6 gap-4">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="relative flex-1 max-w-sm">
+        <div className="rounded-lg border border-border bg-card p-4 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
                 placeholder="Search publications..."
@@ -528,32 +509,28 @@ function PublicationManagement() {
                 className="pl-10"
               />
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                setStatusFilter(e.target.value);
-              }}
-              className="px-4 py-2 border border-border rounded-md bg-background text-sm"
-              aria-label="Filter publications by status"
-            >
-              <option value="all">All Status</option>
-              <option value="PUBLISHED">Published</option>
-              <option value="DRAFT">Draft</option>
-              <option value="ARCHIVED">Archived</option>
-            </select>
+            <div className="flex items-center gap-3">
+              <select
+                value={statusFilter}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                  setStatusFilter(e.target.value);
+                }}
+                className="h-10 px-4 border border-border rounded-md bg-background text-sm min-w-[160px]"
+                aria-label="Filter publications by status"
+              >
+                <option value="all">All Status</option>
+                <option value="PUBLISHED">Published</option>
+                <option value="DRAFT">Draft</option>
+                <option value="ARCHIVED">Archived</option>
+              </select>
+              <Button variant="outline" onClick={loadPublications} disabled={isLoading}>
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : null}
+                Refresh
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={openAddModal}
-            className="bg-primary hover:bg-primary/90"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Plus className="w-4 h-4 mr-2" />
-            )}
-            Add Publication
-          </Button>
         </div>
 
         {/* Table */}
@@ -566,98 +543,122 @@ function PublicationManagement() {
               </span>
             </div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left p-4 font-semibold text-sm">Title</th>
-                  <th className="text-left p-4 font-semibold text-sm">
-                    Author
-                  </th>
-                  <th className="text-left p-4 font-semibold text-sm">Price</th>
-                  <th className="text-left p-4 font-semibold text-sm">
-                    Downloads
-                  </th>
-                  <th className="text-left p-4 font-semibold text-sm">
-                    Status
-                  </th>
-                  <th className="text-left p-4 font-semibold text-sm">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {publications.map((publication) => (
-                  <tr
-                    key={publication.id}
-                    className="border-b border-border hover:bg-muted/20 transition-colors"
-                  >
-                    <td className="p-4">
-                      <div>
-                        <p className="text-sm font-medium">
-                          {publication.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {publication.shortDescription || "No description"}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="p-4 text-sm">
-                      {publication.author || "Unknown"}
-                    </td>
-                    <td className="p-4">
-                      {formatPrice(
-                        publication.price,
-                        publication.discountPrice
-                      )}
-                    </td>
-                    <td className="p-4 text-sm">{publication.downloads}</td>
-                    <td className="p-4">
-                      {getStatusBadge(publication.status)}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleViewPurchasers(publication)}
-                          className="p-2 hover:bg-primary/10 rounded transition-colors"
-                          disabled={isLoading}
-                          aria-label={`View purchasers of ${publication.title}`}
-                          title="View Purchasers"
-                        >
-                          <Users className="w-4 h-4 text-primary" />
-                        </button>
-                        <button
-                          onClick={() => openEditModal(publication)}
-                          className="p-2 hover:bg-warning/10 rounded transition-colors"
-                          disabled={isLoading}
-                          aria-label={`Edit ${publication.title}`}
-                        >
-                          <Edit2 className="w-4 h-4 text-warning" />
-                        </button>
-                        <button
-                          onClick={() => openDeleteModal(publication)}
-                          className="p-2 hover:bg-destructive/10 rounded transition-colors"
-                          disabled={isLoading}
-                          aria-label={`Delete ${publication.title}`}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px]">
+                <thead>
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="text-left p-4 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                      Publication
+                    </th>
+                    <th className="text-left p-4 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                      Author
+                    </th>
+                    <th className="text-left p-4 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                      Access
+                    </th>
+                    <th className="text-left p-4 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                      Downloads
+                    </th>
+                    <th className="text-left p-4 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </th>
+                    <th className="text-right p-4 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-                {publications.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="p-8 text-center text-muted-foreground"
+                </thead>
+                <tbody>
+                  {publications.map((publication) => (
+                    <tr
+                      key={publication.id}
+                      className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors"
                     >
-                      No publications found. Create your first publication to
-                      get started.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      <td className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 rounded-md bg-muted p-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground leading-5">
+                              {publication.title}
+                            </p>
+                            <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                              {publication.shortDescription || "No description"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 text-sm text-foreground">
+                        {publication.author || "Not specified"}
+                      </td>
+                      <td className="p-4 text-sm font-medium">Free</td>
+                      <td className="p-4 text-sm text-foreground">
+                        {publication.downloads}
+                      </td>
+                      <td className="p-4">
+                        {getStatusBadge(publication.status)}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(publication.fileUrl, "_blank")}
+                            disabled={isLoading || !publication.fileUrl}
+                            aria-label={`View ${publication.title}`}
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditModal(publication)}
+                            disabled={isLoading}
+                            aria-label={`Edit ${publication.title}`}
+                          >
+                            <Edit2 className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openDeleteModal(publication)}
+                            disabled={isLoading}
+                            aria-label={`Delete ${publication.title}`}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {publications.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="p-12 text-center text-muted-foreground"
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <FileText className="w-8 h-8 text-muted-foreground" />
+                          <p className="text-sm font-medium text-foreground">
+                            No publications yet
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Create your first publication to get started.
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -665,7 +666,7 @@ function PublicationManagement() {
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Add New Publication</DialogTitle>
+              <DialogTitle className="text-xl">Add New Publication</DialogTitle>
               <button
                 onClick={() => setShowAddModal(false)}
                 className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100"
@@ -676,6 +677,8 @@ function PublicationManagement() {
               </button>
             </DialogHeader>
             <div className="space-y-6 py-4">
+              <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
+                <h3 className="text-sm font-semibold text-foreground">Publication Details</h3>
               <div className="space-y-2">
                 <Label htmlFor="title">Title *</Label>
                 <Input
@@ -718,65 +721,6 @@ function PublicationManagement() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price (LKR) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    placeholder="0.00"
-                    value={price}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setPrice(e.target.value)
-                    }
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="discountPrice">Discount Price (LKR)</Label>
-                  <Input
-                    id="discountPrice"
-                    type="number"
-                    placeholder="0.00"
-                    value={discountPrice}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setDiscountPrice(e.target.value)
-                    }
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="grade">Grade</Label>
-                  <GradeSelect
-                    value={gradeId}
-                    onValueChange={setGradeId}
-                    placeholder="Select grade"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="subject">Subject</Label>
-                  <SubjectSelect
-                    value={subjectId}
-                    onValueChange={setSubjectId}
-                    placeholder="Select subject"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="medium">Medium</Label>
-                  <MediumSelect
-                    value={mediumId}
-                    onValueChange={setMediumId}
-                    placeholder="Select medium"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="author">Author</Label>
                   <Input
                     id="author"
@@ -788,23 +732,23 @@ function PublicationManagement() {
                     disabled={isSubmitting}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="publisher">Publisher</Label>
+                  <Input
+                    id="publisher"
+                    placeholder="Publisher name"
+                    value={publisher}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setPublisher(e.target.value)
+                    }
+                    disabled={isSubmitting}
+                  />
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="publisher">Publisher</Label>
-                <Input
-                  id="publisher"
-                  placeholder="Publisher name"
-                  value={publisher}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setPublisher(e.target.value)
-                  }
-                  disabled={isSubmitting}
-                />
               </div>
 
               {/* File Upload Section */}
-              <div className="space-y-4 border border-border rounded-lg p-4">
+              <div className="space-y-4 border border-border rounded-lg p-4 bg-muted/20">
                 <Label className="text-base font-medium">
                   Publication File *
                 </Label>
@@ -816,11 +760,11 @@ function PublicationManagement() {
                       : "Choose a publication file or drag & drop it here"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    PDF, EPUB formats, up to 50MB
+                    PDF, DOC, DOCX formats, up to 50MB
                   </p>
                   <Input
                     type="file"
-                    accept=".pdf,.epub"
+                    accept=".pdf,.doc,.docx"
                     onChange={(e) => handleFileChange(e, "publication")}
                     className="mt-3"
                     disabled={isSubmitting}
@@ -829,7 +773,7 @@ function PublicationManagement() {
               </div>
 
               {/* Cover Image Upload Section */}
-              <div className="space-y-4 border border-border rounded-lg p-4">
+              <div className="space-y-4 border border-border rounded-lg p-4 bg-muted/20">
                 <Label className="text-base font-medium">Cover Image</Label>
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
                   <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
@@ -906,7 +850,7 @@ function PublicationManagement() {
         <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
           <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Update Publication</DialogTitle>
+              <DialogTitle className="text-xl">Update Publication</DialogTitle>
               <button
                 onClick={() => setShowEditModal(false)}
                 className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100"
@@ -917,6 +861,8 @@ function PublicationManagement() {
               </button>
             </DialogHeader>
             <div className="space-y-6 py-4">
+              <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
+                <h3 className="text-sm font-semibold text-foreground">Publication Details</h3>
               <div className="space-y-2">
                 <Label htmlFor="edit-title">Title *</Label>
                 <Input
@@ -956,65 +902,6 @@ function PublicationManagement() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-price">Price (LKR) *</Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    value={price}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setPrice(e.target.value)
-                    }
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-discountPrice">
-                    Discount Price (LKR)
-                  </Label>
-                  <Input
-                    id="edit-discountPrice"
-                    type="number"
-                    value={discountPrice}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setDiscountPrice(e.target.value)
-                    }
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-grade">Grade</Label>
-                  <GradeSelect
-                    value={gradeId}
-                    onValueChange={setGradeId}
-                    placeholder="Select grade"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-subject">Subject</Label>
-                  <SubjectSelect
-                    value={subjectId}
-                    onValueChange={setSubjectId}
-                    placeholder="Select subject"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-medium">Medium</Label>
-                  <MediumSelect
-                    value={mediumId}
-                    onValueChange={setMediumId}
-                    placeholder="Select medium"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="edit-author">Author</Label>
                   <Input
                     id="edit-author"
@@ -1026,23 +913,23 @@ function PublicationManagement() {
                     disabled={isSubmitting}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-publisher">Publisher</Label>
+                  <Input
+                    id="edit-publisher"
+                    placeholder="Publisher name"
+                    value={publisher}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setPublisher(e.target.value)
+                    }
+                    disabled={isSubmitting}
+                  />
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-publisher">Publisher</Label>
-                <Input
-                  id="edit-publisher"
-                  placeholder="Publisher name"
-                  value={publisher}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setPublisher(e.target.value)
-                  }
-                  disabled={isSubmitting}
-                />
               </div>
 
               {/* Current File Display */}
-              <div className="space-y-4 border border-border rounded-lg p-4">
+              <div className="space-y-4 border border-border rounded-lg p-4 bg-muted/20">
                 <Label className="text-base font-medium">
                   Current Publication File
                 </Label>
@@ -1074,7 +961,7 @@ function PublicationManagement() {
               </div>
 
               {/* Cover Image Upload Section */}
-              <div className="space-y-4 border border-border rounded-lg p-4">
+              <div className="space-y-4 border border-border rounded-lg p-4 bg-muted/20">
                 <Label className="text-base font-medium">Cover Image</Label>
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
                   <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
@@ -1192,119 +1079,6 @@ function PublicationManagement() {
           </DialogContent>
         </Dialog>
 
-        {/* Purchasers Modal */}
-        <Dialog
-          open={showPurchasersModal}
-          onOpenChange={setShowPurchasersModal}
-        >
-          <DialogContent className="sm:max-w-3xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Purchasers of "{selectedPublication?.title}"
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              {loadingPurchasers ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-muted-foreground">
-                    Loading purchasers...
-                  </span>
-                </div>
-              ) : purchasers.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No purchases yet for this publication</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="p-3 text-left text-sm font-semibold">
-                          Name
-                        </th>
-                        <th className="p-3 text-left text-sm font-semibold">
-                          Email
-                        </th>
-                        <th className="p-3 text-left text-sm font-semibold">
-                          Phone
-                        </th>
-                        <th className="p-3 text-left text-sm font-semibold">
-                          Role
-                        </th>
-                        <th className="p-3 text-left text-sm font-semibold">
-                          Purchased At
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {purchasers.map((purchase) => (
-                        <tr
-                          key={purchase.id}
-                          className="border-b border-border hover:bg-muted/20"
-                        >
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              {purchase.user.avatar ? (
-                                <img
-                                  src={purchase.user.avatar}
-                                  alt={`${purchase.user.firstName} ${purchase.user.lastName}`}
-                                  className="w-8 h-8 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                  <span className="text-sm font-medium text-primary">
-                                    {purchase.user.firstName[0]}
-                                    {purchase.user.lastName[0]}
-                                  </span>
-                                </div>
-                              )}
-                              <span className="text-sm font-medium">
-                                {purchase.user.firstName}{" "}
-                                {purchase.user.lastName}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="p-3 text-sm">{purchase.user.email}</td>
-                          <td className="p-3 text-sm">
-                            {purchase.user.phone || "N/A"}
-                          </td>
-                          <td className="p-3 text-sm">
-                            <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs">
-                              {purchase.user.role.replace(/_/g, " ")}
-                            </span>
-                          </td>
-                          <td className="p-3 text-sm">
-                            {new Date(purchase.purchasedAt).toLocaleDateString(
-                              "en-US",
-                              {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowPurchasersModal(false)}
-              >
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );

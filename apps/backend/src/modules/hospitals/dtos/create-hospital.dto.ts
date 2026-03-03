@@ -121,6 +121,21 @@ export class UpdateHospitalDto {
   @IsOptional()
   name?: string;
 
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  registrationNo?: string;
+
+  @ApiProperty({ enum: HospitalTypeEnum, required: false })
+  @IsEnum(HospitalTypeEnum)
+  @IsOptional()
+  type?: HospitalTypeEnum;
+
+  @ApiProperty({ required: false })
+  @IsEmail()
+  @IsOptional()
+  email?: string;
+
   @ApiProperty({ required: false, description: 'Mark as the single main hospital in the system' })
   @IsBoolean()
   @IsOptional()
@@ -193,4 +208,9 @@ export class UpdateHospitalDto {
   @ApiProperty({ enum: ['ACTIVE', 'INACTIVE', 'PENDING_APPROVAL', 'SUSPENDED'], required: false })
   @IsOptional()
   status?: string;
+
+  @ApiProperty({ required: false, description: 'Optional new password for hospital admin account' })
+  @IsString()
+  @IsOptional()
+  adminPassword?: string;
 }

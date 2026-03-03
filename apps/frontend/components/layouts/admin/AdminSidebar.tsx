@@ -11,11 +11,8 @@ import {
   BookOpen,
   Calendar,
   Clock,
-  CreditCard,
   FileText,
   Bell,
-  Settings,
-  Shield,
   BarChart3,
   Video,
   Building2,
@@ -26,17 +23,14 @@ import {
   School,
   Award,
   MessageCircle,
-  AlertTriangle,
-  Receipt,
   ClipboardList,
   CalendarClock,
-  FolderOpen,
-  RefreshCw,
   Map,
   MapPin,
   Building,
   UserPlus,
   HelpCircle,
+  Lock,
 } from "lucide-react";
 
 export default function AdminSidebar({
@@ -45,6 +39,11 @@ export default function AdminSidebar({
   collapsed?: boolean;
 }) {
   const user = useAuthStore((state) => state.user);
+  const userRoles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : [user?.role].filter(Boolean) as string[];
+  const isHospitalScopedUser =
+    userRoles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
   const { mutate: logout } = useLogoutMutation();
   const t = useTranslations();
 
@@ -91,22 +90,16 @@ export default function AdminSidebar({
       },
     ],
     classes: [
-      { href: "/admin/classes", icon: Video, label: "Sessions" },
       { href: "/admin/timetable", icon: Clock, label: "Session Schedule" },
-      {
-        href: "/admin/class-rescheduling",
-        icon: RefreshCw,
-        label: "Session Rescheduling",
-      },
       {
         href: "/admin/teacher-assignments",
         icon: Calendar,
-        label: "Doctor Assignments",
+        label: "Physiotherapy Assignments",
       },
       {
         href: "/admin/teachers/availability",
         icon: CalendarClock,
-        label: "Doctor Availability",
+        label: "Physiotherapy Availability",
       },
     ],
     exams: [
@@ -132,10 +125,6 @@ export default function AdminSidebar({
         label: t("nav.liveProctoring"),
       },
     ],
-    payments: [
-      { href: "/admin/payments", icon: CreditCard, label: t("nav.payments") },
-      { href: "/admin/invoices", icon: Receipt, label: t("nav.invoices") },
-    ],
     content: [
       {
         href: "/admin/announcements",
@@ -148,33 +137,11 @@ export default function AdminSidebar({
         label: t("nav.notifications"),
       },
       {
-        href: "/admin/course-materials",
-        icon: FolderOpen,
-        label: t("nav.courseMaterials"),
-      },
-      {
         href: "/admin/publications",
         icon: BookOpen,
         label: t("nav.publications"),
       },
-    ],
-    system: [
-      { href: "/admin/settings", icon: Settings, label: t("nav.settings") },
-      {
-        href: "/admin/security/sessions",
-        icon: Shield,
-        label: t("nav.securitySessions"),
-      },
-      {
-        href: "/admin/security-audit",
-        icon: FileText,
-        label: t("nav.auditLogs"),
-      },
-      {
-        href: "/admin/system/errors",
-        icon: AlertTriangle,
-        label: t("nav.errorLogs"),
-      },
+      
     ],
   };
 
@@ -215,29 +182,20 @@ export default function AdminSidebar({
           ))}
         </NavSection>
 
-        <NavSection title={t("sidebar.paymentsFinance")}>
-          {navigationConfig.payments.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-        </NavSection>
-
         <NavSection title={t("sidebar.contentResources")}>
           {navigationConfig.content.map((item) => (
             <NavLink key={item.href} {...item} />
           ))}
         </NavSection>
 
-        <NavSection title={t("sidebar.geographyLocations")}>
-          {navigationConfig.geography.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-        </NavSection>
+        {!isHospitalScopedUser ? (
+          <NavSection title={t("sidebar.geographyLocations")}>
+            {navigationConfig.geography.map((item) => (
+              <NavLink key={item.href} {...item} />
+            ))}
+          </NavSection>
+        ) : null}
 
-        <NavSection title={t("sidebar.systemSettings")}>
-          {navigationConfig.system.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-        </NavSection>
       </div>
       <LogoutButton />
     </div>

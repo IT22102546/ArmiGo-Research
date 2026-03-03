@@ -74,6 +74,23 @@ export interface NotificationPreferences {
   notificationTypes: string[];
 }
 
+export interface NotificationTargetPatient {
+  id: string;
+  firstName: string;
+  lastName: string;
+  parentUserId: string | null;
+  parentName: string | null;
+  hospitalId: string | null;
+  hospitalName: string | null;
+}
+
+export interface NotificationTargetHospital {
+  id: string;
+  name: string;
+  adminUserId: string | null;
+  adminName: string | null;
+}
+
 export const notificationsApi = {
   // Get all notifications for current user
   getAll: (params?: { isRead?: boolean; type?: string }) => {
@@ -162,5 +179,45 @@ export const notificationsApi = {
    */
   getAdminStats: () => {
     return ApiClient.get<{ data: any }>("/notifications/admin/stats");
+  },
+
+  getTargetOptions: () => {
+    return ApiClient.get<{
+      patients: NotificationTargetPatient[];
+      hospitals: NotificationTargetHospital[];
+    }>("/notifications/admin/options");
+  },
+
+  sendToTargets: (payload: {
+    title: string;
+    message: string;
+    type?: string;
+    patientIds?: string[];
+    hospitalIds?: string[];
+    hospitalAdminUserIds?: string[];
+    audienceScope?: "DEFAULT" | "HOSPITAL_ONLY";
+  }) => {
+    return ApiClient.post<{
+      sent: number;
+      recipients: number;
+      message: string;
+    }>("/notifications/admin/send", payload);
+  },
+
+  updateAdmin: (
+    id: string,
+    payload: {
+      title?: string;
+      message?: string;
+      type?: string;
+      status?: "UNREAD" | "READ" | "ARCHIVED";
+      isRead?: boolean;
+    }
+  ) => {
+    return ApiClient.put<{ data: Notification }>(`/notifications/admin/${id}`, payload);
+  },
+
+  deleteAdmin: (id: string) => {
+    return ApiClient.delete<{ message: string }>(`/notifications/admin/${id}`);
   },
 };

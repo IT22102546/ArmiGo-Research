@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Search, Pencil, Power } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
+import { useAuthStore } from "@/stores/auth-store";
 
 type Zone = {
   id: string;
@@ -50,6 +51,7 @@ type Zone = {
 type Hospital = {
   id: string;
   name: string;
+  status?: string;
   zoneId?: string | null;
   zone?: {
     id: string;
@@ -96,11 +98,52 @@ const initialForm: FormData = {
 
 export default function TeacherManagement() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const userRoles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : ([user?.role].filter(Boolean) as string[]);
+  const isHospitalScopedUser =
+    userRoles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
+  const [scopedHospital, setScopedHospital] = useState<Hospital | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selected, setSelected] = useState<Physiotherapist | null>(null);
   const [search, setSearch] = useState("");
   const [formData, setFormData] = useState<FormData>(initialForm);
+
+  useEffect(() => {
+    if (!isHospitalScopedUser) return;
+
+    let mounted = true;
+
+    const loadHospitalScope = async () => {
+      try {
+        const response = await ApiClient.get<any>("/users/profile");
+        const payload = response?.data ?? response ?? {};
+        const hospital = payload?.hospitalProfile?.hospital;
+        if (!mounted || !hospital?.id) return;
+
+        setScopedHospital({
+          id: hospital.id,
+          name: hospital.name || "Hospital",
+        });
+        setFormData((prev) => ({
+          ...prev,
+          hospitalId: hospital.id,
+        }));
+      } catch {
+        // Keep UI usable even if profile fetch fails.
+      }
+    };
+
+    loadHospitalScope();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isHospitalScopedUser]);
+
+  const scopedHospitalId = scopedHospital?.id || "";
 
   const {
     data: zones = [],
@@ -116,6 +159,7 @@ export default function TeacherManagement() {
         ? list.filter((z: any) => z?.id && z?.name)
         : [];
     },
+    enabled: !isHospitalScopedUser,
   });
 
   const { data: hospitals = [], isLoading: hospitalsLoading } = useQuery({
@@ -131,16 +175,24 @@ export default function TeacherManagement() {
   });
 
   const { data: physiotherapists = [], isLoading: physioLoading } = useQuery({
-    queryKey: ["physio-management", "physiotherapists"],
+    queryKey: ["physio-management", "physiotherapists", scopedHospitalId],
     queryFn: async () => {
       const response = await ApiClient.get<any>(
         "/patients/locations/physiotherapists",
-        { params: { includeInactive: true } }
+        {
+          params: {
+            includeInactive: true,
+            ...(isHospitalScopedUser && scopedHospitalId
+              ? { hospitalId: scopedHospitalId }
+              : {}),
+          },
+        }
       );
       const payload = response?.data ?? response ?? {};
       const list = payload?.data || payload || [];
       return Array.isArray(list) ? list : [];
     },
+    enabled: !isHospitalScopedUser || !!scopedHospitalId,
   });
 
   const createMutation = useMutation({
@@ -217,13 +269,22 @@ export default function TeacherManagement() {
     },
   });
 
+  const availableHospitals = useMemo(() => {
+    if (!isHospitalScopedUser) return hospitals;
+    if (!scopedHospitalId) return [];
+    return hospitals.filter((hospital: Hospital) => hospital.id === scopedHospitalId);
+  }, [hospitals, isHospitalScopedUser, scopedHospitalId]);
+
   const filteredHospitals = useMemo(() => {
+    if (isHospitalScopedUser) return availableHospitals;
     if (!formData.zoneId) return [];
-    return hospitals.filter((hospital: Hospital) => {
+    return availableHospitals.filter((hospital: Hospital) => {
       const hospitalZoneId = hospital.zoneId || hospital.zone?.id;
-      return hospitalZoneId === formData.zoneId;
+      const isActiveHospital = hospital.status === "ACTIVE";
+      const isCurrentSelection = hospital.id === formData.hospitalId;
+      return hospitalZoneId === formData.zoneId && (isActiveHospital || isCurrentSelection);
     });
-  }, [hospitals, formData.zoneId]);
+  }, [availableHospitals, formData.zoneId, formData.hospitalId, isHospitalScopedUser]);
 
   const filteredPhysiotherapists = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -248,12 +309,18 @@ export default function TeacherManagement() {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setSelected(null);
-    setFormData(initialForm);
+    setFormData({
+      ...initialForm,
+      hospitalId: isHospitalScopedUser ? scopedHospitalId : "",
+    });
   };
 
   const handleOpenAdd = () => {
     setSelected(null);
-    setFormData(initialForm);
+    setFormData({
+      ...initialForm,
+      hospitalId: isHospitalScopedUser ? scopedHospitalId : "",
+    });
     setDialogOpen(true);
   };
 
@@ -278,9 +345,18 @@ export default function TeacherManagement() {
       !formData.name.trim() ||
       !formData.phone.trim() ||
       !formData.hospitalId ||
-      !formData.zoneId
+      (!isHospitalScopedUser && !formData.zoneId)
     ) {
       toast.error("Please fill all required fields");
+      return;
+    }
+
+    const resolvedHospitalId = isHospitalScopedUser
+      ? scopedHospitalId || formData.hospitalId
+      : formData.hospitalId;
+
+    if (!resolvedHospitalId) {
+      toast.error("Hospital is required");
       return;
     }
 
@@ -288,7 +364,7 @@ export default function TeacherManagement() {
       name: formData.name.trim(),
       email: formData.email.trim() || undefined,
       phone: formData.phone.trim(),
-      hospitalId: formData.hospitalId,
+      hospitalId: resolvedHospitalId,
       specialization: formData.specialization.trim() || undefined,
     };
 
@@ -309,6 +385,8 @@ export default function TeacherManagement() {
     if (!selected) return;
     deleteMutation.mutate({ id: selected.id, mode: "permanent" });
   };
+
+  const tableColumnCount = isHospitalScopedUser ? 6 : 7;
 
   return (
     <div className="space-y-6">
@@ -344,7 +422,7 @@ export default function TeacherManagement() {
                   <TableHead>Physiotherapist Name</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Hospital</TableHead>
-                  <TableHead>Zone</TableHead>
+                  {!isHospitalScopedUser ? <TableHead>Zone</TableHead> : null}
                   <TableHead>Contact Number</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -353,13 +431,13 @@ export default function TeacherManagement() {
               <TableBody>
                 {physioLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={tableColumnCount} className="text-center text-muted-foreground py-8">
                       Loading physiotherapists...
                     </TableCell>
                   </TableRow>
                 ) : filteredPhysiotherapists.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={tableColumnCount} className="text-center text-muted-foreground py-8">
                       No physiotherapists found.
                     </TableCell>
                   </TableRow>
@@ -373,7 +451,7 @@ export default function TeacherManagement() {
                         </Badge>
                       </TableCell>
                       <TableCell>{item.hospital?.name || "-"}</TableCell>
-                      <TableCell>{item.hospital?.zone?.name || "-"}</TableCell>
+                      {!isHospitalScopedUser ? <TableCell>{item.hospital?.zone?.name || "-"}</TableCell> : null}
                       <TableCell>{item.phone || "-"}</TableCell>
                       <TableCell>{item.email || "-"}</TableCell>
                       <TableCell className="text-right">
@@ -486,43 +564,45 @@ export default function TeacherManagement() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Zone</Label>
-              <Select
-                value={formData.zoneId}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    zoneId: value,
-                    hospitalId: "",
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      zonesLoading
-                        ? "Loading zones..."
-                        : zonesError
-                          ? "Failed to load zones"
-                          : "Select zone"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {!zonesLoading && zones.length === 0 ? (
-                    <SelectItem value="__NO_ZONES__" disabled>
-                      No zones available
-                    </SelectItem>
-                  ) : null}
-                  {zones.map((zone: Zone) => (
-                    <SelectItem key={zone.id} value={zone.id}>
-                      {zone.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!isHospitalScopedUser ? (
+              <div className="space-y-2">
+                <Label>Zone</Label>
+                <Select
+                  value={formData.zoneId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      zoneId: value,
+                      hospitalId: "",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        zonesLoading
+                          ? "Loading zones..."
+                          : zonesError
+                            ? "Failed to load zones"
+                            : "Select zone"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!zonesLoading && zones.length === 0 ? (
+                      <SelectItem value="__NO_ZONES__" disabled>
+                        No zones available
+                      </SelectItem>
+                    ) : null}
+                    {zones.map((zone: Zone) => (
+                      <SelectItem key={zone.id} value={zone.id}>
+                        {zone.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label>Hospital</Label>
@@ -531,23 +611,27 @@ export default function TeacherManagement() {
                 onValueChange={(value) =>
                   setFormData((prev) => ({ ...prev, hospitalId: value }))
                 }
-                disabled={!formData.zoneId}
+                disabled={isHospitalScopedUser || (!isHospitalScopedUser && !formData.zoneId)}
               >
                 <SelectTrigger>
                   <SelectValue
                     placeholder={
-                      !formData.zoneId
-                        ? "Select zone first"
-                        : hospitalsLoading
-                          ? "Loading hospitals..."
-                          : "Select hospital"
+                      isHospitalScopedUser
+                        ? scopedHospital?.name || "Loading hospital..."
+                        : !formData.zoneId
+                          ? "Select zone first"
+                          : hospitalsLoading
+                            ? "Loading hospitals..."
+                            : "Select hospital"
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredHospitals.length === 0 && formData.zoneId ? (
+                  {filteredHospitals.length === 0 && (isHospitalScopedUser || formData.zoneId) ? (
                     <SelectItem value="__NO_HOSPITALS__" disabled>
-                      No hospitals available in this zone
+                      {isHospitalScopedUser
+                        ? "No hospital available"
+                        : "No hospitals available in this zone"}
                     </SelectItem>
                   ) : null}
                   {filteredHospitals.map((hospital: Hospital) => (

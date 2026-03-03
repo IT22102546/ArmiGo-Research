@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Copy, Power } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -164,6 +164,24 @@ export default function HospitalsPage() {
     },
   });
 
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "INACTIVE" }) =>
+      ApiClient.put(`/hospitals/${id}`, { status }),
+    onSuccess: (_response: any, variables) => {
+      toast.success(
+        variables.status === "ACTIVE"
+          ? "Hospital marked as active"
+          : "Hospital marked as inactive"
+      );
+      queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+    },
+    onError: (error: any) => {
+      toast.error(
+        error.response?.data?.message || "Failed to update hospital status"
+      );
+    },
+  });
+
   const handleOpenDialog = (hospital?: any) => {
     if (hospital) {
       setSelectedHospital(hospital);
@@ -257,6 +275,9 @@ export default function HospitalsPage() {
           bedCapacity: parseInt(formData.bedCapacity) || 0,
           totalStaff: parseInt(formData.totalStaff) || 0,
           isMainHospital: formData.isMainHospital,
+          ...(formData.adminPassword
+            ? { adminPassword: formData.adminPassword }
+            : {}),
         },
       });
     } else {
@@ -375,6 +396,20 @@ export default function HospitalsPage() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() =>
+              statusMutation.mutate({
+                id: h.id,
+                status: h.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+              })
+            }
+            title={h.status === "ACTIVE" ? "Mark inactive" : "Mark active"}
+            disabled={statusMutation.isPending}
+          >
+            <Power className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => handleDeleteClick(h)}
           >
             <Trash2 className="h-4 w-4" />
@@ -487,7 +522,7 @@ export default function HospitalsPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">Hospital Login Email *</Label>
                   <Input
                     id="email"
                     type="email"
@@ -703,47 +738,50 @@ export default function HospitalsPage() {
               </div>
             </div>
 
-            {/* Admin Credentials - Only for new hospitals */}
-            {!selectedHospital && (
-              <div className="space-y-3">
-                <h3 className="font-semibold">Admin Credentials</h3>
+            <div className="space-y-3">
+              <h3 className="font-semibold">Admin Credentials</h3>
 
-                <div>
-                  <Label htmlFor="adminPassword">
-                    Admin Password (for hospital admin account) *
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="adminPassword"
-                      type={showPassword ? "text" : "password"}
-                      value={formData.adminPassword}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          adminPassword: e.target.value,
-                        })
-                      }
-                      placeholder="Set a strong password"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Note: Hospital admin email will be auto-generated
-                  </p>
+              <div>
+                <Label htmlFor="adminPassword">
+                  Admin Password (for hospital admin account){selectedHospital ? "" : " *"}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="adminPassword"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.adminPassword}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        adminPassword: e.target.value,
+                      })
+                    }
+                    placeholder={
+                      selectedHospital
+                        ? "Leave blank to keep current password"
+                        : "Set a strong password"
+                    }
+                    required={!selectedHospital}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedHospital
+                    ? "Set a new password only if you want to change it"
+                    : "This exact email will be used for hospital admin sign-in"}
+                </p>
               </div>
-            )}
+            </div>
 
             <DialogFooter>
               <Button
@@ -856,9 +894,24 @@ export default function HospitalsPage() {
               Cancel
             </Button>
             <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!selectedHospital?.id) return;
+                statusMutation.mutate({
+                  id: selectedHospital.id,
+                  status: "INACTIVE",
+                });
+                setDeleteDialogOpen(false);
+              }}
+              disabled={statusMutation.isPending || deleteMutation.isPending}
+            >
+              Make Inactive
+            </Button>
+            <Button
               variant="destructive"
               onClick={handleConfirmDelete}
-              disabled={deleteMutation.isPending}
+              disabled={statusMutation.isPending || deleteMutation.isPending}
             >
               Delete
             </Button>

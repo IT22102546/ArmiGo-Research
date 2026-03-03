@@ -444,10 +444,10 @@ export default function DoctorAssignmentsPage() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Building2 className="h-8 w-8 text-primary" />
-              Doctor Assignments
+              Physiotherapy Assignments
             </h1>
             <p className="text-muted-foreground mt-1">
-              Map doctors to service lines, wards, and shifts with capacity
+              Map physiotherapy staff to service lines, wards, and shifts with capacity
               controls.
             </p>
           </div>
@@ -513,7 +513,7 @@ export default function DoctorAssignmentsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">
-                    Assigned Doctors
+                    Assigned Physiotherapy Staff
                   </p>
                   <p className="text-3xl font-bold text-blue-600">
                     {stats.doctors}
@@ -536,7 +536,7 @@ export default function DoctorAssignmentsPage() {
                   <div className="relative flex-1 max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search doctors by name, ID, specialty, email, or phone"
+                      placeholder="Search physiotherapy staff by name, ID, specialty, email, or phone"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-10"
@@ -670,7 +670,7 @@ export default function DoctorAssignmentsPage() {
                     unitFilter !== "all" ||
                     shiftFilter !== "all"
                       ? "No assignments match your search criteria"
-                      : "Get started by creating your first doctor assignment"}
+                        : "Get started by creating your first physiotherapy assignment"}
                   </p>
                   {!searchQuery &&
                     statusFilter === "all" &&

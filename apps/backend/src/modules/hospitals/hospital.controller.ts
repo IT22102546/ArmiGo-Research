@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -91,6 +92,17 @@ export class HospitalController {
   ) {
     this.logger.log(`Updating hospital: ${id}`);
     return await this.hospitalService.updateHospital(id, updateHospitalDto);
+  }
+
+  /**
+   * Delete hospital
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete hospital' })
+  async deleteHospital(@Param('id') id: string) {
+    this.logger.log(`Deleting hospital: ${id}`);
+    return await this.hospitalService.deleteHospital(id);
   }
 
   /**

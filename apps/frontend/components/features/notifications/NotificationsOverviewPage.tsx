@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -35,12 +35,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Search, Eye, Calendar, Filter } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, Eye, Calendar, Filter, Pencil, Trash2 } from "lucide-react";
 import { notificationsApi } from "@/lib/api/endpoints";
 import type { Notification } from "@/lib/api/endpoints/notifications";
 import { handleApiError } from "@/lib/error-handling";
+import { toast } from "sonner";
+import { useAuthStore } from "@/stores/auth-store";
+import { ApiClient } from "@/lib/api/api-client";
 
 export default function NotificationsOverviewPage() {
+  const user = useAuthStore((state) => state.user);
+  const userRoles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : ([user?.role].filter(Boolean) as string[]);
+  const isHospitalScopedUser =
+    userRoles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
+  const [scopedHospital, setScopedHospital] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,8 +75,126 @@ export default function NotificationsOverviewPage() {
 
   // Dialog states
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedNotification, setSelectedNotification] =
     useState<Notification | null>(null);
+  const [patients, setPatients] = useState<
+    Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      parentUserId: string | null;
+      parentName: string | null;
+      hospitalId: string | null;
+      hospitalName: string | null;
+    }>
+  >([]);
+  const [hospitals, setHospitals] = useState<
+    Array<{
+      id: string;
+      name: string;
+      adminUserId: string | null;
+      adminName: string | null;
+    }>
+  >([]);
+  const [sending, setSending] = useState(false);
+  const [patientSearch, setPatientSearch] = useState("");
+  const [sendForm, setSendForm] = useState({
+    title: "",
+    message: "",
+    type: "GENERAL",
+    audienceScope: "DEFAULT" as "DEFAULT" | "HOSPITAL_ONLY",
+    patientIds: [] as string[],
+    hospitalIds: [] as string[],
+  });
+
+  const [editForm, setEditForm] = useState({
+    title: "",
+    message: "",
+    type: "GENERAL",
+    status: "UNREAD" as "UNREAD" | "READ" | "ARCHIVED",
+  });
+  const [bulkHospitalId, setBulkHospitalId] = useState<string>("ALL");
+
+  useEffect(() => {
+    if (!isHospitalScopedUser) return;
+
+    let mounted = true;
+    const loadHospitalScope = async () => {
+      try {
+        const profile = await ApiClient.get<any>("/users/profile");
+        const payload = profile?.data ?? profile ?? {};
+        const hospital = payload?.hospitalProfile?.hospital;
+        if (!mounted || !hospital?.id) return;
+
+        setScopedHospital({
+          id: hospital.id,
+          name: hospital.name || "Hospital",
+        });
+      } catch {
+        // Keep page functional even if profile fetch fails.
+      }
+    };
+
+    loadHospitalScope();
+    return () => {
+      mounted = false;
+    };
+  }, [isHospitalScopedUser]);
+
+  const patientHospitals = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; count: number }>();
+    const sourcePatients =
+      isHospitalScopedUser && scopedHospital?.id
+        ? patients.filter((patient) => patient.hospitalId === scopedHospital.id)
+        : patients;
+
+    sourcePatients.forEach((patient) => {
+      if (!patient.hospitalId || !patient.hospitalName) return;
+      const existing = map.get(patient.hospitalId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(patient.hospitalId, {
+          id: patient.hospitalId,
+          name: patient.hospitalName,
+          count: 1,
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [patients]);
+
+  const filteredPatients = useMemo(() => {
+    const term = patientSearch.trim().toLowerCase();
+    const sourcePatients =
+      isHospitalScopedUser && scopedHospital?.id
+        ? patients.filter((patient) => patient.hospitalId === scopedHospital.id)
+        : patients;
+
+    if (!term) {
+      return sourcePatients;
+    }
+
+    return sourcePatients.filter((patient) => {
+      const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
+      const parentName = (patient.parentName || "").toLowerCase();
+      const hospitalName = (patient.hospitalName || "").toLowerCase();
+      return (
+        fullName.includes(term) ||
+        parentName.includes(term) ||
+        hospitalName.includes(term)
+      );
+    });
+  }, [patients, patientSearch, isHospitalScopedUser, scopedHospital?.id]);
+
+  const scopedPatients = useMemo(() => {
+    if (!isHospitalScopedUser || !scopedHospital?.id) {
+      return patients;
+    }
+    return patients.filter((patient) => patient.hospitalId === scopedHospital.id);
+  }, [patients, isHospitalScopedUser, scopedHospital?.id]);
 
   useEffect(() => {
     fetchNotifications();
@@ -74,6 +207,10 @@ export default function NotificationsOverviewPage() {
     dateTo,
     searchTerm,
   ]);
+
+  useEffect(() => {
+    fetchTargetOptions();
+  }, []);
 
   const fetchNotifications = async () => {
     try {
@@ -108,9 +245,195 @@ export default function NotificationsOverviewPage() {
     }
   };
 
+  const fetchTargetOptions = async () => {
+    try {
+      const response = await notificationsApi.getTargetOptions();
+      const payload: any = response;
+      setPatients(payload?.patients || []);
+      setHospitals(payload?.hospitals || []);
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const togglePatient = (id: string, checked: boolean) => {
+    setSendForm((prev) => ({
+      ...prev,
+      patientIds: checked
+        ? [...prev.patientIds, id]
+        : prev.patientIds.filter((value) => value !== id),
+    }));
+  };
+
+  const toggleHospital = (id: string, checked: boolean) => {
+    setSendForm((prev) => ({
+      ...prev,
+      hospitalIds: checked
+        ? [...prev.hospitalIds, id]
+        : prev.hospitalIds.filter((value) => value !== id),
+    }));
+  };
+
+  const selectAllPatients = () => {
+    setSendForm((prev) => ({
+      ...prev,
+      patientIds: scopedPatients.map((patient) => patient.id),
+    }));
+  };
+
+  const clearPatientSelection = () => {
+    setSendForm((prev) => ({
+      ...prev,
+      patientIds: [],
+    }));
+  };
+
+  const selectPatientsByHospital = (hospitalId: string) => {
+    if (!hospitalId || hospitalId === "ALL") {
+      return;
+    }
+
+    const hospitalPatientIds = patients
+      .filter((patient) => patient.hospitalId === hospitalId)
+      .map((patient) => patient.id);
+
+    setSendForm((prev) => ({
+      ...prev,
+      patientIds: Array.from(new Set([...prev.patientIds, ...hospitalPatientIds])),
+    }));
+  };
+
+  const handleSendNotification = async () => {
+    if (!sendForm.title.trim() || !sendForm.message.trim()) {
+      toast.error("Title and message are required");
+      return;
+    }
+
+    if (isHospitalScopedUser && !scopedHospital?.id) {
+      toast.error("Hospital context not found for this account");
+      return;
+    }
+
+    const effectiveHospitalIds = isHospitalScopedUser
+      ? scopedHospital?.id
+        ? [scopedHospital.id]
+        : []
+      : sendForm.hospitalIds;
+
+    if (isHospitalScopedUser && sendForm.patientIds.length === 0) {
+      toast.error("Select at least one child from your hospital");
+      return;
+    }
+
+    if (sendForm.patientIds.length === 0 && effectiveHospitalIds.length === 0) {
+      toast.error("Select at least one patient or hospital target");
+      return;
+    }
+
+    try {
+      setSending(true);
+      const selectedHospitalAdminUserIds = hospitals
+        .filter((hospital) => effectiveHospitalIds.includes(hospital.id))
+        .map((hospital) => hospital.adminUserId)
+        .filter((value): value is string => Boolean(value));
+
+      if (
+        sendForm.audienceScope === "HOSPITAL_ONLY" &&
+        effectiveHospitalIds.length > 0 &&
+        selectedHospitalAdminUserIds.length === 0
+      ) {
+        toast.error(
+          "Selected hospitals have no linked hospital admin user account"
+        );
+        return;
+      }
+
+      const response: any = await notificationsApi.sendToTargets({
+        title: sendForm.title,
+        message: sendForm.message,
+        type: sendForm.type,
+        audienceScope: isHospitalScopedUser ? "DEFAULT" : sendForm.audienceScope,
+        patientIds: sendForm.patientIds,
+        hospitalIds: effectiveHospitalIds,
+        hospitalAdminUserIds: selectedHospitalAdminUserIds,
+      });
+
+      toast.success(
+        response?.message ||
+          `Notification sent to ${response?.sent || 0} recipient(s)`
+      );
+
+      setSendForm({
+        title: "",
+        message: "",
+        type: "GENERAL",
+        audienceScope: "DEFAULT",
+        patientIds: [],
+        hospitalIds: [],
+      });
+
+      setStatusFilter("ALL");
+      setRoleFilter("ALL");
+      setTypeFilter("ALL");
+      setSearchTerm("");
+      setDateFrom("");
+      setDateTo("");
+      setPagination((prev) => ({ ...prev, page: 1 }));
+
+      fetchNotifications();
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleViewDetail = (notification: Notification) => {
     setSelectedNotification(notification);
     setViewDialogOpen(true);
+  };
+
+  const handleOpenEdit = (notification: Notification) => {
+    setSelectedNotification(notification);
+    setEditForm({
+      title: notification.title,
+      message: notification.message,
+      type: notification.type || "GENERAL",
+      status: (notification.status || "UNREAD") as "UNREAD" | "READ" | "ARCHIVED",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateNotification = async () => {
+    if (!selectedNotification) return;
+    try {
+      await notificationsApi.updateAdmin(selectedNotification.id, {
+        title: editForm.title,
+        message: editForm.message,
+        type: editForm.type,
+        status: editForm.status,
+        isRead: editForm.status === "READ",
+      });
+      toast.success("Notification updated successfully");
+      setEditDialogOpen(false);
+      setSelectedNotification(null);
+      fetchNotifications();
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const handleDeleteNotification = async () => {
+    if (!selectedNotification) return;
+    try {
+      await notificationsApi.deleteAdmin(selectedNotification.id);
+      toast.success("Notification deleted successfully");
+      setDeleteDialogOpen(false);
+      setSelectedNotification(null);
+      fetchNotifications();
+    } catch (error) {
+      handleApiError(error);
+    }
   };
 
   const getTypeColor = (type: string): BadgeVariant => {
@@ -160,6 +483,193 @@ export default function NotificationsOverviewPage() {
         </div>
       </CardHeader>
       <CardContent>
+        <div className="border rounded-lg p-4 mb-6 space-y-4">
+          <div>
+            <h3 className="text-base font-semibold">
+              {isHospitalScopedUser
+                ? `Send Notification (${scopedHospital?.name || "Hospital"})`
+                : "Send Notification (Super Admin)"}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {isHospitalScopedUser
+                ? "Select patients from your hospital. Notifications will be restricted to your hospital audience."
+                : "Select patients and/or hospitals. Parents of selected patients and admins of selected hospitals will receive this notification."}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={sendForm.title}
+                onChange={(e) =>
+                  setSendForm((prev) => ({ ...prev, title: e.target.value }))
+                }
+                placeholder="Notification title"
+              />
+            </div>
+            <div>
+              <Label>Type</Label>
+              <Select
+                value={sendForm.type}
+                onValueChange={(value) =>
+                  setSendForm((prev) => ({ ...prev, type: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GENERAL">General</SelectItem>
+                  <SelectItem value="ANNOUNCEMENT">Announcement</SelectItem>
+                  <SelectItem value="SYSTEM">System</SelectItem>
+                  <SelectItem value="INFO">Info</SelectItem>
+                  <SelectItem value="WARNING">Warning</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {!isHospitalScopedUser ? (
+            <div>
+              <Label>Audience Scope</Label>
+              <Select
+                value={sendForm.audienceScope}
+                onValueChange={(value: "DEFAULT" | "HOSPITAL_ONLY") =>
+                  setSendForm((prev) => ({ ...prev, audienceScope: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Audience scope" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DEFAULT">Default (patients + hospitals)</SelectItem>
+                  <SelectItem value="HOSPITAL_ONLY">Hospital only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          <div>
+            <Label>Message</Label>
+            <Textarea
+              value={sendForm.message}
+              onChange={(e) =>
+                setSendForm((prev) => ({ ...prev, message: e.target.value }))
+              }
+              rows={3}
+              placeholder="Notification message"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border rounded-md p-3">
+              <Label className="mb-2 block">Patients (notify parents)</Label>
+              <Input
+                value={patientSearch}
+                onChange={(e) => setPatientSearch(e.target.value)}
+                placeholder={
+                  isHospitalScopedUser
+                    ? "Search patient or parent"
+                    : "Search patient, parent, or hospital"
+                }
+                className="mb-3"
+              />
+              <div className="flex flex-wrap gap-2 mb-3">
+                <Button type="button" variant="outline" size="sm" onClick={selectAllPatients}>
+                  Select All Patients
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearPatientSelection}
+                >
+                  Clear Patients
+                </Button>
+              </div>
+              {!isHospitalScopedUser ? (
+                <div className="flex gap-2 mb-3">
+                  <Select value={bulkHospitalId} onValueChange={setBulkHospitalId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select hospital to add all patients" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Select hospital...</SelectItem>
+                      {patientHospitals.map((hospital) => (
+                        <SelectItem key={hospital.id} value={hospital.id}>
+                          {hospital.name} ({hospital.count})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => selectPatientsByHospital(bulkHospitalId)}
+                  >
+                    Add Hospital Patients
+                  </Button>
+                </div>
+              ) : null}
+              <div className="max-h-40 overflow-y-auto space-y-2">
+                {filteredPatients.map((patient) => (
+                  <div key={patient.id} className="flex items-start space-x-2">
+                    <Checkbox
+                      checked={sendForm.patientIds.includes(patient.id)}
+                      onCheckedChange={(checked) =>
+                        togglePatient(patient.id, Boolean(checked))
+                      }
+                    />
+                    <div className="text-sm">
+                      <div>
+                        {patient.firstName} {patient.lastName}
+                      </div>
+                      <div className="text-muted-foreground text-xs">
+                        Parent: {patient.parentName || "N/A"} • Hospital: {patient.hospitalName || "N/A"}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {filteredPatients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No patients found</p>
+                ) : null}
+              </div>
+            </div>
+
+            {!isHospitalScopedUser ? (
+              <div className="border rounded-md p-3">
+                <Label className="mb-2 block">Hospitals (notify hospital admins)</Label>
+                <div className="max-h-40 overflow-y-auto space-y-2">
+                  {hospitals.map((hospital) => (
+                    <div key={hospital.id} className="flex items-start space-x-2">
+                      <Checkbox
+                        checked={sendForm.hospitalIds.includes(hospital.id)}
+                        onCheckedChange={(checked) =>
+                          toggleHospital(hospital.id, Boolean(checked))
+                        }
+                      />
+                      <div className="text-sm">
+                        <div>{hospital.name}</div>
+                        <div className="text-muted-foreground text-xs">
+                          Admin: {hospital.adminName || "N/A"}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handleSendNotification} disabled={sending}>
+              {sending ? "Sending..." : "Send Notification"}
+            </Button>
+          </div>
+        </div>
+
         {/* Filters */}
         <div className="space-y-4 mb-6">
           <div className="flex gap-4">
@@ -205,19 +715,8 @@ export default function NotificationsOverviewPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Roles</SelectItem>
-                <SelectItem value="INTERNAL_STUDENT">
-                  Internal Student
-                </SelectItem>
-                <SelectItem value="EXTERNAL_STUDENT">
-                  External Student
-                </SelectItem>
-                <SelectItem value="INTERNAL_TEACHER">
-                  Internal Teacher
-                </SelectItem>
-                <SelectItem value="EXTERNAL_TEACHER">
-                  External Teacher
-                </SelectItem>
-                <SelectItem value="ADMIN">Admin</SelectItem>
+                <SelectItem value="PARENT">Parent</SelectItem>
+                <SelectItem value="HOSPITAL_ADMIN">Hospital Admin</SelectItem>
                 <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
               </SelectContent>
             </Select>
@@ -351,16 +850,39 @@ export default function NotificationsOverviewPage() {
                       : "-"}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewDetail(notification);
-                      }}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewDetail(notification);
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(notification);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedNotification(notification);
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -473,6 +995,90 @@ export default function NotificationsOverviewPage() {
           </div>
           <DialogFooter>
             <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Notification</DialogTitle>
+            <DialogDescription>Update notification content and status</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={editForm.title}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, title: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label>Message</Label>
+              <Textarea
+                value={editForm.message}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, message: e.target.value }))
+                }
+                rows={4}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Type</Label>
+                <Input
+                  value={editForm.type}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, type: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select
+                  value={editForm.status}
+                  onValueChange={(value: "UNREAD" | "READ" | "ARCHIVED") =>
+                    setEditForm((prev) => ({ ...prev, status: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UNREAD">Unread</SelectItem>
+                    <SelectItem value="READ">Read</SelectItem>
+                    <SelectItem value="ARCHIVED">Archived</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateNotification}>Update</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Notification</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this notification?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteNotification}>
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

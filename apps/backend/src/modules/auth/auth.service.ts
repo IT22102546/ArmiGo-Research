@@ -10,11 +10,19 @@ export class AuthService {
     private jwtService: JwtService
   ) {}
 
+private isBcryptHash(value?: string): boolean {
+  if (!value) return false;
+  return /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(value);
+}
+
 async validateUser(identifier: string, password: string, allowedRoles?: string[]): Promise<any> {
   console.log('\n========== AUTH DEBUG ==========');
   console.log(`1️⃣ validateUser called with identifier: "${identifier}"`);
   
-  const user = await this.usersService.findByPhoneOrEmail(identifier);
+  let user = await this.usersService.findByPhoneOrEmail(identifier);
+  if (!user && identifier.includes("@")) {
+    user = await this.usersService.ensureHospitalAdminAccountByEmail(identifier);
+  }
   
   if (!user) {
     console.log('2️⃣ ❌ User not found in database');
@@ -23,6 +31,22 @@ async validateUser(identifier: string, password: string, allowedRoles?: string[]
   }
   
   const userAny = user as any;
+
+  if (userAny.status !== "ACTIVE") {
+    console.log(`2️⃣ ❌ User account is inactive: ${userAny.email || userAny.phone}`);
+    console.log('=================================\n');
+    throw new UnauthorizedException("Account is inactive. Please contact administrator.");
+  }
+
+  if (
+    userAny.role === "HOSPITAL_ADMIN" &&
+    userAny.hospitalProfile?.hospital?.status &&
+    userAny.hospitalProfile.hospital.status !== "ACTIVE"
+  ) {
+    console.log(`2️⃣ ❌ Hospital admin account blocked because hospital is inactive: ${userAny.email || userAny.phone}`);
+    console.log('=================================\n');
+    throw new UnauthorizedException("Account is inactive. Please contact administrator.");
+  }
 
   console.log(`2️⃣ ✅ User found:`, {
     id: userAny.id,
@@ -47,7 +71,22 @@ async validateUser(identifier: string, password: string, allowedRoles?: string[]
   }
   
   console.log(`3️⃣ Comparing passwords...`);
-  const isPasswordValid = await bcrypt.compare(password, userAny.password);
+  let isPasswordValid = false;
+
+  if (this.isBcryptHash(userAny.password)) {
+    isPasswordValid = await bcrypt.compare(password, userAny.password);
+  } else if (typeof userAny.password === "string" && userAny.password === password) {
+    isPasswordValid = true;
+
+    try {
+      const migratedHash = await bcrypt.hash(password, 12);
+      await this.usersService.updatePassword(userAny.id, migratedHash);
+      userAny.password = migratedHash;
+      console.log("3️⃣ 🔄 Migrated legacy plaintext password to bcrypt hash");
+    } catch (migrationError) {
+      console.log("3️⃣ ⚠️ Password verified but migration failed:", migrationError);
+    }
+  }
   
   if (isPasswordValid) {
     console.log(`4️⃣ ✅ Password valid!`);

@@ -42,6 +42,35 @@ export default function ProvincesPage() {
     if (provinces) setSortedProvinces(provinces);
   }, [provinces]);
 
+  const { data: districts = [] } = useQuery({
+    queryKey: ["districts"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/geography/districts");
+      const resp = response?.data ?? response ?? {};
+      return resp.data || resp.districts || resp || [];
+    },
+  });
+
+  const districtCountByProvince = (provincesList: any[] = [], districtsList: any[] = []) => {
+    const map = new Map<string, number>();
+
+    provincesList.forEach((province) => {
+      if (province?.id) {
+        map.set(province.id, 0);
+      }
+    });
+
+    districtsList.forEach((district: any) => {
+      if (district?.provinceId && map.has(district.provinceId)) {
+        map.set(district.provinceId, (map.get(district.provinceId) || 0) + 1);
+      }
+    });
+
+    return map;
+  };
+
+  const provinceDistrictCounts = districtCountByProvince(sortedProvinces, districts);
+
   const createMutation = useMutation({
     mutationFn: (data: any) => ApiClient.post("/geography/provinces", data),
     onSuccess: () => {
@@ -160,7 +189,10 @@ export default function ProvincesPage() {
                   key: "districts",
                   label: "Districts",
                   render: (p: any) =>
-                    p._count?.districts ?? p.districts?.length ?? 0,
+                    provinceDistrictCounts.get(p.id) ??
+                    p._count?.districts ??
+                    p.districts?.length ??
+                    0,
                 },
                 {
                   key: "actions",

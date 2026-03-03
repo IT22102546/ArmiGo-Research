@@ -237,10 +237,10 @@ export default function TeacherAvailabilityPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">
-            Teacher Availability Management
+            Physiotherapy Availability Management
           </h1>
           <p className="text-muted-foreground">
-            Manage teacher leaves, replacements, and scheduling
+            Manage physiotherapy staff leaves, replacements, and scheduling
           </p>
         </div>
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -254,12 +254,12 @@ export default function TeacherAvailabilityPage() {
             <DialogHeader>
               <DialogTitle>Create Leave Request</DialogTitle>
               <DialogDescription>
-                Submit a new leave request for a teacher
+                Submit a new leave request for physiotherapy staff
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="teacherId">Teacher *</Label>
+                <Label htmlFor="teacherId">Physiotherapy Staff *</Label>
                 <Select
                   value={createForm.teacherId}
                   onValueChange={(value) =>
@@ -268,7 +268,7 @@ export default function TeacherAvailabilityPage() {
                   required
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select teacher" />
+                    <SelectValue placeholder="Select physiotherapy staff" />
                   </SelectTrigger>
                   <SelectContent>
                     {teachers.map((teacher) => (
@@ -357,7 +357,7 @@ export default function TeacherAvailabilityPage() {
 
               {replacementSuggestions && replacementSuggestions.length > 0 && (
                 <div className="space-y-2">
-                  <Label>Replacement Teacher Suggestions</Label>
+                  <Label>Replacement Physiotherapy Staff Suggestions</Label>
                   <div className="border rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
                     {replacementSuggestions.map((suggestion) => (
                       <div
@@ -474,7 +474,7 @@ export default function TeacherAvailabilityPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label>Teacher</Label>
+              <Label>Physiotherapy Staff</Label>
               <Select
                 value={filters.teacherId || "all"}
                 onValueChange={(value) =>
@@ -486,10 +486,10 @@ export default function TeacherAvailabilityPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="All teachers" />
+                  <SelectValue placeholder="All physiotherapy staff" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All teachers</SelectItem>
+                  <SelectItem value="all">All physiotherapy staff</SelectItem>
                   {teachers.map((teacher) => (
                     <SelectItem key={teacher.id} value={teacher.id}>
                       {teacher.firstName} {teacher.lastName}

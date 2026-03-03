@@ -8,7 +8,7 @@ import { getErrorMessage } from "@/lib/error-handling";
 const logger = createLogger("SignInPage");
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Phone, Lock, Shield, Mail } from "lucide-react";
+import { Phone, Lock, Mail } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLoginMutation } from "@/lib/hooks/queries/useAuth";
 import Link from "next/link";
@@ -49,10 +49,8 @@ export default function SignIn() {
 
       if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
         router.replace("/admin");
-      } else if (userRole === "INTERNAL_TEACHER") {
-        router.replace("/teacher");
-      } else if (userRole === "EXTERNAL_TEACHER") {
-        router.replace("/teacher/transfers");
+      } else if (userRole === "HOSPITAL_ADMIN") {
+        router.replace("/admin");
       } else {
         setError("This account type is not allowed in the web dashboard.");
       }
@@ -80,6 +78,10 @@ export default function SignIn() {
           },
           onError: (err: any) => {
             logger.error("❌ Login failed:", getErrorMessage(err));
+            const message = String(err?.message || "").toLowerCase();
+            if (message.includes("account is inactive") || message.includes("inactive")) {
+              setError("Account is inactive. Please contact administrator.");
+            } else
             if (err.response?.status === 401) {
               setError("Invalid credentials");
             } else if (err.response?.status === 429) {
@@ -192,26 +194,17 @@ export default function SignIn() {
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
                   <span className="bg-background px-2 text-muted-foreground">
-                    Other Options
+                    Hospital Access
                   </span>
                 </div>
               </div>
 
               <Link
-                href="/admin/sign-in"
-                className="flex items-center justify-center gap-2 w-full h-10 text-sm font-medium text-muted-foreground hover:text-primary border border-border rounded-lg hover:border-primary transition-colors"
-              >
-                <Shield className="h-4 w-4" />
-                Admin Login
-              </Link>
-
-              {/* Update this link for hospital registration */}
-              <Link
-                href="/sign-up/hospital"
+                href="/hospital/sign-in"
                 className="flex items-center justify-center gap-2 w-full h-10 text-sm font-medium text-muted-foreground hover:text-primary border border-border rounded-lg hover:border-primary transition-colors"
               >
                 <Phone className="h-4 w-4" />
-                Hospital Registration
+                Hospital Login
               </Link>
             </div>
           </form>
