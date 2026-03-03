@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +44,8 @@ export default function ZonesPage() {
       const resp = response?.data ?? response ?? {};
       return resp.data || resp.zones || resp || [];
     },
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const [sortedZones, setSortedZones] = useState<any[]>([]);
   useEffect(() => {
@@ -59,67 +61,7 @@ export default function ZonesPage() {
     },
   });
 
-  const { data: hospitals } = useQuery({
-    queryKey: ["hospitals"],
-    queryFn: async () => {
-      const pageSize = 200;
-      let page = 1;
-      let totalPages = 1;
-      const allHospitals: any[] = [];
-
-      while (page <= totalPages) {
-        const response = await ApiClient.get<any>("/hospitals", {
-          params: {
-            page,
-            limit: pageSize,
-          },
-        });
-
-        const resp = response?.data ?? response ?? {};
-        const pageData = resp.data || resp.hospitals || [];
-        if (Array.isArray(pageData)) {
-          allHospitals.push(...pageData);
-        }
-
-        const pagesFromApi = Number(resp?.pagination?.pages || 1);
-        totalPages = Number.isFinite(pagesFromApi) && pagesFromApi > 0 ? pagesFromApi : 1;
-        page += 1;
-      }
-
-      return allHospitals;
-    },
-  });
-
-  const hospitalCountByZone = (zonesList: any[] = [], hospitalsList: any[] = []) => {
-    const map = new Map<string, number>();
-
-    zonesList.forEach((zone) => {
-      if (zone?.id) {
-        map.set(zone.id, 0);
-      }
-    });
-
-    const uniqueHospitalIds = new Set<string>();
-
-    hospitalsList.forEach((hospital: any) => {
-      if (!hospital?.id || uniqueHospitalIds.has(hospital.id)) {
-        return;
-      }
-      uniqueHospitalIds.add(hospital.id);
-
-      const resolvedZoneId = hospital?.zoneId || hospital?.zone?.id;
-      if (resolvedZoneId && map.has(resolvedZoneId)) {
-        map.set(resolvedZoneId, (map.get(resolvedZoneId) || 0) + 1);
-      }
-    });
-
-    return map;
-  };
-
-  const zoneHospitalCounts = useMemo(
-    () => hospitalCountByZone(sortedZones, hospitals || []),
-    [sortedZones, hospitals]
-  );
+  // Zone hospital counts come directly from _count.hospitals returned by the backend
 
   const createMutation = useMutation({
     mutationFn: (data: any) => ApiClient.post("/geography/zones", data),
@@ -250,8 +192,7 @@ export default function ZonesPage() {
                 {
                   key: "hospitals",
                   label: "Hospitals",
-                  render: (z: any) =>
-                    zoneHospitalCounts.get(z.id) ?? z._count?.hospitals ?? z._count?.institutions ?? 0,
+                  render: (z: any) => z._count?.hospitals ?? 0,
                 },
                 {
                   key: "actions",

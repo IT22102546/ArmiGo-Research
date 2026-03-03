@@ -101,18 +101,20 @@ export default function HospitalsPage() {
   });
 
   // Query for hospitals
-  const { data: hospitals, isLoading } = useQuery({
+  const { data: hospitals, isLoading, isFetching } = useQuery({
     queryKey: ["hospitals"],
     queryFn: async () => {
       const response = await ApiClient.get<any>("/hospitals");
       const resp = response?.data ?? response ?? {};
       return resp.data || resp || [];
     },
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const [sortedHospitals, setSortedHospitals] = useState<any[]>([]);
   useEffect(() => {
-    if (hospitals) setSortedHospitals(hospitals);
+    if (hospitals && hospitals.length > 0) setSortedHospitals(hospitals);
   }, [hospitals]);
 
   const createMutation = useMutation({
@@ -120,6 +122,7 @@ export default function HospitalsPage() {
     onSuccess: (response: any) => {
       toast.success("Hospital created successfully");
       queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+      queryClient.invalidateQueries({ queryKey: ["zones"] });
       if (response?.adminPassword) {
         setSelectedHospital(response);
         handleCloseDialog();
@@ -141,6 +144,7 @@ export default function HospitalsPage() {
     onSuccess: () => {
       toast.success("Hospital updated successfully");
       queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+      queryClient.invalidateQueries({ queryKey: ["zones"] });
       handleCloseDialog();
     },
     onError: (error: any) => {
@@ -155,6 +159,7 @@ export default function HospitalsPage() {
     onSuccess: () => {
       toast.success("Hospital deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+      queryClient.invalidateQueries({ queryKey: ["zones"] });
       setDeleteDialogOpen(false);
     },
     onError: (error: any) => {
@@ -174,6 +179,7 @@ export default function HospitalsPage() {
           : "Hospital marked as inactive"
       );
       queryClient.invalidateQueries({ queryKey: ["hospitals"] });
+      queryClient.invalidateQueries({ queryKey: ["zones"] });
     },
     onError: (error: any) => {
       toast.error(
@@ -434,7 +440,7 @@ export default function HospitalsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {isLoading ? (
+          {isLoading || (isFetching && sortedHospitals.length === 0) ? (
             <div className="text-center py-8">Loading hospitals...</div>
           ) : sortedHospitals.length === 0 ? (
             <div className="text-center py-8">
