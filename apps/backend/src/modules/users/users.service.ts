@@ -855,6 +855,14 @@ export class UsersService {
           duration: true,
         },
       },
+      progressRecords: {
+        select: {
+          recordDate: true,
+          baselineValue: true,
+          currentValue: true,
+        },
+        orderBy: { recordDate: 'asc' as const },
+      },
       physioAssignments: {
         include: {
           physiotherapist: {
@@ -937,11 +945,26 @@ export class UsersService {
       const playTimeMinutes = therapyPlayTimeMinutes + admissionPlayTimeMinutes;
       const playHours = Number((playTimeMinutes / 60).toFixed(1));
 
-      const { admissionTrackings, therapySessions, ...rest } = child;
+      const progressRecords = Array.isArray(child.progressRecords) ? [...child.progressRecords] : [];
+      const firstRecord = progressRecords[0];
+      const lastRecord = progressRecords[progressRecords.length - 1];
+      const startProgress = firstRecord?.baselineValue ?? firstRecord?.currentValue ?? 0;
+      const currentProgress = lastRecord?.currentValue ?? lastRecord?.baselineValue ?? 0;
+
+      const { admissionTrackings, therapySessions, progressRecords: _pr, ...rest } = child;
       return {
         ...rest,
         playTimeMinutes,
         playHours,
+        progressTracker: {
+          startProgress: Number(startProgress.toFixed?.(1) ?? startProgress),
+          currentProgress: Number(currentProgress.toFixed?.(1) ?? currentProgress),
+          playTimeMinutes,
+          fingerProgress: child.exerciseFingers ? Number(currentProgress.toFixed?.(1) ?? currentProgress) : undefined,
+          wristProgress: child.exerciseWrist ? Number(currentProgress.toFixed?.(1) ?? currentProgress) : undefined,
+          elbowProgress: child.exerciseElbow ? Number(currentProgress.toFixed?.(1) ?? currentProgress) : undefined,
+          shoulderProgress: child.exerciseShoulder ? Number(currentProgress.toFixed?.(1) ?? currentProgress) : undefined,
+        },
       };
     });
   }

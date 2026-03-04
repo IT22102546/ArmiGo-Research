@@ -214,6 +214,18 @@ const ScreenLayout = () => {
             title: "Payment",
           }}
         />
+
+        <Stack.Screen
+          name="exercise_progress"
+          options={{
+            headerShown: true,
+            headerStyle: { backgroundColor: "#f8fafc" },
+            headerTintColor: "#1e293b",
+            headerTitleStyle: { fontWeight: "bold" },
+            title: "Exercise Progress",
+            headerShadowVisible: false,
+          }}
+        />
       </Stack>
 
       {/* Sidebar and Overlay */}

@@ -8,6 +8,7 @@ import { randomInt } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { UpdatePatientDto } from './dtos/update-patient.dto';
 import { PatientResponseDto, PatientStatsDto } from './dtos/patient-response.dto';
@@ -30,7 +31,10 @@ type AdmissionLifecycleStatus = (typeof ADMISSION_LIFECYCLE_STATUSES)[number];
 export class PatientService {
   private readonly logger = new Logger(PatientService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   /**
    * Create a new patient
@@ -1678,7 +1682,7 @@ export class PatientService {
       data.endTime
     );
 
-    return await this.prisma.admissionTracking.create({
+    const record = await this.prisma.admissionTracking.create({
       data: {
         childId: data.childId,
         physiotherapistId: resolvedPhysiotherapistId,
@@ -1710,6 +1714,7 @@ export class PatientService {
             age: true,
             diagnosis: true,
             assignedDoctor: true,
+            parentId: true,
           },
         },
         physiotherapist: {
@@ -1734,6 +1739,31 @@ export class PatientService {
         },
       },
     });
+
+    // ── Send notification to the parent user ──────────────────────────
+    try {
+      const parentUserId = (record.child as any)?.parentId;
+      if (parentUserId) {
+        const isOnline = String(data.admissionType || '').toUpperCase() === 'ONLINE';
+        const sessionType = isOnline ? 'Online' : 'Physical';
+        const childName = `${record.child?.firstName || ''} ${record.child?.lastName || ''}`.trim();
+        const dateStr = admissionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = data.startTime ? ` at ${data.startTime}` : '';
+        const physioName = record.physiotherapist?.name ? ` with ${record.physiotherapist.name}` : '';
+
+        await this.notificationsService.createNotification({
+          userId: parentUserId,
+          title: `New ${sessionType} Session Scheduled`,
+          message: `A ${sessionType.toLowerCase()} session has been scheduled for ${childName} on ${dateStr}${timeStr}${physioName}.`,
+          type: isOnline ? 'SESSION_ONLINE' : 'SESSION_PHYSICAL',
+          metadata: { admissionTrackingId: record.id, admissionType: data.admissionType, childId: data.childId },
+        });
+      }
+    } catch (err: any) {
+      this.logger.warn(`Failed to send session notification: ${err?.message}`);
+    }
+
+    return record;
   }
 
   async updateAdmissionTracking(id: string, data: UpdateAdmissionTrackingDto) {
@@ -2558,7 +2588,7 @@ export class PatientService {
     const child = await this.prisma.child.findUnique({ where: { id: data.childId } });
     if (!child) throw new NotFoundException(`Child ${data.childId} not found`);
 
-    return this.prisma.physiotherapyAssignment.create({
+    const assignment = await this.prisma.physiotherapyAssignment.create({
       data: {
         hospitalId: data.hospitalId || null,
         physiotherapistId: data.physiotherapistId || null,
@@ -2574,10 +2604,33 @@ export class PatientService {
       include: {
         hospital: { select: { id: true, name: true } },
         physiotherapist: { select: { id: true, name: true, role: true } },
-        child: { select: { id: true, firstName: true, lastName: true, age: true } },
+        child: { select: { id: true, firstName: true, lastName: true, age: true, parentId: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     });
+
+    // ── Send notification to the parent user ──────────────────────────
+    try {
+      const parentUserId = (assignment.child as any)?.parentId;
+      if (parentUserId) {
+        const childName = `${assignment.child?.firstName || ''} ${assignment.child?.lastName || ''}`.trim();
+        const dueDateStr = data.dueDate
+          ? new Date(data.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : 'no due date';
+
+        await this.notificationsService.createNotification({
+          userId: parentUserId,
+          title: 'New Assignment Added',
+          message: `A new assignment "${data.title}" has been added for ${childName}. Due: ${dueDateStr}.`,
+          type: 'ASSIGNMENT_NEW',
+          metadata: { assignmentId: assignment.id, childId: data.childId },
+        });
+      }
+    } catch (err: any) {
+      this.logger.warn(`Failed to send assignment notification: ${err?.message}`);
+    }
+
+    return assignment;
   }
 
   /** Update an existing physiotherapy assignment */

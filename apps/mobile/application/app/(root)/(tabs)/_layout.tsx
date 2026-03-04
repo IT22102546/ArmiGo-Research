@@ -114,10 +114,7 @@ const TabsLayout = () => {
           name="home"
           options={{
             title: "",
-            headerShown: true,
-            headerStyle: {
-              backgroundColor: "#0057FF", // Blue only for home
-            },
+            headerShown: false,
           }}
         />
         <Tabs.Screen
@@ -232,10 +229,7 @@ const TabsLayout = () => {
           name="profile"
           options={{
             title: "Profile",
-            headerShown: true,
-            headerStyle: {
-              backgroundColor: "#fff", // Default color for other tabs
-            },
+            headerShown: false,
           }}
         />
         <Tabs.Screen

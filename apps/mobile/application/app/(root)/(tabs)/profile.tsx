@@ -11,8 +11,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Dimensions,
+  Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -22,6 +22,7 @@ import { apiFetch } from "@/utils/api";
 
 // ─── Responsive ─────────────────────────────────────────────────
 const { width: SW } = Dimensions.get("window");
+const STATUS_BAR_HEIGHT = Platform.OS === "android" ? (StatusBar.currentHeight || 36) : 44;
 
 // ─── Color Palette ───────────────────────────────────────────────
 const BLUE        = "#4B3AFF";
@@ -505,26 +506,26 @@ const Profile = () => {
   // ── Loading ──────────────────────────────────────────────────
   if (loading) {
     return (
-      <SafeAreaView style={s.flex} edges={["right", "left"]}>
-        <StatusBar barStyle="light-content" backgroundColor={BLUE} />
-        <LinearGradient colors={[BLUE, BLUE_LIGHT]} style={s.header}>
-          <Text style={s.headerTxt}>My Profile</Text>
+      <View style={s.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <LinearGradient colors={["#4338CA", "#6366F1", "#818CF8"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.headerGradient}>
+          <Text style={s.headerTitle}>Profile</Text>
         </LinearGradient>
         <View style={s.center}>
-          <ActivityIndicator size="large" color={BLUE} />
+          <ActivityIndicator size="large" color="#6366F1" />
           <Text style={s.loadTxt}>Loading profile…</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // ── No user ──────────────────────────────────────────────────
   if (!user) {
     return (
-      <SafeAreaView style={s.flex} edges={["right", "left"]}>
-        <StatusBar barStyle="light-content" backgroundColor={BLUE} />
-        <LinearGradient colors={[BLUE, BLUE_LIGHT]} style={s.header}>
-          <Text style={s.headerTxt}>My Profile</Text>
+      <View style={s.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <LinearGradient colors={["#4338CA", "#6366F1", "#818CF8"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.headerGradient}>
+          <Text style={s.headerTitle}>My Profile</Text>
         </LinearGradient>
         <View style={s.center}>
           <Ionicons name="person-circle-outline" size={64} color={SLATE_200} />
@@ -533,48 +534,38 @@ const Profile = () => {
             <Text style={s.retryTxt}>Retry</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // ── Main render ──────────────────────────────────────────────
   return (
-    <SafeAreaView style={s.flex} edges={["right", "left"]}>
-      <StatusBar barStyle="light-content" backgroundColor={BLUE} translucent={false} />
+    <View style={s.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Gradient top bar */}
+      {/* ═══════════════════════════════════
+          IMMERSIVE GRADIENT HEADER
+      ═══════════════════════════════════ */}
       <LinearGradient
-        colors={[BLUE, BLUE_LIGHT]}
+        colors={["#4338CA", "#6366F1", "#818CF8"]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={s.header}
+        end={{ x: 1, y: 1 }}
+        style={s.headerGradient}
       >
-        <Text style={s.headerTxt}>My Profile</Text>
-      </LinearGradient>
+        {/* Decorative circles */}
+        <View style={s.decorCircle1} />
+        <View style={s.decorCircle2} />
 
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={s.scrollPad}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[BLUE]}
-            tintColor={BLUE}
-          />
-        }
-      >
-        {/* ═══════════════════════════════════
-            PARENT IDENTITY CARD
-        ═══════════════════════════════════ */}
-        <LinearGradient
-          colors={[BLUE, "#7055FF"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={s.identityCard}
-        >
-          {/* Parent avatar */}
+        {/* Top bar */}
+        <View style={s.topBar}>
+          <Text style={s.headerTitle}>My Profile</Text>
+          <TouchableOpacity style={s.settingsBtn} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Avatar + Name */}
+        <View style={s.profileCenter}>
           <View style={s.pAvatar}>
             <Text style={s.pAvatarTxt}>
               {featuredChild
@@ -599,7 +590,48 @@ const Profile = () => {
               ? `${children.length} ${children.length === 1 ? "child" : "children"} linked`
               : (user.email ?? user.phone ?? "Parent Account")}
           </Text>
-        </LinearGradient>
+        </View>
+
+        {/* Stats ribbon */}
+        <View style={s.statsRow}>
+          <View style={s.statItem}>
+            <Text style={[s.statValue, { color: "#34d399" }]}>{children.length}</Text>
+            <Text style={s.statLabel}>{children.length === 1 ? "Child" : "Children"}</Text>
+          </View>
+          <View style={s.statItem}>
+            <Text style={[s.statValue, { color: "#fbbf24" }]}>
+              {featuredChild?.hospital ? "1" : "0"}
+            </Text>
+            <Text style={s.statLabel}>Hospital</Text>
+          </View>
+          <View style={s.statItem}>
+            <Text style={[s.statValue, { color: "#f472b6" }]}>
+              {featuredChild?.physioAssignments?.length ?? 0}
+            </Text>
+            <Text style={s.statLabel}>Physio</Text>
+          </View>
+          <View style={s.statItem}>
+            <Text style={[s.statValue, { color: "#60a5fa" }]}>
+              {featuredChild?.playHours?.toFixed(1) ?? "0"}
+            </Text>
+            <Text style={s.statLabel}>Play Hrs</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.scrollPad}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#6366F1"]}
+            tintColor={"#6366F1"}
+          />
+        }
+      >
 
         {/* ═══════════════════════════════════
             CHILDREN — PRIMARY FOCUS
@@ -696,9 +728,9 @@ const Profile = () => {
           </View>
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -708,29 +740,79 @@ const Profile = () => {
 
 // ─── Screen ─────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: SLATE_100 },
+  container: { flex: 1, backgroundColor: "#4338CA" },
 
-  header: {
-    paddingTop: 14,
-    paddingBottom: 16,
+  headerGradient: {
     paddingHorizontal: 20,
-    alignItems: "center",
+    paddingTop: STATUS_BAR_HEIGHT + 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: "hidden",
   },
-  headerTxt: {
+  decorCircle1: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    top: -40,
+    right: -30,
+  },
+  decorCircle2: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    bottom: -20,
+    left: -20,
+  },
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  headerTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#fff",
     fontFamily: "Poppins-Bold",
     letterSpacing: 0.4,
   },
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profileCenter: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
 
-  scroll: { flex: 1 },
-  scrollPad: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 50 },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+  },
+  statItem: { alignItems: "center", flex: 1 },
+  statValue: { fontSize: 22, fontWeight: "800", fontFamily: "Poppins-Bold" },
+  statLabel: { fontSize: 11, color: "#c7d2fe", fontFamily: "Poppins-Regular", marginTop: 4 },
 
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  scroll: { flex: 1, backgroundColor: "#f8fafc" },
+  scrollPad: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 50 },
+
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "#f8fafc" },
   loadTxt: { fontSize: 15, color: SLATE_500, fontFamily: "Poppins-Regular" },
   retryBtn: {
-    backgroundColor: BLUE,
+    backgroundColor: "#6366F1",
     paddingHorizontal: 28,
     paddingVertical: 11,
     borderRadius: 10,
@@ -738,33 +820,20 @@ const s = StyleSheet.create({
   },
   retryTxt: { color: "#fff", fontWeight: "600", fontFamily: "Poppins-SemiBold" },
 
-  // Identity card (parent)
-  identityCard: {
-    marginTop: 16,
-    borderRadius: 18,
-    paddingVertical: 24,
-    paddingHorizontal: 24,
-    alignItems: "center",
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
-  },
   pAvatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.55)",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.4)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
   },
-  pAvatarTxt: { fontSize: 24, fontWeight: "700", color: "#fff", fontFamily: "Poppins-Bold" },
+  pAvatarTxt: { fontSize: 26, fontWeight: "700", color: "#fff", fontFamily: "Poppins-Bold" },
   pName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: "#fff",
     fontFamily: "Poppins-Bold",
@@ -774,16 +843,16 @@ const s = StyleSheet.create({
   rolePill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.18)",
     borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginBottom: 10,
+    paddingVertical: 5,
+    marginBottom: 8,
   },
   roleTxt: { color: "rgba(255,255,255,0.92)", fontSize: 12, fontFamily: "Poppins-Regular" },
   pMeta: {
     fontSize: 12,
-    color: "rgba(255,255,255,0.88)",
+    color: "#c7d2fe",
     fontFamily: "Poppins-Regular",
     maxWidth: SW * 0.7,
     textAlign: "center",
