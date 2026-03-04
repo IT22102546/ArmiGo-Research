@@ -8,7 +8,6 @@ import {
   Alert,
   StatusBar,
   Image,
-  TextInput,
   ActivityIndicator,
   RefreshControl,
   Dimensions,
@@ -56,7 +55,7 @@ const AVAILABILITY_CONFIG: Record<string, { label: string; color: string; bg: st
   NOT_AVAILABLE: { label: "Unavailable", color: "#ef4444", bg: "#fef2f2", icon: "close-circle" },
 };
 
-const EXERCISE_CONFIG: { key: string; label: string; icon: "hand-left-outline" | "hand-right-outline" | "fitness-outline" | "body-outline"; color: string; bg: string }[] = [
+const EXERCISE_CONFIG: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }[] = [
   { key: "exerciseFingers", label: "Fingers", icon: "hand-left-outline", color: "#6366F1", bg: "#eef2ff" },
   { key: "exerciseWrist", label: "Wrist", icon: "hand-right-outline", color: "#8b5cf6", bg: "#f5f3ff" },
   { key: "exerciseElbow", label: "Elbow", icon: "fitness-outline", color: "#f59e0b", bg: "#fffbeb" },
@@ -74,6 +73,15 @@ type PhysioInfo = {
   availabilityNote?: string;
   unavailableDates?: { id: string; date: string; reason?: string }[];
 };
+type ProgressTracker = {
+  startProgress?: number;
+  currentProgress?: number;
+  playTimeMinutes?: number;
+  fingerProgress?: number;
+  wristProgress?: number;
+  elbowProgress?: number;
+  shoulderProgress?: number;
+};
 type ChildDetail = ChildInfo & {
   exerciseFingers?: boolean;
   exerciseWrist?: boolean;
@@ -83,6 +91,7 @@ type ChildDetail = ChildInfo & {
   playHours?: number;
   hospital?: { id?: string; name?: string };
   physioAssignments?: { physiotherapist?: PhysioInfo }[];
+  progressTracker?: ProgressTracker;
 };
 type SessionItem = {
   id: string;
@@ -118,7 +127,6 @@ const Home = () => {
   const [onlineSessions, setOnlineSessions] = useState<SessionItem[]>([]);
   const [physicalSessions, setPhysicalSessions] = useState<SessionItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const childDetailFetched = useRef(false);
 
@@ -191,7 +199,7 @@ const Home = () => {
           apiFetch(`/api/v1/users/my-admission-trackings?childId=${encodeURIComponent(cid)}`, { method: "GET" }).catch(() => null),
           apiFetch(`/api/v1/users/my-assignments?childId=${encodeURIComponent(cid)}`, { method: "GET" }).catch(() => null),
           apiFetch("/api/v1/notifications/unread-count", { method: "GET" }).catch(() => null),
-          !childDetailFetched.current ? apiFetch("/api/v1/users/my-children", { method: "GET" }).catch(() => null) : Promise.resolve(null),
+          apiFetch("/api/v1/users/my-children", { method: "GET" }).catch(() => null),
         ]);
 
         if (onlineRes?.ok) {
@@ -225,12 +233,33 @@ const Home = () => {
             setUnreadCount(typeof cnt === "number" ? cnt : parseInt(cnt, 10) || 0);
           } catch {}
         }
+        // Populate childDetail from my-children or mobile/profile fallback
         if (childrenRes?.ok) {
           try {
             const json = await childrenRes.json();
             const rows: ChildDetail[] = extractData(json) || [];
             const match = Array.isArray(rows) ? rows.find((c) => c.id === cid) || rows[0] : null;
             if (match) { setChildDetail(match); childDetailFetched.current = true; }
+          } catch {}
+        }
+        // Fallback: if childDetail still not set, try mobile/profile
+        if (!childDetailFetched.current) {
+          try {
+            const profileRes = await apiFetch("/api/v1/users/mobile/profile", { method: "GET" });
+            if (profileRes?.ok) {
+              const json = await profileRes.json();
+              const data = extractData(json);
+              const children: ChildDetail[] = Array.isArray(data?.children) ? data.children : [];
+              const match = children.find((c) => c.id === cid) || children[0] || null;
+              if (match) {
+                setChildDetail(match);
+                childDetailFetched.current = true;
+                if (!childName) {
+                  const n = `${match.firstName || ""} ${match.lastName || ""}`.trim();
+                  if (n) setChildName(n);
+                }
+              }
+            }
           } catch {}
         }
       } catch {} finally { setLoading(false); setRefreshing(false); }
@@ -279,7 +308,17 @@ const Home = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
 
-      {/* ── HEADER ─────────────────────────────────────────────────── */}
+      {loading ? (
+        <View style={styles.loaderWrap}><ActivityIndicator size="large" color="#6366F1" /></View>
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} colors={["#6366F1"]} tintColor="#6366F1" />}
+        >
+
+      {/* ── HEADER (now scrollable) ─────────────────────────────────── */}
       <LinearGradient colors={["#4338CA", "#6366F1", "#818CF8"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
         <View style={styles.decorCircle1} />
         <View style={styles.decorCircle2} />
@@ -288,12 +327,6 @@ const Home = () => {
           <View style={styles.greetingWrap}>
             <Text style={styles.greetingText}>{greeting} 👋</Text>
             <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
-            {childName ? (
-              <View style={styles.childBadge}>
-                <Ionicons name="person" size={11} color="#c7d2fe" />
-                <Text style={styles.childBadgeText}>Child Profile</Text>
-              </View>
-            ) : null}
           </View>
 
           <View style={styles.topActions}>
@@ -315,17 +348,58 @@ const Home = () => {
           </View>
         </View>
 
-        {/* Search */}
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color="#a5b4fc" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search sessions, assignments…"
-            placeholderTextColor="#a5b4fc"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
+        {/* Compact Progress + Stats in one row */}
+        {enabledExercises.length > 0 ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.progressSection}
+            onPress={() => router.push({ pathname: "/(root)/(screens)/exercise_progress" as any, params: { childId: childId || "" } })}
+          >
+            <View style={styles.progressHeader}>
+              <View style={styles.progressTitleWrap}>
+                <Ionicons name="analytics-outline" size={14} color="#c7d2fe" />
+                <Text style={styles.progressTitle}>Progress</Text>
+              </View>
+              <View style={styles.viewDetailBtn}>
+                <Text style={styles.viewDetailText}>Details</Text>
+                <Ionicons name="chevron-forward" size={12} color="#fff" />
+              </View>
+            </View>
+            <View style={styles.progressBarWrap}>
+              <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarFill, { width: `${Math.min(100, Math.max(0, childDetail?.progressTracker?.currentProgress ?? 0))}%` }]} />
+              </View>
+              <Text style={styles.progressPercent}>{Math.round(childDetail?.progressTracker?.currentProgress ?? 0)}%</Text>
+            </View>
+            <View style={styles.exerciseMiniList}>
+              {enabledExercises.map((ex) => {
+                const progKey = ex.key === "exerciseFingers" ? "fingerProgress"
+                  : ex.key === "exerciseWrist" ? "wristProgress"
+                  : ex.key === "exerciseElbow" ? "elbowProgress"
+                  : "shoulderProgress";
+                const val = (childDetail?.progressTracker as any)?.[progKey] ?? 0;
+                const brightColor = ex.key === "exerciseFingers" ? "#67e8f9"
+                  : ex.key === "exerciseWrist" ? "#a78bfa"
+                  : ex.key === "exerciseElbow" ? "#fbbf24"
+                  : "#f9a8d4";
+                return (
+                  <View key={ex.key} style={styles.exerciseMiniRow}>
+                    <View style={styles.exerciseMiniLeft}>
+                      <View style={[styles.exerciseMiniIconWrap, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+                        <Ionicons name={ex.icon as any} size={14} color={brightColor} />
+                      </View>
+                      <Text style={styles.exerciseMiniLabel}>{ex.label}</Text>
+                    </View>
+                    <View style={styles.exerciseMiniBarBg}>
+                      <View style={[styles.exerciseMiniBarFill, { width: `${Math.min(100, Math.max(0, val))}%`, backgroundColor: brightColor }]} />
+                    </View>
+                    <Text style={[styles.exerciseMiniVal, { color: brightColor }]}>{Math.round(val)}%</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
+        ) : null}
 
         {/* Stats ribbon */}
         <View style={styles.statsRow}>
@@ -344,15 +418,8 @@ const Home = () => {
       </LinearGradient>
 
       {/* ── BODY ───────────────────────────────────────────────────── */}
-      {loading ? (
-        <View style={styles.loaderWrap}><ActivityIndicator size="large" color="#6366F1" /></View>
-      ) : (
-        <ScrollView
-          style={styles.body}
-          contentContainerStyle={styles.bodyContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} colors={["#6366F1"]} tintColor="#6366F1" />}
-        >
+      <View style={styles.body}>
+        <View style={styles.bodyContent}>
           {/* Quick Access Grid */}
           <Text style={styles.sectionTitle}>Quick Access</Text>
           <View style={styles.quickGrid}>
@@ -548,6 +615,8 @@ const Home = () => {
           </View>
 
           <View style={{ height: 100 }} />
+        </View>
+      </View>
         </ScrollView>
       )}
     </View>
@@ -559,15 +628,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#4338CA" },
 
   /* header */
-  header: { paddingHorizontal: 20, paddingTop: STATUS_BAR_HEIGHT + 24, paddingBottom: 28, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: "hidden" },
+  header: { paddingHorizontal: 20, paddingTop: STATUS_BAR_HEIGHT + 16, paddingBottom: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: "hidden" },
   decorCircle1: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,255,255,0.06)", top: -40, right: -30 },
   decorCircle2: { position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.05)", bottom: -20, left: -20 },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   greetingWrap: { flex: 1, marginRight: 12 },
   greetingText: { fontSize: 14, color: "#c7d2fe", fontFamily: "Poppins-Regular" },
-  displayName: { fontSize: 26, fontWeight: "700", color: "#fff", fontFamily: "Poppins-Bold", marginTop: 6 },
-  childBadge: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, backgroundColor: "rgba(255,255,255,0.12)", alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  childBadgeText: { fontSize: 11, color: "#c7d2fe", fontFamily: "Poppins-Regular" },
+  displayName: { fontSize: 22, fontWeight: "700", color: "#fff", fontFamily: "Poppins-Bold", marginTop: 2 },
   topActions: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 6 },
   iconBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   badge: { position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: "#ef4444", justifyContent: "center", alignItems: "center", paddingHorizontal: 4, borderWidth: 1.5, borderColor: "#4338CA" },
@@ -577,18 +644,36 @@ const styles = StyleSheet.create({
   avatarPlaceholder: { width: 44, height: 44, borderRadius: 14, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "rgba(255,255,255,0.25)" },
   avatarInitials: { color: "#fff", fontSize: 14, fontWeight: "700", fontFamily: "Poppins-Bold" },
 
-  /* search */
-  searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 14, paddingHorizontal: 14, marginTop: 24, height: 48 },
-  searchInput: { flex: 1, marginLeft: 8, color: "#fff", fontSize: 14, fontFamily: "Poppins-Regular" },
+  /* progress tracker */
+  progressSection: { marginTop: 14, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 14, padding: 12 },
+  progressHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  progressTitleWrap: { flexDirection: "row", alignItems: "center", gap: 5 },
+  progressTitle: { fontSize: 13, fontWeight: "600", color: "#e0e7ff", fontFamily: "Poppins-SemiBold" },
+  viewDetailBtn: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(255,255,255,0.18)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  viewDetailText: { fontSize: 10, color: "#fff", fontWeight: "600", fontFamily: "Poppins-SemiBold" },
+  progressBarWrap: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  progressBarBg: { flex: 1, height: 8, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 4, overflow: "hidden" },
+  progressBarFill: { height: 8, backgroundColor: "#34d399", borderRadius: 4 },
+  progressPercent: { fontSize: 13, fontWeight: "800", color: "#34d399", fontFamily: "Poppins-Bold", minWidth: 32, textAlign: "right" },
+
+  /* exercise mini rows inside progress */
+  exerciseMiniList: { marginBottom: 0 },
+  exerciseMiniRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  exerciseMiniLeft: { flexDirection: "row", alignItems: "center", gap: 6, width: 90 },
+  exerciseMiniIconWrap: { width: 24, height: 24, borderRadius: 8, justifyContent: "center" as const, alignItems: "center" as const },
+  exerciseMiniLabel: { fontSize: 10, color: "#fff", fontFamily: "Poppins-Regular", fontWeight: "600" as const },
+  exerciseMiniBarBg: { flex: 1, height: 6, backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 4, overflow: "hidden" as const, marginHorizontal: 6 },
+  exerciseMiniBarFill: { height: 6, borderRadius: 4 },
+  exerciseMiniVal: { fontSize: 10, fontWeight: "800" as const, fontFamily: "Poppins-Bold", minWidth: 30, textAlign: "right" as const },
 
   /* stats */
-  statsRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 24, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 16, paddingVertical: 18, paddingHorizontal: 14 },
+  statsRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 14, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 12 },
   statItem: { alignItems: "center", flex: 1 },
-  statValue: { fontSize: 24, fontWeight: "800", fontFamily: "Poppins-Bold" },
-  statLabel: { fontSize: 11, color: "#c7d2fe", fontFamily: "Poppins-Regular", marginTop: 6 },
+  statValue: { fontSize: 20, fontWeight: "800", fontFamily: "Poppins-Bold" },
+  statLabel: { fontSize: 10, color: "#c7d2fe", fontFamily: "Poppins-Regular", marginTop: 4 },
 
   /* body */
-  body: { flex: 1, backgroundColor: "#f8fafc" },
+  body: { backgroundColor: "#f8fafc" },
   bodyContent: { paddingHorizontal: 20, paddingTop: 20 },
   loaderWrap: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f8fafc" },
 
