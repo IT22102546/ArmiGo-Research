@@ -103,7 +103,7 @@ const DashStudentEnrollment = () => {
   };
 
   const handleViewProfile = (): void => {
-    router.push("/admin/students");
+    router.push("/admin/children");
   };
 
   return (

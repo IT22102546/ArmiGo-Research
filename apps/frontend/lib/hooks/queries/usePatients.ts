@@ -144,6 +144,7 @@ export function useDeletePatient() {
         title: "Error",
         description: message,
         variant: "destructive",
+      });
       logger.error("Failed to delete patient:", error);
     },
   });

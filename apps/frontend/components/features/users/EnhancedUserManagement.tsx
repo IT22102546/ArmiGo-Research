@@ -1892,7 +1892,7 @@ const EnhancedUserManagement: React.FC = () => {
                                     onClick={() => {
                                       if (activeTab.includes("STUDENT")) {
                                         router.push(
-                                          `/admin/students/${user.id}`
+                                          `/admin/children/${user.id}`
                                         );
                                       } else {
                                         router.push(
@@ -2213,7 +2213,7 @@ const EnhancedUserManagement: React.FC = () => {
                       onClick={() => {
                         setQuickViewOpen(false);
                         if (activeTab.includes("STUDENT")) {
-                          router.push(`/admin/students/${quickViewUser.id}`);
+                          router.push(`/admin/children/${quickViewUser.id}`);
                         } else {
                           router.push(`/admin/teachers/${quickViewUser.id}`);
                         }

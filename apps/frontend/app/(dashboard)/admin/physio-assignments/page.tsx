@@ -193,6 +193,7 @@ export default function PhysiotherapyAssignmentsPage() {
       filterStatus,
       search,
     ],
+    refetchOnMount: "always", // always re-fetch when navigating to this page
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (filterHospitalId !== "all") params.hospitalId = filterHospitalId;
@@ -602,23 +603,40 @@ export default function PhysiotherapyAssignmentsPage() {
                   <Building2 className="h-4 w-4 text-muted-foreground" />
                   Hospital
                 </Label>
-                <Select
-                  value={form.hospitalId}
-                  onValueChange={(v) =>
-                    setForm((p) => ({ ...p, hospitalId: v }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select hospital" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hospitals.map((h) => (
-                      <SelectItem key={h.id} value={h.id}>
-                        {h.name}
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={form.hospitalId || "__none__"}
+                    onValueChange={(v) =>
+                      setForm((p) => ({ ...p, hospitalId: v === "__none__" ? "" : v }))
+                    }
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select hospital" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        <span className="text-muted-foreground">— No hospital filter —</span>
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {hospitals.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          {h.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.hospitalId && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => setForm((p) => ({ ...p, hospitalId: "", physiotherapistId: "", childId: "" }))}
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="sr-only">Clear hospital</span>
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -640,32 +658,49 @@ export default function PhysiotherapyAssignmentsPage() {
                 <Stethoscope className="h-4 w-4 text-muted-foreground" />
                 Physiotherapist
               </Label>
-              <Select
-                value={form.physiotherapistId}
-                onValueChange={(v) =>
-                  setForm((p) => ({ ...p, physiotherapistId: v }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select physiotherapist" />
-                </SelectTrigger>
-                <SelectContent>
-                  {physiotherapists.length === 0 ? (
-                    <SelectItem value="__none__" disabled>
-                      {form.hospitalId || isHospitalScoped
-                        ? "No physiotherapists found"
-                        : "Select a hospital first"}
+              <div className="flex items-center gap-2">
+                <Select
+                  value={form.physiotherapistId || "__none__"}
+                  onValueChange={(v) =>
+                    setForm((p) => ({ ...p, physiotherapistId: v === "__none__" ? "" : v }))
+                  }
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select physiotherapist (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      <span className="text-muted-foreground">— None (optional) —</span>
                     </SelectItem>
-                  ) : (
-                    physiotherapists.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                        {p.specialization ? ` — ${p.specialization}` : ""}
+                    {physiotherapists.length === 0 ? (
+                      <SelectItem value="__empty__" disabled>
+                        {form.hospitalId || isHospitalScoped
+                          ? "No physiotherapists found"
+                          : "Select a hospital first"}
                       </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+                    ) : (
+                      physiotherapists.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                          {p.specialization ? ` — ${p.specialization}` : ""}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {form.physiotherapistId && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => setForm((p) => ({ ...p, physiotherapistId: "", childId: "" }))}
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Clear physiotherapist</span>
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Child selector */}
@@ -674,33 +709,50 @@ export default function PhysiotherapyAssignmentsPage() {
                 <User2 className="h-4 w-4 text-muted-foreground" />
                 Child <span className="text-destructive ml-0.5">*</span>
               </Label>
-              <Select
-                value={form.childId}
-                onValueChange={(v) => setForm((p) => ({ ...p, childId: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select child" />
-                </SelectTrigger>
-                <SelectContent>
-                  {children.length === 0 ? (
-                    <SelectItem value="__none__" disabled>
-                      {form.physiotherapistId
-                        ? "No children found for this physiotherapist"
-                        : form.hospitalId || isHospitalScoped
-                        ? "Select a physiotherapist to filter children"
-                        : "Select a hospital first"}
+              <div className="flex items-center gap-2">
+                <Select
+                  value={form.childId || "__none__"}
+                  onValueChange={(v) => setForm((p) => ({ ...p, childId: v === "__none__" ? "" : v }))}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select child" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__" disabled={!form.childId}>
+                      <span className="text-muted-foreground">— Select a child —</span>
                     </SelectItem>
-                  ) : (
-                    children.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.firstName} {c.lastName}
-                        {c.age ? ` (${c.age}y)` : ""}
-                        {c.diagnosis ? ` — ${c.diagnosis}` : ""}
+                    {children.length === 0 ? (
+                      <SelectItem value="__empty__" disabled>
+                        {form.physiotherapistId
+                          ? "No children found for this physiotherapist"
+                          : form.hospitalId || isHospitalScoped
+                          ? "No active children found for this hospital"
+                          : "Select a hospital first"}
                       </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+                    ) : (
+                      children.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.firstName} {c.lastName}
+                          {c.age ? ` (${c.age}y)` : ""}
+                          {c.diagnosis ? ` — ${c.diagnosis}` : ""}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {form.childId && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => setForm((p) => ({ ...p, childId: "" }))}
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Clear child</span>
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Title */}

@@ -36,8 +36,9 @@ export function useLoginMutation() {
       // Update Zustand store with user data
       setUser(response.user);
 
-      // Invalidate user-related queries
-      queryClient.invalidateQueries({ queryKey: ["user"] });
+      // Invalidate ALL cached queries so every page re-fetches fresh data
+      // after login (prevents stale data from a previous session being shown)
+      queryClient.invalidateQueries();
 
       logger.log("✅ Login successful:", response.user);
     },
