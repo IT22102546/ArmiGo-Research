@@ -720,12 +720,34 @@ export class UsersService {
   }
 
   async findById(id: string): Promise<any> {
-    return this.prisma.user.findUnique({
+    const childInclude = {
+      hospital: {
+        select: { id: true, name: true, city: true, phone: true, address: true },
+      },
+      physioAssignments: {
+        include: {
+          physiotherapist: {
+            select: { id: true, name: true, role: true, specialization: true, phone: true },
+          },
+        },
+        orderBy: { createdAt: "desc" as const },
+        take: 1,
+      },
+    };
+
+    const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
+        // Direct relation: Child.parentId → User.id  (most reliable)
+        children: {
+          include: childInclude,
+        },
         parentProfile: {
           include: {
-            children: true,
+            // Indirect relation via ParentProfile record (may not always exist)
+            children: {
+              include: childInclude,
+            },
           },
         },
         hospitalProfile: {
@@ -737,6 +759,134 @@ export class UsersService {
         zone: true,
       },
     });
+
+    if (!user) return null;
+
+    // Collect sibling user IDs sharing the same email/phone (handles parallel accounts)
+    const allParentIds = new Set<string>([id]);
+    const orClauses: any[] = [];
+    if ((user as any).email) orClauses.push({ email: (user as any).email });
+    if ((user as any).phone) orClauses.push({ phone: (user as any).phone });
+    if (orClauses.length) {
+      const siblings = await this.prisma.user.findMany({
+        where: { OR: orClauses, NOT: { id } },
+        select: { id: true },
+      });
+      siblings.forEach((s: any) => allParentIds.add(s.id));
+    }
+
+    // Fetch children for all sibling IDs if there are extras
+    let extraChildren: any[] = [];
+    if (allParentIds.size > 1) {
+      const extraIds = [...allParentIds].filter((pid) => pid !== id);
+      extraChildren = await this.prisma.child.findMany({
+        where: { parentId: { in: extraIds } },
+        include: childInclude,
+      });
+    }
+
+    // Normalise: merge children from both pathways, deduplicate by id
+    const directChildren: any[] = (user as any).children ?? [];
+    const profileChildren: any[] = (user as any).parentProfile?.children ?? [];
+    const seen = new Set<string>();
+    const mergedChildren: any[] = [];
+    for (const c of [...directChildren, ...profileChildren, ...extraChildren]) {
+      if (!seen.has(c.id)) { seen.add(c.id); mergedChildren.push(c); }
+    }
+
+    // Attach merged list to parentProfile for consistent mobile API shape
+    const result: any = { ...user, children: mergedChildren };
+    if (result.parentProfile) {
+      result.parentProfile = { ...result.parentProfile, children: mergedChildren };
+    } else {
+      result.parentProfile = { children: mergedChildren };
+    }
+
+    return result;
+  }
+
+  /**
+   * Return all children belonging to a parent user, with hospital and
+   * physio-assignment data – same shape used by the mobile profile screen.
+   *
+   * Looks up children by the authenticated user's ID first, then broadens
+   * to any other User records sharing the same email or phone (handles the
+   * case where the admin enrolled the child under a parallel account).
+   */
+  async findChildrenForParent(parentId: string): Promise<any[]> {
+    const childInclude = {
+      hospital: {
+        select: { id: true, name: true, city: true, phone: true, address: true },
+      },
+      physioAssignments: {
+        include: {
+          physiotherapist: {
+            select: { id: true, name: true, role: true, specialization: true, phone: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' as const },
+        take: 1,
+      },
+    } as const;
+
+    // Collect all parent-user IDs that share the same email / phone
+    const me = await this.prisma.user.findUnique({
+      where: { id: parentId },
+      select: { id: true, email: true, phone: true },
+    });
+
+    const allParentIds = new Set<string>([parentId]);
+
+    if (me) {
+      const orClauses: any[] = [];
+      if (me.email) orClauses.push({ email: me.email });
+      if (me.phone) orClauses.push({ phone: me.phone });
+
+      if (orClauses.length) {
+        const siblings = await this.prisma.user.findMany({
+          where: { OR: orClauses },
+          select: { id: true },
+        });
+        siblings.forEach((s) => allParentIds.add(s.id));
+      }
+    }
+
+    const children = await this.prisma.child.findMany({
+      where: { parentId: { in: [...allParentIds] } },
+      orderBy: { enrolledAt: 'asc' },
+      include: childInclude,
+    });
+
+    this.logger.log(
+      `findChildrenForParent(${parentId}): searched ids=${[...allParentIds].join(',')} → ${children.length} children`,
+    );
+
+    return children;
+  }
+
+  async getMobileParentProfile(userId: string): Promise<{ parent: any; children: any[] } | null> {
+    const parent = await this.findById(userId);
+    if (!parent) return null;
+
+    const childrenFromDedicatedLookup = await this.findChildrenForParent(userId);
+    const childrenFromProfile: any[] =
+      parent?.parentProfile?.children?.length
+        ? parent.parentProfile.children
+        : parent?.children ?? [];
+
+    const merged: any[] = [];
+    const seen = new Set<string>();
+    for (const child of [...childrenFromDedicatedLookup, ...childrenFromProfile]) {
+      if (!seen.has(child.id)) {
+        seen.add(child.id);
+        merged.push(child);
+      }
+    }
+
+    return {
+      parent,
+      children: merged,
+    };
   }
 
 async findByEmail(email: string): Promise<User | null> {

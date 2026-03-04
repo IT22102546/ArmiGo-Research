@@ -88,6 +88,27 @@ export class UsersController {
     );
   }
 
+  @Get("my-children")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get all children for the authenticated parent, with hospital and physio data" })
+  async getMyChildren(@Request() req: { user: { id: string } }): Promise<any> {
+    const children = await this.usersService.findChildrenForParent(req.user.id);
+    return { success: true, data: children };
+  }
+
+  @Get("mobile/profile")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Mobile parent profile payload: parent + children (hospital + physio)" })
+  async getMobileProfile(@Request() req: { user: { id: string } }): Promise<any> {
+    const payload = await this.usersService.getMobileParentProfile(req.user.id);
+    if (!payload) {
+      throw AppException.notFound(ErrorCode.USER_NOT_FOUND, "User not found");
+    }
+    return { success: true, data: payload };
+  }
+
   @Get("profile")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -97,7 +118,8 @@ export class UsersController {
     if (!user) {
       throw AppException.notFound(ErrorCode.USER_NOT_FOUND, "User not found");
     }
-    return user;
+    // Wrap in { success, data } so mobile and web clients both work
+    return { success: true, data: user };
   }
 
   @Put("profile")

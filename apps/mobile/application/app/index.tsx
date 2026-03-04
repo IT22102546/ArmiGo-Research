@@ -16,15 +16,9 @@ const Home = () => {
 
   if (loading) return null;
 
+  // Parent-only app: signed-in users go to home, otherwise start onboarding
   return isSignedIn ? (
-    currentUser?.role === "Teacher" ||
-    currentUser?.role === "TEACHER" ||
-    currentUser?.role === "INTERNAL_TEACHER" ||
-    currentUser?.role === "EXTERNAL_TEACHER" ? (
-      <Redirect href="/(root)/(tabs)/TeacherHome" />
-    ) : (
-      <Redirect href="/(root)/(tabs)/home" />
-    )
+    <Redirect href="/(root)/(tabs)/home" />
   ) : (
     <Redirect href="/(auth)/onBoard1" />
   );
