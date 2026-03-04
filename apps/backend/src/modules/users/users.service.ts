@@ -727,7 +727,23 @@ export class UsersService {
       physioAssignments: {
         include: {
           physiotherapist: {
-            select: { id: true, name: true, role: true, specialization: true, phone: true },
+            select: {
+              id: true,
+              name: true,
+              role: true,
+              specialization: true,
+              phone: true,
+              email: true,
+              isActive: true,
+              availabilityStatus: true,
+              availabilityNote: true,
+              availabilityUpdatedAt: true,
+              unavailableDates: {
+                where: { date: { gte: new Date() } },
+                orderBy: { date: 'asc' as const },
+                select: { id: true, date: true, reason: true },
+              },
+            },
           },
         },
         orderBy: { createdAt: "desc" as const },
@@ -814,14 +830,51 @@ export class UsersService {
    * case where the admin enrolled the child under a parallel account).
    */
   async findChildrenForParent(parentId: string): Promise<any[]> {
+    const parseTimeToMinutes = (value?: string | null): number => {
+      if (!value) return 0;
+      const [hourPart, minutePart] = String(value).split(":");
+      const hours = Number(hourPart);
+      const minutes = Number(minutePart);
+      if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
+      return (hours * 60) + minutes;
+    };
+
     const childInclude = {
       hospital: {
         select: { id: true, name: true, city: true, phone: true, address: true },
       },
+      admissionTrackings: {
+        select: {
+          status: true,
+          startTime: true,
+          endTime: true,
+        },
+      },
+      therapySessions: {
+        select: {
+          duration: true,
+        },
+      },
       physioAssignments: {
         include: {
           physiotherapist: {
-            select: { id: true, name: true, role: true, specialization: true, phone: true },
+            select: {
+              id: true,
+              name: true,
+              role: true,
+              specialization: true,
+              phone: true,
+              email: true,
+              isActive: true,
+              availabilityStatus: true,
+              availabilityNote: true,
+              availabilityUpdatedAt: true,
+              unavailableDates: {
+                where: { date: { gte: new Date() } },
+                orderBy: { date: 'asc' as const },
+                select: { id: true, date: true, reason: true },
+              },
+            },
           },
         },
         orderBy: { createdAt: 'desc' as const },
@@ -861,7 +914,36 @@ export class UsersService {
       `findChildrenForParent(${parentId}): searched ids=${[...allParentIds].join(',')} → ${children.length} children`,
     );
 
-    return children;
+    return children.map((child: any) => {
+      const admissionPlayTimeMinutes = (Array.isArray(child.admissionTrackings) ? child.admissionTrackings : [])
+        .filter(
+          (tracking: any) =>
+            tracking?.status === "ATTENDED_COMPLETE" || tracking?.status === "COMPLETED"
+        )
+        .reduce((sum: number, tracking: any) => {
+          if (!tracking?.startTime || !tracking?.endTime) {
+            return sum;
+          }
+
+          const duration =
+            parseTimeToMinutes(tracking.endTime) - parseTimeToMinutes(tracking.startTime);
+
+          return duration > 0 ? sum + duration : sum;
+        }, 0);
+
+      const therapyPlayTimeMinutes = (Array.isArray(child.therapySessions) ? child.therapySessions : [])
+        .reduce((sum: number, session: any) => sum + (session?.duration || 0), 0);
+
+      const playTimeMinutes = therapyPlayTimeMinutes + admissionPlayTimeMinutes;
+      const playHours = Number((playTimeMinutes / 60).toFixed(1));
+
+      const { admissionTrackings, therapySessions, ...rest } = child;
+      return {
+        ...rest,
+        playTimeMinutes,
+        playHours,
+      };
+    });
   }
 
   async getMobileParentProfile(userId: string): Promise<{ parent: any; children: any[] } | null> {
@@ -887,6 +969,223 @@ export class UsersService {
       parent,
       children: merged,
     };
+  }
+
+  async getMyAssignments(userId: string, childId?: string): Promise<any[]> {
+    const me = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, phone: true },
+    });
+
+    const allParentIds = new Set<string>([userId]);
+
+    if (me) {
+      const orClauses: any[] = [];
+      if (me.email) orClauses.push({ email: me.email });
+      if (me.phone) orClauses.push({ phone: me.phone });
+
+      if (orClauses.length > 0) {
+        const siblings = await this.prisma.user.findMany({
+          where: { OR: orClauses },
+          select: { id: true },
+        });
+        siblings.forEach((s) => allParentIds.add(s.id));
+      }
+    }
+
+    const where: any = {
+      child: {
+        parentId: { in: [...allParentIds] },
+      },
+    };
+
+    if (childId) {
+      where.childId = childId;
+    }
+
+    return this.prisma.physiotherapyAssignment.findMany({
+      where,
+      include: {
+        hospital: { select: { id: true, name: true } },
+        physiotherapist: {
+          select: { id: true, name: true, role: true, specialization: true },
+        },
+        child: {
+          select: { id: true, firstName: true, lastName: true, age: true, diagnosis: true },
+        },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async getMyOnlineSessions(userId: string, childId?: string): Promise<any[]> {
+    const me = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, phone: true },
+    });
+
+    const allParentIds = new Set<string>([userId]);
+
+    if (me) {
+      const orClauses: any[] = [];
+      if (me.email) orClauses.push({ email: me.email });
+      if (me.phone) orClauses.push({ phone: me.phone });
+
+      if (orClauses.length > 0) {
+        const siblings = await this.prisma.user.findMany({
+          where: { OR: orClauses },
+          select: { id: true },
+        });
+        siblings.forEach((s) => allParentIds.add(s.id));
+      }
+    }
+
+    const where: any = {
+      admissionType: "ONLINE",
+      child: {
+        parentId: { in: [...allParentIds] },
+      },
+    };
+
+    if (childId) {
+      where.childId = childId;
+    }
+
+    return this.prisma.admissionTracking.findMany({
+      where,
+      include: {
+        child: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        physiotherapist: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            specialization: true,
+            phone: true,
+            email: true,
+            availabilityStatus: true,
+            availabilityNote: true,
+            availabilityUpdatedAt: true,
+          },
+        },
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+          },
+        },
+      },
+      orderBy: [
+        { admissionDate: "asc" },
+        { startTime: "asc" },
+      ],
+    });
+  }
+
+  async getMyAdmissionTrackings(userId: string, childId?: string): Promise<any[]> {
+    const me = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, phone: true },
+    });
+
+    const allParentIds = new Set<string>([userId]);
+
+    if (me) {
+      const orClauses: any[] = [];
+      if (me.email) orClauses.push({ email: me.email });
+      if (me.phone) orClauses.push({ phone: me.phone });
+
+      if (orClauses.length > 0) {
+        const siblings = await this.prisma.user.findMany({
+          where: { OR: orClauses },
+          select: { id: true },
+        });
+        siblings.forEach((s) => allParentIds.add(s.id));
+      }
+    }
+
+    const where: any = {
+      NOT: {
+        admissionType: {
+          contains: "ONLINE",
+          mode: "insensitive",
+        },
+      },
+      OR: [
+        {
+          child: {
+            parentId: { in: [...allParentIds] },
+          },
+        },
+        {
+          childId: { in: [...allParentIds] },
+        },
+      ],
+    };
+
+    if (childId) {
+      where.AND = [{ childId }];
+    }
+
+    return this.prisma.admissionTracking.findMany({
+      where,
+      include: {
+        child: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            age: true,
+            diagnosis: true,
+          },
+        },
+        physiotherapist: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            specialization: true,
+            phone: true,
+            email: true,
+            availabilityStatus: true,
+            availabilityNote: true,
+            availabilityUpdatedAt: true,
+          },
+        },
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            phone: true,
+            address: true,
+          },
+        },
+        device: {
+          select: {
+            id: true,
+            deviceType: true,
+            serialNumber: true,
+            modelNumber: true,
+            manufacturer: true,
+            status: true,
+            condition: true,
+          },
+        },
+      },
+      orderBy: [
+        { admissionDate: "desc" },
+        { startTime: "asc" },
+      ],
+    });
   }
 
 async findByEmail(email: string): Promise<User | null> {

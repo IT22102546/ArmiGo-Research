@@ -44,6 +44,16 @@ interface Physio {
   role?: string;
   specialization?: string;
   phone?: string;
+  email?: string;
+  isActive?: boolean;
+  availabilityStatus?: "AVAILABLE" | "IN_WORK" | "NOT_AVAILABLE" | string | null;
+  availabilityNote?: string | null;
+  availabilityUpdatedAt?: string | null;
+  unavailableDates?: Array<{
+    id: string;
+    date: string;
+    reason?: string | null;
+  }>;
 }
 
 interface Hospital {
@@ -65,6 +75,8 @@ interface Child {
   diagnosisDate?: string | null;
   medicalNotes?: string | null;
   assignedDoctor?: string | null;
+  playTimeMinutes?: number;
+  playHours?: number;
   isActive: boolean;
   enrolledAt: string;
   hospital?: Hospital | null;
@@ -131,6 +143,12 @@ const genderColor = (g?: string): string =>
 const capitalize = (s?: string): string =>
   !s ? "" : s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
+const resolveAvailability = (raw?: string | null): { label: string; color: string } => {
+  if (raw === "IN_WORK") return { label: "In Work", color: "#3b82f6" };
+  if (raw === "NOT_AVAILABLE") return { label: "Not Available", color: RED };
+  return { label: "Available", color: GREEN };
+};
+
 // ═══════════════════════════════════════════════════════════════
 //  SUB-COMPONENTS
 // ═══════════════════════════════════════════════════════════════
@@ -189,6 +207,15 @@ const ChildCard: React.FC<{ child: Child; index: number }> = ({ child, index }) 
   const age = calcAge(child.dateOfBirth) ?? child.age;
   const gc  = genderColor(child.gender);
   const physio = child.physioAssignments?.[0]?.physiotherapist ?? null;
+  const availability = resolveAvailability(physio?.availabilityStatus ?? null);
+  const nextUnavailable = physio?.unavailableDates?.[0];
+  const playTimeMinutes = typeof child.playTimeMinutes === "number" ? child.playTimeMinutes : null;
+  const playHours =
+    typeof child.playHours === "number"
+      ? child.playHours
+      : playTimeMinutes !== null
+        ? Number((playTimeMinutes / 60).toFixed(1))
+        : null;
 
   return (
     <View style={cc.card}>
@@ -265,8 +292,31 @@ const ChildCard: React.FC<{ child: Child; index: number }> = ({ child, index }) 
             color="#8b5cf6"
             label="Physiotherapist"
             value={physio?.name ?? child.assignedDoctor ?? "Not assigned"}
-            sub={physio?.specialization ?? physio?.role}
+            sub={
+              [
+                physio?.specialization ?? physio?.role,
+                physio ? availability.label : undefined,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            }
           />
+
+          {!!physio && (
+            <InfoRow
+              icon="pulse-outline"
+              color={availability.color}
+              label="Physio Availability"
+              value={availability.label}
+              sub={[
+                physio.availabilityNote ? `Note: ${physio.availabilityNote}` : undefined,
+                physio.availabilityUpdatedAt ? `Updated: ${fmtDate(physio.availabilityUpdatedAt)}` : undefined,
+                nextUnavailable?.date ? `Next Off: ${fmtDate(nextUnavailable.date)}${nextUnavailable.reason ? ` (${nextUnavailable.reason})` : ""}` : undefined,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+          )}
 
           {/* Diagnosis */}
           <InfoRow
@@ -291,6 +341,15 @@ const ChildCard: React.FC<{ child: Child; index: number }> = ({ child, index }) 
             color="#10b981"
             label="Enrolled Since"
             value={fmtDate(child.enrolledAt)}
+          />
+
+          {/* Play hours */}
+          <InfoRow
+            icon="game-controller-outline"
+            color="#06b6d4"
+            label="Play Hours"
+            value={playHours !== null ? `${playHours.toFixed(1)} hrs` : "Not recorded"}
+            sub={playTimeMinutes !== null ? `${playTimeMinutes} minutes total` : undefined}
           />
 
           {/* Medical notes */}
@@ -441,6 +500,7 @@ const Profile = () => {
       ? (user.parentProfile!.children as Child[])
       : (user?.children ?? []);
   const children: Child[] = enrichedChildren.length > 0 ? enrichedChildren : profileChildren;
+  const featuredChild = children.length > 0 ? children[0] : null;
 
   // ── Loading ──────────────────────────────────────────────────
   if (loading) {
@@ -517,19 +577,27 @@ const Profile = () => {
           {/* Parent avatar */}
           <View style={s.pAvatar}>
             <Text style={s.pAvatarTxt}>
-              {toInitials(user.firstName, user.lastName)}
+              {featuredChild
+                ? toInitials(featuredChild.firstName, featuredChild.lastName)
+                : toInitials(user.firstName, user.lastName)}
             </Text>
           </View>
 
-          <Text style={s.pName}>{user.firstName} {user.lastName}</Text>
+          <Text style={s.pName}>
+            {featuredChild
+              ? `${featuredChild.firstName} ${featuredChild.lastName}`
+              : `${user.firstName} ${user.lastName}`}
+          </Text>
 
           <View style={s.rolePill}>
-            <Ionicons name="shield-checkmark-outline" size={12} color="rgba(255,255,255,0.9)" />
-            <Text style={s.roleTxt}>  Parent Account</Text>
+            <Ionicons name="people-outline" size={12} color="rgba(255,255,255,0.9)" />
+            <Text style={s.roleTxt}>  {children.length > 0 ? "Children Account" : "Parent Account"}</Text>
           </View>
 
           <Text style={s.pMeta} numberOfLines={1}>
-            {user.email ?? user.phone ?? "Parent Account"}
+            {children.length > 0
+              ? `${children.length} ${children.length === 1 ? "child" : "children"} linked`
+              : (user.email ?? user.phone ?? "Parent Account")}
           </Text>
         </LinearGradient>
 

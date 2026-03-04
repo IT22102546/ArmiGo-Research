@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,675 +9,695 @@ import {
   StatusBar,
   Image,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import useAuthStore from "@/stores/authStore";
-import { icons, images } from "@/constants";
+import { apiFetch } from "@/utils/api";
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// ── helpers ────────────────────────────────────────────────────────────
+const extractData = (payload: any) =>
+  payload?.success && payload?.data ? payload.data : payload;
+
+const formatDateSmart = (value?: string | null) => {
+  if (!value) return "Not set";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not set";
+  const now = new Date();
+  const diff = parsed.getTime() - now.getTime();
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  if (days > 1 && days <= 7) return `In ${days} days`;
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: parsed.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+};
+
+const formatTime = (start?: string | null, end?: string | null) => {
+  if (!start && !end) return "";
+  if (start && end) return `${start} – ${end}`;
+  return start || end || "";
+};
+
+type ChildInfo = { id: string; firstName?: string; lastName?: string };
+type SessionItem = {
+  id: string;
+  admissionDate?: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  status?: string;
+  notes?: string | null;
+  child?: ChildInfo;
+  physiotherapist?: { name?: string; specialization?: string } | null;
+  hospital?: { name?: string } | null;
+};
+type AssignmentItem = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status?: string | null;
+  dueDate?: string | null;
+  child?: ChildInfo;
+  physiotherapist?: { name?: string } | null;
+};
+
+// ── component ──────────────────────────────────────────────────────────
 const Home = () => {
-  const { currentUser, signOut } = useAuthStore();
+  const { currentUser, signOut, isSignedIn } = useAuthStore();
   const router = useRouter();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [childName, setChildName] = useState("");
+  const [childId, setChildId] = useState<string | null>(null);
+  const [onlineSessions, setOnlineSessions] = useState<SessionItem[]>([]);
+  const [physicalSessions, setPhysicalSessions] = useState<SessionItem[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good Morning";
+    if (h < 17) return "Good Afternoon";
+    return "Good Evening";
+  })();
+
+  // resolve child id ────────────────────────────────────────────────────
+  const resolveChildId = useCallback(async (): Promise<string | null> => {
+    const role = String((currentUser as any)?.role || "").toUpperCase();
+    const isStudent = role.includes("STUDENT");
+    const candidates = [
+      (currentUser as any)?.childId,
+      (currentUser as any)?.child?.id,
+      (currentUser as any)?.profile?.childId,
+      (currentUser as any)?.studentProfile?.childId,
+      ...(isStudent ? [(currentUser as any)?.id, (currentUser as any)?._id] : []),
+    ].filter(Boolean);
+    if (candidates.length) return String(candidates[0]);
+
+    try {
+      const res = await apiFetch("/api/v1/users/mobile/profile", { method: "GET" });
+      if (res.ok) {
+        const json = await res.json();
+        const data = extractData(json);
+        const first = Array.isArray(data?.children) ? data.children[0] : null;
+        if (first?.id) {
+          const name = `${first.firstName || ""} ${first.lastName || ""}`.trim();
+          if (name) setChildName(name);
+          return String(first.id);
+        }
+      }
+    } catch {}
+    try {
+      const res = await apiFetch("/api/v1/users/my-children", { method: "GET" });
+      if (res.ok) {
+        const json = await res.json();
+        const rows: ChildInfo[] = extractData(json) || [];
+        const first = Array.isArray(rows) ? rows[0] : null;
+        if (first?.id) {
+          const name = `${first.firstName || ""} ${first.lastName || ""}`.trim();
+          if (name) setChildName(name);
+          return String(first.id);
+        }
+      }
+    } catch {}
+    return null;
+  }, [currentUser]);
+
+  // fetch all home data ────────────────────────────────────────────────
+  const fetchData = useCallback(
+    async (isRefresh = false) => {
+      if (!isSignedIn || !currentUser) { setLoading(false); return; }
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      try {
+        const cid = await resolveChildId();
+        setChildId(cid);
+        if (!cid) { setLoading(false); setRefreshing(false); return; }
+
+        const [onlineRes, physicalRes, assignRes] = await Promise.all([
+          apiFetch(`/api/v1/users/my-online-sessions?childId=${encodeURIComponent(cid)}`, { method: "GET" }).catch(() => null),
+          apiFetch(`/api/v1/users/my-admission-trackings?childId=${encodeURIComponent(cid)}`, { method: "GET" }).catch(() => null),
+          apiFetch(`/api/v1/users/my-assignments?childId=${encodeURIComponent(cid)}`, { method: "GET" }).catch(() => null),
+        ]);
+
+        if (onlineRes?.ok) {
+          const json = await onlineRes.json();
+          const rows: SessionItem[] = Array.isArray(extractData(json)) ? extractData(json) : [];
+          const filtered = rows.filter((s) => s?.child?.id === cid);
+          setOnlineSessions(filtered);
+          if (!childName && filtered[0]?.child) {
+            const n = `${filtered[0].child.firstName || ""} ${filtered[0].child.lastName || ""}`.trim();
+            if (n) setChildName(n);
+          }
+        }
+        if (physicalRes?.ok) {
+          const json = await physicalRes.json();
+          const rows: SessionItem[] = Array.isArray(extractData(json)) ? extractData(json) : [];
+          setPhysicalSessions(rows.filter((s) => s?.child?.id === cid));
+        }
+        if (assignRes?.ok) {
+          const json = await assignRes.json();
+          const root = extractData(json);
+          let items: AssignmentItem[] = [];
+          if (Array.isArray(root)) items = root;
+          else if (Array.isArray(root?.assignments)) items = root.assignments;
+          else if (Array.isArray(root?.data?.assignments)) items = root.data.assignments;
+          setAssignments(items);
+        }
+      } catch {} finally { setLoading(false); setRefreshing(false); }
+    },
+    [childName, currentUser, isSignedIn, resolveChildId]
+  );
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await signOut();
-          router.replace("/(auth)/onBoard1");
-        },
-      },
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign Out", style: "destructive", onPress: async () => { await signOut(); router.replace("/(auth)/onBoard1"); } },
     ]);
   };
 
-  // Dummy data for upcoming schedules (physiotherapy focused)
-  const upcomingSchedules = [
-    {
-      id: 1,
-      courseTitle: "Elbow Rehabilitation",
-      scheduleTitle: "Elbow Rehabilitation",
-      date: "12th June 2025",
-      time: "3:00 pm - 3:15 pm",
-      instructor: "Dr. Sarah Johnson",
-      image: images.test,
-    },
-    {
-      id: 2,
-      courseTitle: "Finger Rehabilitation",
-      scheduleTitle: "Finger Rehabilitation",
-      date: "12th June 2025",
-      time: "3:30 pm - 4:00 pm",
-      instructor: "Dr. Sarah Johnson",
-      image: images.test,
-    },
-    {
-      id: 3,
-      courseTitle: "Knee Strengthening",
-      scheduleTitle: "Knee Strengthening",
-      date: "15th June 2025",
-      time: "10:00 am - 10:45 am",
-      instructor: "Dr. Michael Chen",
-      image: images.test,
-    },
-  ];
+  // derived data ────────────────────────────────────────────────────────
+  const upcomingOnline = onlineSessions
+    .filter((s) => { const st = String(s.status || "").toUpperCase(); return st === "SCHEDULED" || st === "ONGOING"; })
+    .sort((a, b) => new Date(a.admissionDate || "").getTime() - new Date(b.admissionDate || "").getTime())
+    .slice(0, 3);
 
+  const upcomingPhysical = physicalSessions
+    .filter((s) => { const st = String(s.status || "").toUpperCase(); return st === "SCHEDULED" || st === "ONGOING" || st === "ACTIVE"; })
+    .sort((a, b) => new Date(a.admissionDate || "").getTime() - new Date(b.admissionDate || "").getTime())
+    .slice(0, 3);
+
+  const latestAssignments = [...assignments]
+    .sort((a, b) => new Date(b.dueDate || "").getTime() - new Date(a.dueDate || "").getTime())
+    .slice(0, 3);
+
+  const scheduledOnline = onlineSessions.filter((s) => String(s.status || "").toUpperCase() === "SCHEDULED").length;
+  const scheduledPhysical = physicalSessions.filter((s) => { const st = String(s.status || "").toUpperCase(); return st === "SCHEDULED" || st === "ACTIVE"; }).length;
+  const totalSessions = onlineSessions.length + physicalSessions.length;
+
+  const displayName = childName || `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim() || "User";
+  const initials = (childName ? childName.split(" ").map((w: string) => w[0]).join("").slice(0, 2) : "") || `${currentUser?.firstName?.[0] || ""}${currentUser?.lastName?.[0] || ""}` || "U";
+
+  // ── render ──────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={["right", "left"]}>
-      {/* Custom Status Bar */}
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#0057FF"
-        translucent={false}
-      />
+      <StatusBar barStyle="light-content" backgroundColor="#4338CA" translucent={false} />
 
-      {/* System Status Bar Area (for battery, signal, etc.) */}
-      <View style={styles.systemStatusBar} />
+      {/* ── HEADER ─────────────────────────────────────────────────── */}
+      <LinearGradient colors={["#4338CA", "#6366F1", "#818CF8"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+        <View style={styles.decorCircle1} />
+        <View style={styles.decorCircle2} />
 
-      {/* Blue Header Area with Rounded Bottom */}
-      <View style={styles.header}>
-        <View style={styles.welcomeContainer}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View>
-              <Text style={styles.welcomeText}>Welcome Back</Text>
-              <Text style={styles.userName}>{currentUser?.firstName + " " + currentUser?.lastName || "Randy Perera"}</Text>
-            </View>
+        <View style={styles.topRow}>
+          <View style={styles.greetingWrap}>
+            <Text style={styles.greetingText}>{greeting} 👋</Text>
+            <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
+            {childName ? (
+              <View style={styles.childBadge}>
+                <Ionicons name="person" size={11} color="#c7d2fe" />
+                <Text style={styles.childBadgeText}>Child Profile</Text>
+              </View>
+            ) : null}
+          </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
-              {/* Notification Button with Better Styling */}
-              <TouchableOpacity 
-                style={styles.notificationButton} 
-                onPress={() => router.push("/(root)/(tabs)/notifications")}
-              >
-                <View style={styles.notificationIconContainer}>
-                  <Ionicons name="notifications-outline" size={22} color="#fff" />
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>3</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-
-              {/* Profile Avatar with Better Styling */}
-              <TouchableOpacity 
-                style={styles.profileButton}
-                onPress={() => router.push("/(root)/(tabs)/profile")}
-              >
-                {currentUser?.profilePicture ? (
-                  <Image 
-                    source={{ uri: currentUser.profilePicture }} 
-                    style={styles.profileAvatar}
-                  />
-                ) : (
-                  <View style={styles.profilePlaceholder}>
-                    <Text style={styles.profileInitials}>
-                      {currentUser?.firstName?.[0] || "R"}{currentUser?.lastName?.[0] || "P"}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
+          <View style={styles.topActions}>
+            <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/(root)/(tabs)/Notifications")}>
+              <Ionicons name="notifications-outline" size={22} color="#fff" />
+              <View style={styles.badge}><Text style={styles.badgeText}>3</Text></View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.avatarBtn} onPress={() => router.push("/(root)/(tabs)/profile")}>
+              {currentUser?.profilePicture ? (
+                <Image source={{ uri: currentUser.profilePicture }} style={styles.avatarImg} />
+              ) : (
+                <LinearGradient colors={["#a78bfa", "#7c3aed"]} style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarInitials}>{initials}</Text>
+                </LinearGradient>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Search Bar on Blue Background */}
-        <View style={styles.searchContainer}>
+        {/* Search bar */}
+        <View style={styles.searchWrap}>
           <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={20} color="#64748b" />
+            <Ionicons name="search" size={18} color="#a5b4fc" />
             <TextInput
               style={styles.searchInput}
               placeholder="Search exercises, therapists..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#a5b4fc"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
-          </View>
-        </View>
-      </View>
-
-      {/* Main Content */}
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Quick Access Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Access</Text>
-          <View style={styles.quickAccessContainer}>
-            <TouchableOpacity
-              style={styles.quickAccessItem}
-              onPress={() => router.push("/(root)/(tabs)/exams")}
-            >
-              <View style={styles.quickAccessCard}>
-                <View style={[styles.quickAccessIconContainer, { backgroundColor: "#4B9BFF" }]}>
-                  <Image
-                    source={icons.home_book}
-                    style={styles.quickAccessIcon}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.quickAccessText}>Exercises</Text>
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={18} color="#a5b4fc" />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.searchFilter}>
+                <Ionicons name="options-outline" size={16} color="#6366F1" />
               </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.quickAccessItem}
-              onPress={() => router.push("/(root)/(tabs)/publications")}
-            >
-              <View style={styles.quickAccessCard}>
-                <View style={[styles.quickAccessIconContainer, { backgroundColor: "#FF6B6B" }]}>
-                  <Image
-                    source={icons.home_publication}
-                    style={styles.quickAccessIcon}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.quickAccessText}>Progress</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.quickAccessItem}
-              onPress={() => router.push("/(root)/(tabs)/schedule")}
-            >
-              <View style={styles.quickAccessCard}>
-                <View style={[styles.quickAccessIconContainer, { backgroundColor: "#6BCF7F" }]}>
-                  <Ionicons name="calendar-outline" size={28} color="#fff" />
-                </View>
-                <Text style={styles.quickAccessText}>Schedule</Text>
-              </View>
-            </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Upcoming Schedules Section - Changed to Horizontal Scroll */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Upcoming Sessions</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
+        {/* Stats ribbon */}
+        <View style={styles.statsRow}>
+          <View style={styles.statChip}>
+            <Ionicons name="videocam" size={14} color="#fbbf24" />
+            <Text style={styles.statValue}>{scheduledOnline}</Text>
+            <Text style={styles.statLabel}>Online</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statChip}>
+            <Ionicons name="medkit" size={14} color="#34d399" />
+            <Text style={styles.statValue}>{scheduledPhysical}</Text>
+            <Text style={styles.statLabel}>Physical</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statChip}>
+            <Ionicons name="document-text" size={14} color="#f472b6" />
+            <Text style={styles.statValue}>{assignments.length}</Text>
+            <Text style={styles.statLabel}>Tasks</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statChip}>
+            <Ionicons name="pulse" size={14} color="#60a5fa" />
+            <Text style={styles.statValue}>{totalSessions}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* ── BODY ───────────────────────────────────────────────────── */}
+      {loading ? (
+        <View style={styles.loaderWrap}>
+          <ActivityIndicator size="large" color="#6366F1" />
+          <Text style={styles.loaderText}>Loading your dashboard...</Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.body}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} colors={["#6366F1"]} tintColor="#6366F1" />}
+        >
+          {/* Quick Access Grid */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Quick Access</Text>
+            <View style={styles.quickGrid}>
+              <TouchableOpacity style={styles.quickCard} onPress={() => router.push("/(root)/(tabs)/assignments")}>
+                <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.quickIconWrap}>
+                  <Ionicons name="document-text" size={24} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.quickLabel}>Assignments</Text>
+                <Text style={styles.quickCount}>{assignments.length} total</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.quickCard} onPress={() => router.push("/(root)/(tabs)/publications")}>
+                <LinearGradient colors={["#f43f5e", "#e11d48"]} style={styles.quickIconWrap}>
+                  <Ionicons name="bar-chart" size={24} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.quickLabel}>Progress</Text>
+                <Text style={styles.quickCount}>View reports</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.quickCard} onPress={() => router.push("/(root)/(screens)/online_sessions")}>
+                <LinearGradient colors={["#8b5cf6", "#7c3aed"]} style={styles.quickIconWrap}>
+                  <Ionicons name="videocam" size={24} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.quickLabel}>Online</Text>
+                <Text style={styles.quickCount}>{scheduledOnline} upcoming</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.quickCard} onPress={() => router.push("/(root)/(tabs)/admission_tracking")}>
+                <LinearGradient colors={["#10b981", "#059669"]} style={styles.quickIconWrap}>
+                  <Ionicons name="medkit" size={24} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.quickLabel}>Physical</Text>
+                <Text style={styles.quickCount}>{scheduledPhysical} upcoming</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalScrollContent}
-          >
-            {upcomingSchedules.map((schedule) => (
-              <View key={schedule.id} style={styles.scheduleCard}>
-                {/* Schedule Image */}
-                <View style={styles.scheduleImageContainer}>
-                  <Image
-                    source={schedule.image}
-                    style={styles.scheduleImage}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.scheduleImageOverlay} />
-                </View>
-
-                <View style={styles.scheduleContent}>
-                  <View style={styles.scheduleHeader}>
-                    <Text style={styles.courseTitle}>{schedule.courseTitle}</Text>
-                    <View style={styles.liveIndicator}>
-                      <View style={styles.liveDot} />
-                      <Text style={styles.liveText}>Live in 2h</Text>
+          {/* ── Upcoming Online Sessions ───────────────────────────── */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionDot, { backgroundColor: "#8b5cf6" }]} />
+                <Text style={styles.sectionTitle}>Online Sessions</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push("/(root)/(screens)/online_sessions")}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            {upcomingOnline.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="videocam-outline" size={36} color="#c4b5fd" />
+                <Text style={styles.emptyTitle}>No Upcoming Online Sessions</Text>
+                <Text style={styles.emptySub}>Your scheduled video sessions will appear here</Text>
+              </View>
+            ) : (
+              upcomingOnline.map((session) => (
+                <TouchableOpacity key={session.id} style={styles.sessionCard} activeOpacity={0.7} onPress={() => router.push("/(root)/(screens)/online_sessions")}>
+                  <View style={[styles.sessionAccent, { backgroundColor: "#8b5cf6" }]} />
+                  <View style={styles.sessionBody}>
+                    <View style={styles.sessionTop}>
+                      <View style={styles.sessionTypeChip}>
+                        <Ionicons name="videocam" size={12} color="#7c3aed" />
+                        <Text style={styles.sessionTypeText}>Online</Text>
+                      </View>
+                      <View style={[styles.statusPill, { backgroundColor: String(session.status || "").toUpperCase() === "ONGOING" ? "#dcfce7" : "#fef3c7" }]}>
+                        <View style={[styles.statusDot, { backgroundColor: String(session.status || "").toUpperCase() === "ONGOING" ? "#16a34a" : "#f59e0b" }]} />
+                        <Text style={[styles.statusText, { color: String(session.status || "").toUpperCase() === "ONGOING" ? "#16a34a" : "#92400e" }]}>{session.status || "Scheduled"}</Text>
+                      </View>
                     </View>
-                  </View>
-                  
-                  <Text style={styles.scheduleTitle}>
-                    {schedule.scheduleTitle}
-                  </Text>
-
-                  <View style={styles.scheduleDetails}>
-                    <View style={styles.scheduleTime}>
-                      <Ionicons name="calendar-outline" size={14} color="#64748b" />
-                      <Text style={styles.scheduleText}>{schedule.date}</Text>
+                    <View style={styles.sessionInfoRow}>
+                      <Ionicons name="calendar-outline" size={14} color="#6366f1" />
+                      <Text style={styles.sessionInfoText}>{formatDateSmart(session.admissionDate)}</Text>
                     </View>
-                    <View style={styles.scheduleTime}>
-                      <Ionicons name="time-outline" size={14} color="#64748b" />
-                      <Text style={styles.scheduleText}>{schedule.time}</Text>
+                    {(session.startTime || session.endTime) ? (
+                      <View style={styles.sessionInfoRow}>
+                        <Ionicons name="time-outline" size={14} color="#6366f1" />
+                        <Text style={styles.sessionInfoText}>{formatTime(session.startTime, session.endTime)}</Text>
+                      </View>
+                    ) : null}
+                    {session.physiotherapist?.name ? (
+                      <View style={styles.sessionInfoRow}>
+                        <Ionicons name="person-outline" size={14} color="#6366f1" />
+                        <Text style={styles.sessionInfoText}>{session.physiotherapist.name}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+
+          {/* ── Upcoming Physical Sessions ─────────────────────────── */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionDot, { backgroundColor: "#10b981" }]} />
+                <Text style={styles.sectionTitle}>Physical Sessions</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push("/(root)/(tabs)/admission_tracking")}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            {upcomingPhysical.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="medkit-outline" size={36} color="#86efac" />
+                <Text style={styles.emptyTitle}>No Upcoming Physical Sessions</Text>
+                <Text style={styles.emptySub}>Your in-person sessions will show up here</Text>
+              </View>
+            ) : (
+              upcomingPhysical.map((session) => (
+                <TouchableOpacity key={session.id} style={styles.sessionCard} activeOpacity={0.7} onPress={() => router.push("/(root)/(tabs)/admission_tracking")}>
+                  <View style={[styles.sessionAccent, { backgroundColor: "#10b981" }]} />
+                  <View style={styles.sessionBody}>
+                    <View style={styles.sessionTop}>
+                      <View style={[styles.sessionTypeChip, { backgroundColor: "#ecfdf5" }]}>
+                        <Ionicons name="medkit" size={12} color="#059669" />
+                        <Text style={[styles.sessionTypeText, { color: "#059669" }]}>Physical</Text>
+                      </View>
+                      <View style={[styles.statusPill, { backgroundColor: String(session.status || "").toUpperCase() === "ACTIVE" ? "#dbeafe" : "#fef3c7" }]}>
+                        <View style={[styles.statusDot, { backgroundColor: String(session.status || "").toUpperCase() === "ACTIVE" ? "#2563eb" : "#f59e0b" }]} />
+                        <Text style={[styles.statusText, { color: String(session.status || "").toUpperCase() === "ACTIVE" ? "#2563eb" : "#92400e" }]}>{session.status || "Scheduled"}</Text>
+                      </View>
                     </View>
+                    <View style={styles.sessionInfoRow}>
+                      <Ionicons name="calendar-outline" size={14} color="#10b981" />
+                      <Text style={styles.sessionInfoText}>{formatDateSmart(session.admissionDate)}</Text>
+                    </View>
+                    {(session.startTime || session.endTime) ? (
+                      <View style={styles.sessionInfoRow}>
+                        <Ionicons name="time-outline" size={14} color="#10b981" />
+                        <Text style={styles.sessionInfoText}>{formatTime(session.startTime, session.endTime)}</Text>
+                      </View>
+                    ) : null}
+                    {session.physiotherapist?.name ? (
+                      <View style={styles.sessionInfoRow}>
+                        <Ionicons name="person-outline" size={14} color="#10b981" />
+                        <Text style={styles.sessionInfoText}>{session.physiotherapist.name}</Text>
+                      </View>
+                    ) : null}
+                    {session.hospital?.name ? (
+                      <View style={styles.sessionInfoRow}>
+                        <Ionicons name="location-outline" size={14} color="#10b981" />
+                        <Text style={styles.sessionInfoText}>{session.hospital.name}</Text>
+                      </View>
+                    ) : null}
                   </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
 
-                  <View style={styles.instructorContainer}>
-                    <Ionicons name="person-outline" size={14} color="#64748b" />
-                    <Text style={styles.instructorText}>
-                      {schedule.instructor}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity style={styles.joinButton}>
-                    <Text style={styles.joinButtonText}>Join Session</Text>
-                    <Ionicons name="arrow-forward" size={16} color="#fff" />
+          {/* ── Latest Assignments ─────────────────────────────────── */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionDot, { backgroundColor: "#3b82f6" }]} />
+                <Text style={styles.sectionTitle}>Latest Assignments</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push("/(root)/(tabs)/assignments")}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            {latestAssignments.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="document-text-outline" size={36} color="#93c5fd" />
+                <Text style={styles.emptyTitle}>No Assignments Yet</Text>
+                <Text style={styles.emptySub}>When you receive assignments they will appear here</Text>
+              </View>
+            ) : (
+              latestAssignments.map((a) => {
+                const statusUpper = String(a.status || "").toUpperCase();
+                const isPending = statusUpper === "PENDING" || statusUpper === "ASSIGNED";
+                const isCompleted = statusUpper.includes("COMPLETE") || statusUpper.includes("SUBMITTED");
+                const pillBg = isCompleted ? "#dcfce7" : isPending ? "#fef3c7" : "#f1f5f9";
+                const pillColor = isCompleted ? "#16a34a" : isPending ? "#92400e" : "#64748b";
+                const dotColor = isCompleted ? "#16a34a" : isPending ? "#f59e0b" : "#94a3b8";
+                return (
+                  <TouchableOpacity key={a.id} style={styles.sessionCard} activeOpacity={0.7} onPress={() => router.push("/(root)/(tabs)/assignments")}>
+                    <View style={[styles.sessionAccent, { backgroundColor: "#3b82f6" }]} />
+                    <View style={styles.sessionBody}>
+                      <View style={styles.sessionTop}>
+                        <Text style={styles.assignTitle} numberOfLines={1}>{a.title}</Text>
+                        <View style={[styles.statusPill, { backgroundColor: pillBg }]}>
+                          <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
+                          <Text style={[styles.statusText, { color: pillColor }]}>{a.status || "Pending"}</Text>
+                        </View>
+                      </View>
+                      {a.description ? <Text style={styles.assignDesc} numberOfLines={2}>{a.description}</Text> : null}
+                      <View style={styles.assignMeta}>
+                        <View style={styles.sessionInfoRow}>
+                          <Ionicons name="calendar-outline" size={14} color="#3b82f6" />
+                          <Text style={styles.sessionInfoText}>Due: {formatDateSmart(a.dueDate)}</Text>
+                        </View>
+                        {a.physiotherapist?.name ? (
+                          <View style={styles.sessionInfoRow}>
+                            <Ionicons name="person-outline" size={14} color="#3b82f6" />
+                            <Text style={styles.sessionInfoText}>{a.physiotherapist.name}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
                   </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
+                );
+              })
+            )}
+          </View>
 
-        {/* Recent Activity Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>View All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.activityContainer}>
-            <View style={styles.activityItem}>
-              <View style={[styles.activityIcon, { backgroundColor: "#E3F2FD" }]}>
-                <Ionicons name="checkmark-circle" size={20} color="#2196F3" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Elbow Exercise Completed</Text>
-                <Text style={styles.activityTime}>10 minutes ago</Text>
-              </View>
-              <Text style={styles.activityScore}>+5 pts</Text>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={[styles.activityIcon, { backgroundColor: "#E8F5E9" }]}>
-                <Ionicons name="trending-up" size={20} color="#4CAF50" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Progress Improved by 15%</Text>
-                <Text style={styles.activityTime}>2 hours ago</Text>
-              </View>
-              <Text style={styles.activityScore}>+10 pts</Text>
+          {/* ── Quick Links Footer ─────────────────────────────────── */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>More</Text>
+            <View style={styles.moreRow}>
+              <TouchableOpacity style={styles.moreBtn} onPress={() => router.push("/(root)/(tabs)/physiotherapists")}>
+                <LinearGradient colors={["#f97316", "#ea580c"]} style={styles.moreBtnIcon}>
+                  <Ionicons name="people" size={20} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.moreBtnLabel}>Therapists</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.moreBtn} onPress={() => router.push("/(root)/(tabs)/publications")}>
+                <LinearGradient colors={["#06b6d4", "#0891b2"]} style={styles.moreBtnIcon}>
+                  <Ionicons name="book" size={20} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.moreBtnLabel}>Publications</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.moreBtn} onPress={() => router.push("/(root)/(tabs)/Notifications")}>
+                <LinearGradient colors={["#ec4899", "#db2777"]} style={styles.moreBtnIcon}>
+                  <Ionicons name="notifications" size={20} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.moreBtnLabel}>Alerts</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.moreBtn} onPress={handleSignOut}>
+                <LinearGradient colors={["#ef4444", "#dc2626"]} style={styles.moreBtnIcon}>
+                  <Ionicons name="log-out" size={20} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.moreBtnLabel}>Sign Out</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </ScrollView>
+
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
 
+// ── styles ──────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  systemStatusBar: {
-    backgroundColor: "#3b82f6",
-    height: 0,
-  },
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+
+  // header
   header: {
-    backgroundColor: "#0057FF",
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  welcomeContainer: {
-    marginBottom: 16,
-  },
-  welcomeText: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500",
-    fontFamily: "Poppins-Regular",
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-    marginTop: 4,
-    fontFamily: "Poppins-Bold",
-  },
-  searchContainer: {
-    marginBottom: 8,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: "#1e293b",
-    fontFamily: "Poppins-Regular",
-  },
-  notificationButton: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  notificationIconContainer: {
-    position: "relative",
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#FF3B30",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: "#0057FF",
-  },
-  notificationBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "bold",
-    fontFamily: "Poppins-Bold",
-  },
-  profileButton: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  profileAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  profilePlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  profileInitials: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "bold",
-    fontFamily: "Poppins-Bold",
-  },
-  content: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  section: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1e293b",
-    fontFamily: "Poppins-Bold",
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: "#3b82f6",
-    fontWeight: "600",
-    fontFamily: "Poppins-SemiBold",
-  },
-  horizontalScrollContent: {
-    paddingRight: 20,
-  },
-  quickAccessContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  quickAccessItem: {
-    flex: 1,
-  },
-  quickAccessCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  quickAccessIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  quickAccessIcon: {
-    width: 28,
-    height: 28,
-    tintColor: "#fff",
-  },
-  quickAccessText: {
-    fontSize: 14,
-    color: "#1e293b",
-    fontWeight: "600",
-    textAlign: "center",
-    fontFamily: "Poppins-SemiBold",
-  },
-  scheduleCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 6,
-    width: 300,
-    marginRight: 16,
+    paddingTop: 14,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     overflow: "hidden",
   },
-  scheduleImageContainer: {
-    width: "100%",
-    height: 140,
-    position: "relative",
+  decorCircle1: {
+    position: "absolute", width: 200, height: 200, borderRadius: 100,
+    backgroundColor: "rgba(255,255,255,0.06)", top: -60, right: -40,
   },
-  scheduleImage: {
-    width: "100%",
-    height: "100%",
+  decorCircle2: {
+    position: "absolute", width: 140, height: 140, borderRadius: 70,
+    backgroundColor: "rgba(255,255,255,0.04)", bottom: -30, left: -20,
   },
-  scheduleImageOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 87, 255, 0.1)",
+  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  greetingWrap: { flex: 1, marginRight: 12 },
+  greetingText: { fontSize: 13, color: "rgba(255,255,255,0.8)", fontFamily: "Poppins-Regular" },
+  displayName: { fontSize: 22, fontWeight: "700", color: "#fff", fontFamily: "Poppins-Bold", marginTop: 2 },
+  childBadge: {
+    flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)",
+    alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, marginTop: 6, gap: 4,
   },
-  scheduleContent: {
-    padding: 16,
+  childBadgeText: { fontSize: 11, color: "#c7d2fe", fontFamily: "Poppins-Regular" },
+  topActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconBtn: {
+    width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
   },
-  scheduleHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
+  badge: {
+    position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: "#ef4444", justifyContent: "center", alignItems: "center",
+    paddingHorizontal: 3, borderWidth: 2, borderColor: "#4338CA",
   },
-  courseTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#3b82f6",
-    fontFamily: "Poppins-SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  badgeText: { color: "#fff", fontSize: 9, fontWeight: "bold" },
+  avatarBtn: {},
+  avatarImg: { width: 42, height: 42, borderRadius: 14, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)" },
+  avatarPlaceholder: {
+    width: 42, height: 42, borderRadius: 14, justifyContent: "center", alignItems: "center",
+    borderWidth: 2, borderColor: "rgba(255,255,255,0.3)",
   },
-  liveIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 59, 48, 0.1)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+  avatarInitials: { color: "#fff", fontSize: 14, fontWeight: "bold", fontFamily: "Poppins-Bold" },
+
+  // search
+  searchWrap: { marginTop: 18 },
+  searchBar: {
+    flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", gap: 10,
   },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#FF3B30",
-    marginRight: 4,
+  searchInput: { flex: 1, fontSize: 14, color: "#fff", fontFamily: "Poppins-Regular", paddingVertical: 0 },
+  searchFilter: {
+    width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.9)",
+    justifyContent: "center", alignItems: "center",
   },
-  liveText: {
-    fontSize: 10,
-    color: "#FF3B30",
-    fontWeight: "600",
-    fontFamily: "Poppins-SemiBold",
+
+  // stats ribbon
+  statsRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 14, marginTop: 16,
+    paddingVertical: 12, paddingHorizontal: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
   },
-  scheduleTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginBottom: 12,
-    fontFamily: "Poppins-Bold",
-    lineHeight: 24,
+  statChip: { flex: 1, alignItems: "center", gap: 2 },
+  statValue: { fontSize: 18, fontWeight: "700", color: "#fff", fontFamily: "Poppins-Bold" },
+  statLabel: { fontSize: 10, color: "rgba(255,255,255,0.7)", fontFamily: "Poppins-Regular" },
+  statDivider: { width: 1, height: 30, backgroundColor: "rgba(255,255,255,0.15)" },
+
+  // loader
+  loaderWrap: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
+  loaderText: { fontSize: 14, color: "#94a3b8", fontFamily: "Poppins-Regular" },
+
+  // body
+  body: { flex: 1 },
+  scrollContent: { paddingBottom: 100 },
+
+  // sections
+  section: { paddingHorizontal: 20, marginTop: 22 },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sectionDot: { width: 8, height: 8, borderRadius: 4 },
+  sectionTitle: { fontSize: 18, fontWeight: "700", color: "#1e293b", fontFamily: "Poppins-Bold" },
+  seeAll: { fontSize: 13, color: "#6366f1", fontWeight: "600", fontFamily: "Poppins-SemiBold" },
+
+  // quick access grid
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 4 },
+  quickCard: {
+    width: (SCREEN_WIDTH - 52) / 2, backgroundColor: "#fff", borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: "#e2e8f0",
+    shadowColor: "#6366f1", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
   },
-  scheduleDetails: {
-    flexDirection: "row",
-    marginBottom: 12,
-    gap: 16,
+  quickIconWrap: { width: 48, height: 48, borderRadius: 14, justifyContent: "center", alignItems: "center", marginBottom: 12 },
+  quickLabel: { fontSize: 15, fontWeight: "600", color: "#1e293b", fontFamily: "Poppins-SemiBold" },
+  quickCount: { fontSize: 12, color: "#94a3b8", fontFamily: "Poppins-Regular", marginTop: 2 },
+
+  // session / assignment cards
+  sessionCard: {
+    flexDirection: "row", backgroundColor: "#fff", borderRadius: 16, marginBottom: 12,
+    borderWidth: 1, borderColor: "#e2e8f0", overflow: "hidden",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
   },
-  scheduleTime: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  sessionAccent: { width: 5 },
+  sessionBody: { flex: 1, padding: 14 },
+  sessionTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  sessionTypeChip: {
+    flexDirection: "row", alignItems: "center", backgroundColor: "#ede9fe",
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4,
   },
-  scheduleText: {
-    fontSize: 12,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
+  sessionTypeText: { fontSize: 11, fontWeight: "600", color: "#7c3aed", fontFamily: "Poppins-SemiBold" },
+  statusPill: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 5 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 11, fontWeight: "600", fontFamily: "Poppins-SemiBold", textTransform: "capitalize" },
+  sessionInfoRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  sessionInfoText: { fontSize: 13, color: "#475569", fontFamily: "Poppins-Regular" },
+
+  // assignment extras
+  assignTitle: { fontSize: 15, fontWeight: "600", color: "#1e293b", fontFamily: "Poppins-SemiBold", flex: 1, marginRight: 8 },
+  assignDesc: { fontSize: 12, color: "#64748b", fontFamily: "Poppins-Regular", lineHeight: 18, marginBottom: 6 },
+  assignMeta: { marginTop: 4 },
+
+  // empty states
+  emptyCard: {
+    backgroundColor: "#fff", borderRadius: 16, padding: 28, alignItems: "center",
+    borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed",
   },
-  instructorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-    gap: 4,
-  },
-  instructorText: {
-    fontSize: 12,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
-  },
-  joinButton: {
-    backgroundColor: "#0057FF",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  joinButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "bold",
-    fontFamily: "Poppins-Bold",
-  },
-  activityContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  activityItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: 14,
-    color: "#1e293b",
-    fontWeight: "600",
-    fontFamily: "Poppins-SemiBold",
-    marginBottom: 2,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontFamily: "Poppins-Regular",
-  },
-  activityScore: {
-    fontSize: 14,
-    color: "#10b981",
-    fontWeight: "bold",
-    fontFamily: "Poppins-Bold",
-  },
+  emptyTitle: { fontSize: 15, fontWeight: "600", color: "#64748b", fontFamily: "Poppins-SemiBold", marginTop: 10 },
+  emptySub: { fontSize: 12, color: "#94a3b8", fontFamily: "Poppins-Regular", textAlign: "center", marginTop: 4 },
+
+  // more links row
+  moreRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+  moreBtn: { alignItems: "center", gap: 6 },
+  moreBtnIcon: { width: 50, height: 50, borderRadius: 16, justifyContent: "center", alignItems: "center" },
+  moreBtnLabel: { fontSize: 11, color: "#475569", fontWeight: "600", fontFamily: "Poppins-SemiBold" },
 });
 
 export default Home;

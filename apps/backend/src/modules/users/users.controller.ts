@@ -97,6 +97,42 @@ export class UsersController {
     return { success: true, data: children };
   }
 
+  @Get("my-assignments")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get assignments for authenticated user's linked children" })
+  async getMyAssignments(
+    @Request() req: { user: { id: string } },
+    @Query("childId") childId?: string
+  ): Promise<any> {
+    const assignments = await this.usersService.getMyAssignments(req.user.id, childId);
+    return { success: true, data: assignments };
+  }
+
+  @Get("my-online-sessions")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get online sessions for authenticated user's linked children" })
+  async getMyOnlineSessions(
+    @Request() req: { user: { id: string } },
+    @Query("childId") childId?: string
+  ): Promise<any> {
+    const sessions = await this.usersService.getMyOnlineSessions(req.user.id, childId);
+    return { success: true, data: sessions };
+  }
+
+  @Get("my-admission-trackings")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get admission tracking details for authenticated user's linked children" })
+  async getMyAdmissionTrackings(
+    @Request() req: { user: { id: string } },
+    @Query("childId") childId?: string
+  ): Promise<any> {
+    const admissions = await this.usersService.getMyAdmissionTrackings(req.user.id, childId);
+    return { success: true, data: admissions };
+  }
+
   @Get("mobile/profile")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
