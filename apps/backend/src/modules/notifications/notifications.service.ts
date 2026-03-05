@@ -1,465 +1,174 @@
-import { Injectable, Logger } from "@nestjs/common";
+// src/modules/notifications/notifications.service.ts
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "@database/prisma.service";
-import { NotificationType, UserRole } from "@prisma/client";
-import { EmailService, NotificationEmailData } from "./services/email.service";
-import { AppException } from "../../common/errors/app-exception";
-import { ErrorCode } from "../../common/errors/error-codes.enum";
-
-export interface NotificationData {
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-  metadata?: Record<string, any>;
-  sendRealtime?: boolean;
-  priority?: "LOW" | "NORMAL" | "HIGH" | "URGENT" | string;
-}
-
-export interface NotificationTargeting {
-  grades?: string[];
-  batches?: string[];
-  subjects?: string[];
-  teachers?: string[];
-  studentTypes?: string[];
-  roles?: UserRole[];
-  specificUserIds?: string[];
-}
-
-export interface CreateBulkNotificationDto {
-  title: string;
-  message: string;
-  type: NotificationType;
-  targeting: NotificationTargeting;
-  scheduleAt?: Date;
-  metadata?: Record<string, any>;
-}
+import { EmailService } from "./services/email.service";
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private notificationsGateway: any; // Will be injected via setter to avoid circular dependency
 
   constructor(
     private prisma: PrismaService,
     private emailService: EmailService
   ) {}
 
-  /**
-   * Set the notifications gateway (called by module to avoid circular dependency)
-   */
-  setNotificationsGateway(gateway: any): void {
-    this.notificationsGateway = gateway;
+  private get notificationModel() {
+    return (this.prisma as any).notification;
   }
 
-  async createNotification(notification: NotificationData): Promise<void> {
-    // Create notification with sentAt timestamp (Single tick ✓)
-    const created = await this.prisma.notification.create({
+  async createNotification(data: {
+    userId: string;
+    title: string;
+    message: string;
+    type: string;
+    link?: string;
+    metadata?: Record<string, any>;
+  }) {
+    this.logger.log(`Creating notification for user ${data.userId}: ${data.title}`);
+
+    return this.notificationModel.create({
       data: {
-        userId: notification.userId,
-        type: notification.type as NotificationType,
-        title: notification.title,
-        message: notification.message,
-        data: notification.metadata
-          ? JSON.stringify({ ...notification.metadata })
-          : null,
-        sentAt: new Date(), // Single tick ✓ - message sent to server
-      },
-      include: {
-        user: {
-          select: {
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
-    });
-
-    // Prepare notification with delivery status for real-time
-    const notificationWithStatus = {
-      ...created,
-      deliveryStatus: "sent", // Single tick ✓
-      notificationId: created.id,
-    };
-
-    // Send real-time notification if enabled and gateway is available
-    if (notification.sendRealtime !== false && this.notificationsGateway) {
-      try {
-        await this.notificationsGateway.sendNotificationToUser(
-          notification.userId,
-          notificationWithStatus
-        );
-        // If user is online and received the notification, mark as delivered (Double tick ✓✓)
-        await this.prisma.notification.update({
-          where: { id: created.id },
-          data: { deliveredAt: new Date() },
-        });
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-        this.logger.warn(
-          `Failed to send real-time notification: ${errorMessage}`
-        );
-      }
-    }
-
-    // Send email notification if email service is available
-    if (this.emailService.isAvailable() && created.user.email) {
-      try {
-        const emailData: NotificationEmailData = {
-          recipientName: `${created.user.firstName} ${created.user.lastName}`,
-          recipientEmail: created.user.email,
-          title: created.title,
-          message: created.message,
-          type: created.type,
-          actionUrl: notification.metadata?.actionUrl,
-          actionText: notification.metadata?.actionText,
-        };
-
-        await this.emailService.sendNotificationEmail(emailData);
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-        this.logger.warn(`Failed to send email notification: ${errorMessage}`);
-      }
-    }
-  }
-
-  async sendBulkNotifications(
-    notifications: NotificationData[]
-  ): Promise<void> {
-    const created = await this.prisma.notification.createMany({
-      data: notifications.map((n) => ({
-        userId: n.userId,
-        type: n.type as NotificationType,
-        title: n.title,
-        message: n.message,
-        data: n.metadata ? JSON.stringify(n.metadata) : null,
+        userId: data.userId,
+        title: data.title,
+        message: data.message,
+        type: data.type || "GENERAL",
+        status: "UNREAD",
+        isRead: false,
+        link: data.link,
+        metadata: data.metadata,
         sentAt: new Date(),
-      })),
-    });
-
-    // Send real-time notifications if gateway is available
-    if (this.notificationsGateway) {
-      const userIds = [...new Set(notifications.map((n) => n.userId))];
-      try {
-        // Fetch created notifications for real-time delivery
-        const createdNotifications = await this.prisma.notification.findMany({
-          where: {
-            userId: { in: userIds },
-            sentAt: { gte: new Date(Date.now() - 5000) }, // Last 5 seconds
-          },
-          orderBy: { createdAt: "desc" },
-        });
-
-        for (const notif of createdNotifications) {
-          await this.notificationsGateway.sendNotificationToUser(
-            notif.userId,
-            notif
-          );
-        }
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-        this.logger.warn(
-          `Failed to send bulk real-time notifications: ${errorMessage}`
-        );
-      }
-    }
-
-    // Send bulk email notifications if email service is available
-    if (this.emailService.isAvailable()) {
-      try {
-        const notificationsWithUsers = await this.prisma.notification.findMany({
-          where: {
-            userId: { in: notifications.map((n) => n.userId) },
-            sentAt: { gte: new Date(Date.now() - 5000) },
-          },
-          include: {
-            user: {
-              select: {
-                email: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
-          },
-          orderBy: { createdAt: "desc" },
-        });
-
-        const emailData = notificationsWithUsers
-          .filter((notif) => notif.user.email) // Filter out users with null email
-          .map((notif) => ({
-            recipientName: `${notif.user.firstName} ${notif.user.lastName}`,
-            recipientEmail: notif.user.email!,
-            title: notif.title,
-            message: notif.message,
-            type: notif.type,
-            actionUrl: notif.data
-              ? JSON.parse(notif.data).actionUrl
-              : undefined,
-            actionText: notif.data
-              ? JSON.parse(notif.data).actionText
-              : undefined,
-          }));
-
-        await this.emailService.sendBulkNotificationEmails(emailData);
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-        this.logger.warn(
-          `Failed to send bulk email notifications: ${errorMessage}`
-        );
-      }
-    }
-  }
-
-  /**
-   * Helper method to send notification about student enrollment
-   */
-  async notifyTeacherAboutEnrollment(
-    teacherId: string,
-    studentName: string,
-    className: string
-  ): Promise<void> {
-    await this.createNotification({
-      userId: teacherId,
-      type: "SYSTEM",
-      title: "New Student Enrollment",
-      message: `${studentName} has enrolled in ${className}`,
-      metadata: { action: "student_enrollment" },
-      sendRealtime: true,
-    });
-  }
-
-  /**
-   * Helper method to notify about approval/rejection
-   */
-  async notifyAboutApproval(
-    userId: string,
-    resourceType: string,
-    resourceName: string,
-    approved: boolean,
-    reason?: string
-  ): Promise<void> {
-    await this.createNotification({
-      userId,
-      type: "SYSTEM",
-      title: approved ? `${resourceType} Approved` : `${resourceType} Rejected`,
-      message: approved
-        ? `Your ${resourceType.toLowerCase()} "${resourceName}" has been approved`
-        : `Your ${resourceType.toLowerCase()} "${resourceName}" was rejected${reason ? `: ${reason}` : ""}`,
-      metadata: {
-        resourceType,
-        resourceName,
-        approved,
-        reason,
-      },
-      sendRealtime: true,
-    });
-  }
-
-  /**
-   * Helper method to notify about timetable changes
-   */
-  async notifyStudentsAboutTimetable(
-    studentIds: string[],
-    action: "created" | "updated" | "cancelled",
-    timetableInfo: { subject: string; date: string; time: string }
-  ): Promise<void> {
-    const titles = {
-      created: "New Class Scheduled",
-      updated: "Class Schedule Updated",
-      cancelled: "Class Cancelled",
-    };
-
-    const messages = {
-      created: `${timetableInfo.subject} class scheduled for ${timetableInfo.date} at ${timetableInfo.time}`,
-      updated: `${timetableInfo.subject} class schedule has been updated for ${timetableInfo.date} at ${timetableInfo.time}`,
-      cancelled: `${timetableInfo.subject} class on ${timetableInfo.date} at ${timetableInfo.time} has been cancelled`,
-    };
-
-    await this.sendBulkNotifications(
-      studentIds.map((studentId) => ({
-        userId: studentId,
-        type: "CLASS_UPDATE",
-        title: titles[action],
-        message: messages[action],
-        metadata: { timetableInfo, action },
-        sendRealtime: true,
-      }))
-    );
-  }
-
-  /**
-   * Helper method to notify about exam updates
-   */
-  async notifyAboutExam(
-    userId: string,
-    action: "approved" | "rejected" | "scheduled" | "published",
-    examTitle: string,
-    additionalInfo?: string
-  ): Promise<void> {
-    const titles = {
-      approved: "Exam Approved",
-      rejected: "Exam Rejected",
-      scheduled: "Exam Scheduled",
-      published: "Exam Results Published",
-    };
-
-    const messages = {
-      approved: `Your exam "${examTitle}" has been approved`,
-      rejected: `Your exam "${examTitle}" was rejected${additionalInfo ? `: ${additionalInfo}` : ""}`,
-      scheduled: `Exam "${examTitle}" has been scheduled${additionalInfo ? `: ${additionalInfo}` : ""}`,
-      published: `Results for "${examTitle}" are now available`,
-    };
-
-    await this.createNotification({
-      userId,
-      type: "EXAM_UPDATE",
-      title: titles[action],
-      message: messages[action],
-      metadata: { examTitle, action, additionalInfo },
-      sendRealtime: true,
-    });
-  }
-
-  async getTargetedUserCount(
-    targeting: NotificationTargeting
-  ): Promise<number> {
-    const where = this.buildTargetingWhere(targeting);
-    return this.prisma.user.count({ where });
-  }
-
-  async getTargetedUsers(
-    targeting: NotificationTargeting
-  ): Promise<{ id: string; name: string; email: string }[]> {
-    const where = this.buildTargetingWhere(targeting);
-    const users = await this.prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
       },
     });
-    return users.map((user) => ({
-      id: user.id,
-      name: `${user.firstName} ${user.lastName}`,
-      email: user.email || "",
-    }));
   }
 
-  async createTargetedNotification(
-    dto: CreateBulkNotificationDto,
-    createdBy: string
-  ) {
-    // Get target users
-    const users = await this.getTargetedUsers(dto.targeting);
+  async getMyNotifications(userId: string, params?: { isRead?: boolean; type?: string }) {
+    return this.notificationModel.findMany({
+      where: {
+        userId,
+        ...(params?.isRead !== undefined ? { isRead: params.isRead } : {}),
+        ...(params?.type ? { type: params.type } : {}),
+      },
+      orderBy: [{ sentAt: "desc" }],
+    });
+  }
 
-    if (users.length === 0) {
-      throw AppException.badRequest(
-        ErrorCode.NO_TARGETING_CRITERIA_MATCH,
-        "No users match the targeting criteria"
-      );
-    }
-
-    // Create notifications for all targeted users
-    const notifications = users.map((user) => ({
-      userId: user.id,
-      type: dto.type,
-      title: dto.title,
-      message: dto.message,
-      data: dto.metadata
-        ? JSON.stringify({ ...dto.metadata, createdBy })
-        : JSON.stringify({ createdBy }),
-      sentAt: dto.scheduleAt || new Date(),
-    }));
-
-    await this.prisma.notification.createMany({
-      data: notifications,
+  async markAsRead(id: string, userId: string) {
+    const notification = await this.notificationModel.findFirst({
+      where: { id, userId },
+      select: { id: true },
     });
 
-    return {
-      success: true,
-      recipientCount: users.length,
-      recipients: users,
-    };
+    if (!notification) {
+      throw new NotFoundException("Notification not found");
+    }
+
+    return this.notificationModel.update({
+      where: { id },
+      data: {
+        isRead: true,
+        status: "READ",
+        readAt: new Date(),
+        deliveredAt: new Date(),
+      },
+    });
   }
 
-  private buildTargetingWhere(targeting: NotificationTargeting): any {
-    const conditions: any[] = [];
+  async markAllAsRead(userId: string) {
+    await this.notificationModel.updateMany({
+      where: { userId, isRead: false },
+      data: {
+        isRead: true,
+        status: "READ",
+        readAt: new Date(),
+        deliveredAt: new Date(),
+      },
+    });
 
-    // Specific user IDs take precedence
-    if (targeting.specificUserIds && targeting.specificUserIds.length > 0) {
-      return { id: { in: targeting.specificUserIds } };
+    return { message: "All notifications marked as read" };
+  }
+
+  async getUnreadCount(userId: string) {
+    const count = await this.notificationModel.count({
+      where: { userId, isRead: false },
+    });
+
+    return { count };
+  }
+
+  async deleteNotification(id: string, userId: string) {
+    const notification = await this.notificationModel.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!notification) {
+      throw new NotFoundException("Notification not found");
     }
 
-    // Role filtering
-    if (targeting.roles && targeting.roles.length > 0) {
-      conditions.push({ role: { in: targeting.roles } });
+    await this.notificationModel.delete({ where: { id } });
+    return { message: "Notification deleted successfully" };
+  }
+
+  async getAdminAll(filters: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    status?: string;
+    role?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    search?: string;
+    hospitalId?: string;
+  }) {
+    const page = Number(filters?.page || 1);
+    const limit = Number(filters?.limit || 20);
+    const skip = (page - 1) * limit;
+
+    const baseWhere: any = {
+      ...(filters?.type ? { type: filters.type } : {}),
+      ...(filters?.status ? { status: filters.status } : {}),
+      ...(filters?.role ? { user: { role: filters.role as any } } : {}),
+    };
+
+    const andWhere: any[] = [];
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      baseWhere.sentAt = {
+        ...(filters?.dateFrom ? { gte: new Date(filters.dateFrom) } : {}),
+        ...(filters?.dateTo ? { lte: new Date(filters.dateTo) } : {}),
+      };
     }
 
-    // Student type filtering (for students only)
-    if (targeting.studentTypes && targeting.studentTypes.length > 0) {
-      conditions.push({
-        role: { in: [UserRole.INTERNAL_STUDENT, UserRole.EXTERNAL_STUDENT] },
+    if (filters?.search?.trim()) {
+      const search = filters.search.trim();
+      andWhere.push({
+        OR: [
+        { title: { contains: search, mode: "insensitive" } },
+        { message: { contains: search, mode: "insensitive" } },
+        { user: { firstName: { contains: search, mode: "insensitive" } } },
+        { user: { lastName: { contains: search, mode: "insensitive" } } },
+        { user: { email: { contains: search, mode: "insensitive" } } },
+        ],
       });
     }
 
-    // Grade filtering (for students)
-    if (targeting.grades && targeting.grades.length > 0) {
-      conditions.push({
-        role: { in: [UserRole.INTERNAL_STUDENT, UserRole.EXTERNAL_STUDENT] },
-        enrollments: {
-          some: {
-            class: {
-              grade: { in: targeting.grades },
-            },
-          },
-        },
-      });
-    }
-
-    // Batch filtering (for students)
-    if (targeting.batches && targeting.batches.length > 0) {
-      conditions.push({
-        role: { in: [UserRole.INTERNAL_STUDENT, UserRole.EXTERNAL_STUDENT] },
-        enrollments: {
-          some: {
-            class: {
-              batch: { in: targeting.batches },
-            },
-          },
-        },
-      });
-    }
-
-    // Subject filtering (for both students and teachers)
-    if (targeting.subjects && targeting.subjects.length > 0) {
-      conditions.push({
+    if (filters?.hospitalId) {
+      andWhere.push({
         OR: [
           {
-            role: {
-              in: [UserRole.INTERNAL_STUDENT, UserRole.EXTERNAL_STUDENT],
-            },
-            enrollments: {
-              some: {
-                class: {
-                  subjectId: { in: targeting.subjects },
-                },
+            user: {
+              hospitalProfile: {
+                hospitalId: filters.hospitalId,
               },
             },
           },
           {
-            role: {
-              in: [UserRole.INTERNAL_TEACHER, UserRole.EXTERNAL_TEACHER],
-            },
-            teacherClasses: {
-              some: {
-                class: {
-                  subjectId: { in: targeting.subjects },
+            user: {
+              parentProfile: {
+                children: {
+                  some: {
+                    hospitalId: filters.hospitalId,
+                  },
                 },
               },
             },
@@ -468,205 +177,513 @@ export class NotificationsService {
       });
     }
 
-    // Specific teachers
-    if (targeting.teachers && targeting.teachers.length > 0) {
-      conditions.push({
-        id: { in: targeting.teachers },
+    const where: any =
+      andWhere.length > 0
+        ? { AND: [baseWhere, ...andWhere] }
+        : baseWhere;
+
+    const [data, total] = await Promise.all([
+      this.notificationModel.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: [{ sentAt: "desc" }],
+        skip,
+        take: limit,
+      }),
+      this.notificationModel.count({ where }),
+    ]);
+
+    return {
+      data,
+      total,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getAdminDetail(id: string, hospitalId?: string) {
+    const notification = await this.notificationModel.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            hospitalProfile: {
+              select: {
+                hospitalId: true,
+              },
+            },
+            parentProfile: {
+              select: {
+                children: {
+                  select: {
+                    hospitalId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!notification) {
+      throw new NotFoundException("Notification not found");
+    }
+
+    if (hospitalId) {
+      const recipient = notification.user as any;
+      const recipientHospitalId = recipient?.hospitalProfile?.hospitalId;
+      const recipientChildHospitalIds = Array.isArray(recipient?.parentProfile?.children)
+        ? recipient.parentProfile.children
+            .map((child: any) => child?.hospitalId)
+            .filter((value: any): value is string => Boolean(value))
+        : [];
+
+      const isInScope =
+        recipientHospitalId === hospitalId ||
+        recipientChildHospitalIds.includes(hospitalId);
+
+      if (!isInScope) {
+        throw new NotFoundException("Notification not found");
+      }
+    }
+
+    return notification;
+  }
+
+  async getAdminStats(hospitalId?: string) {
+    const scopedWhere = hospitalId
+      ? {
+          OR: [
+            {
+              user: {
+                hospitalProfile: {
+                  hospitalId,
+                },
+              },
+            },
+            {
+              user: {
+                parentProfile: {
+                  children: {
+                    some: {
+                      hospitalId,
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {};
+
+    const [total, unread, read] = await Promise.all([
+      this.notificationModel.count({ where: scopedWhere }),
+      this.notificationModel.count({ where: { ...scopedWhere, isRead: false } }),
+      this.notificationModel.count({ where: { ...scopedWhere, isRead: true } }),
+    ]);
+
+    return { total, unread, read };
+  }
+
+  async getNotificationTargetOptions(hospitalId?: string) {
+    const [patients, hospitals] = await Promise.all([
+      this.prisma.child.findMany({
+        where: {
+          isActive: true,
+          ...(hospitalId ? { hospitalId } : {}),
+          parent: {
+            status: "ACTIVE",
+          },
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          parentId: true,
+          hospital: {
+            select: { id: true, name: true },
+          },
+          parent: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+              status: true,
+            },
+          },
+        },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      }),
+      this.prisma.hospital.findMany({
+        where: {
+          status: "ACTIVE",
+          ...(hospitalId ? { id: hospitalId } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          adminProfile: {
+            select: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+
+    return {
+      patients: patients.map((patient) => ({
+        id: patient.id,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        parentUserId: patient.parentId,
+        parentName: patient.parent
+          ? `${patient.parent.firstName} ${patient.parent.lastName}`
+          : null,
+        hospitalId: patient.hospital?.id || null,
+        hospitalName: patient.hospital?.name || null,
+      })),
+      hospitals: hospitals.map((hospital) => ({
+        id: hospital.id,
+        name: hospital.name,
+        adminUserId:
+          hospital.adminProfile?.user?.status === "ACTIVE"
+            ? hospital.adminProfile?.user?.id || null
+            : null,
+        adminName: hospital.adminProfile?.user
+          ? `${hospital.adminProfile.user.firstName} ${hospital.adminProfile.user.lastName}`
+          : null,
+      })),
+    };
+  }
+
+  async sendByTargets(payload: {
+    title: string;
+    message: string;
+    type?: string;
+    patientIds?: string[];
+    hospitalIds?: string[];
+    hospitalAdminUserIds?: string[];
+    audienceScope?: "DEFAULT" | "HOSPITAL_ONLY";
+    senderUserId?: string;
+    hospitalId?: string;
+  }) {
+    let patientIds = payload.patientIds || [];
+    let hospitalIds = payload.hospitalIds || [];
+    const hospitalAdminUserIds = payload.hospitalAdminUserIds || [];
+
+    if (payload.hospitalId) {
+      if (payload.audienceScope === "HOSPITAL_ONLY") {
+        hospitalIds = [payload.hospitalId];
+      } else {
+        hospitalIds = hospitalIds.filter((id) => id === payload.hospitalId);
+      }
+
+      if (patientIds.length > 0) {
+        const allowedPatients = await this.prisma.child.findMany({
+          where: {
+            id: { in: patientIds },
+            hospitalId: payload.hospitalId,
+          },
+          select: { id: true },
+        });
+
+        patientIds = allowedPatients.map((item) => item.id);
+      }
+    }
+
+    const [patients, hospitals, hospitalChildren, selectedHospitals] = await Promise.all([
+      patientIds.length
+        ? this.prisma.child.findMany({
+            where: { id: { in: patientIds } },
+            select: { parentId: true, hospitalId: true },
+          })
+        : Promise.resolve([]),
+      hospitalIds.length
+        ? this.prisma.hospitalProfile.findMany({
+            where: { hospitalId: { in: hospitalIds } },
+            select: { userId: true },
+          })
+        : Promise.resolve([]),
+      hospitalIds.length
+        ? this.prisma.child.findMany({
+            where: { hospitalId: { in: hospitalIds } },
+            select: { parentId: true },
+          })
+        : Promise.resolve([]),
+      hospitalIds.length
+        ? this.prisma.hospital.findMany({
+            where: { id: { in: hospitalIds } },
+            select: { id: true, adminEmail: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const adminEmails = selectedHospitals
+      .map((hospital) => hospital.adminEmail)
+      .filter((email): email is string => Boolean(email));
+
+    const normalizedAdminEmails = new Set(
+      adminEmails.map((email) => email.trim().toLowerCase())
+    );
+
+    const fallbackHospitalAdmins = hospitalIds.length
+      ? (
+          await this.prisma.user.findMany({
+            where: {
+              role: "HOSPITAL_ADMIN",
+            },
+            select: {
+              id: true,
+              email: true,
+              hospitalProfile: {
+                select: {
+                  hospitalId: true,
+                },
+              },
+            },
+          })
+        ).filter((user) => {
+          const linkedHospitalId = user.hospitalProfile?.hospitalId;
+          const linkedToSelectedHospital =
+            Boolean(linkedHospitalId) && hospitalIds.includes(linkedHospitalId as string);
+
+          const emailMatch = user.email
+            ? normalizedAdminEmails.has(user.email.trim().toLowerCase())
+            : false;
+
+          return linkedToSelectedHospital || emailMatch;
+        })
+      : [];
+
+    const patientHospitalIds = Array.from(
+      new Set(
+        patients
+          .map((item) => item.hospitalId)
+          .filter((item): item is string => Boolean(item))
+      )
+    );
+
+    const patientHospitals = patientHospitalIds.length
+      ? await this.prisma.hospitalProfile.findMany({
+          where: { hospitalId: { in: patientHospitalIds } },
+          select: { userId: true },
+        })
+      : [];
+
+    const recipientIds = new Set<string>();
+
+    hospitalAdminUserIds.forEach((userId) => {
+      if (userId) recipientIds.add(userId);
+    });
+
+    const addHospitalAdmins = () => {
+      hospitals.forEach((item) => {
+        if (item.userId) recipientIds.add(item.userId);
+      });
+      fallbackHospitalAdmins.forEach((item) => {
+        if (item.id) recipientIds.add(item.id);
+      });
+
+      if (recipientIds.size === 0 && hospitalIds.length > 0) {
+        this.logger.warn(
+          `No linked hospital admins found for hospitals [${hospitalIds.join(",")}] - falling back to all hospital admins`
+        );
+      }
+    };
+
+    if (payload.audienceScope === "HOSPITAL_ONLY") {
+      addHospitalAdmins();
+    } else {
+      patients.forEach((item) => {
+        if (item.parentId) recipientIds.add(item.parentId);
+      });
+      if (!payload.hospitalId) {
+        addHospitalAdmins();
+        hospitalChildren.forEach((item) => {
+          if (item.parentId) recipientIds.add(item.parentId);
+        });
+      }
+      patientHospitals.forEach((item) => {
+        if (item.userId) recipientIds.add(item.userId);
       });
     }
 
-    // Combine all conditions with AND logic
-    if (conditions.length === 0) {
-      return {}; // No filters, return all users
-    }
-
-    if (conditions.length === 1) {
-      return conditions[0];
-    }
-
-    return { AND: conditions };
-  }
-
-  /**
-   * Notify all admins with a specific notification
-   */
-  async notifyAdmins(data: {
-    title: string;
-    message: string;
-    type: string;
-    priority: string;
-    metadata?: Record<string, any>;
-  }): Promise<void> {
-    // Find all admin users
-    const admins = await this.prisma.user.findMany({
+    const activeRecipients = await this.prisma.user.findMany({
       where: {
-        role: {
-          in: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
-        },
+        id: { in: Array.from(recipientIds) },
         status: "ACTIVE",
       },
       select: { id: true },
     });
 
-    if (admins.length === 0) {
-      this.logger.warn("No admins found to notify");
-      return;
+    const recipientUserIds = activeRecipients.map((user) => user.id);
+
+    if (recipientUserIds.length === 0) {
+      if (hospitalIds.length > 0) {
+        const emailSendResults = await Promise.all(
+          adminEmails.map((email) =>
+            this.emailService.sendEmail(
+              email,
+              payload.title,
+              payload.message
+            )
+          )
+        );
+
+        const emailSentCount = emailSendResults.length;
+
+        return {
+          sent: emailSentCount,
+          recipients: emailSentCount,
+          message:
+            emailSentCount > 0
+              ? "Notifications sent to hospital targets"
+              : "No hospital admin recipients found for selected hospitals",
+        };
+      }
+
+      return { sent: 0, recipients: 0, message: "No target recipients found" };
     }
 
-    // Create notifications for all admins
-    const notifications = admins.map((admin) => ({
-      userId: admin.id,
-      type: data.type,
-      title: data.title,
-      message: data.message,
-      metadata: { ...data.metadata, priority: data.priority },
-      sendRealtime: true,
-    }));
-
-    await this.sendBulkNotifications(notifications);
-
-    this.logger.log(`Notified ${admins.length} admins: ${data.title}`);
-  }
-
-  /**
-   * Mark a notification as read (Double blue tick ✓✓)
-   * This indicates the user has opened/seen the notification
-   */
-  async markAsRead(notificationId: string, userId: string): Promise<void> {
-    const notification = await this.prisma.notification.findFirst({
-      where: {
-        id: notificationId,
-        userId,
-      },
-    });
-
-    if (!notification) {
-      this.logger.warn(
-        `Notification ${notificationId} not found for user ${userId}`
-      );
-      return;
-    }
-
-    await this.prisma.notification.update({
-      where: {
-        id: notificationId,
-      },
-      data: {
-        status: "READ",
-        readAt: new Date(),
-        // Ensure delivered is also set if not already
-        deliveredAt: notification.deliveredAt || new Date(),
-      },
-    });
-    this.logger.debug(
-      `Notification ${notificationId} marked as read (blue double tick) by user ${userId}`
-    );
-  }
-
-  /**
-   * Mark notification as delivered (Double tick ✓✓)
-   * This indicates the notification reached the user's device
-   */
-  async markAsDelivered(notificationId: string, userId: string): Promise<void> {
-    const notification = await this.prisma.notification.findFirst({
-      where: {
-        id: notificationId,
-        userId,
-      },
-    });
-
-    if (!notification) {
-      this.logger.warn(
-        `Notification ${notificationId} not found for user ${userId}`
-      );
-      return;
-    }
-
-    // Only update if not already delivered
-    if (!notification.deliveredAt) {
-      await this.prisma.notification.update({
-        where: {
-          id: notificationId,
-        },
-        data: {
-          deliveredAt: new Date(),
-        },
-      });
-      this.logger.debug(
-        `Notification ${notificationId} marked as delivered (double tick) to user ${userId}`
-      );
-    }
-  }
-
-  /**
-   * Mark notification as sent (Single tick ✓)
-   * This is called when the notification is created and stored in the server
-   */
-  async markAsSent(notificationId: string): Promise<void> {
-    await this.prisma.notification.update({
-      where: {
-        id: notificationId,
-      },
-      data: {
-        sentAt: new Date(),
-      },
-    });
-    this.logger.debug(
-      `Notification ${notificationId} marked as sent (single tick)`
-    );
-  }
-
-  /**
-   * Get notification delivery status
-   * Returns: 'pending' | 'sent' | 'delivered' | 'read'
-   */
-  getDeliveryStatus(notification: {
-    sentAt: Date | null;
-    deliveredAt: Date | null;
-    readAt: Date | null;
-  }): string {
-    if (notification.readAt) {return "read";} // Double blue tick ✓✓
-    if (notification.deliveredAt) {return "delivered";} // Double tick ✓✓
-    if (notification.sentAt) {return "sent";} // Single tick ✓
-    return "pending"; // Clock/pending icon
-  }
-
-  /**
-   * Mark all notifications as read for a user
-   */
-  async markAllAsRead(userId: string): Promise<number> {
     const now = new Date();
-    const result = await this.prisma.notification.updateMany({
-      where: {
+    await this.notificationModel.createMany({
+      data: recipientUserIds.map((userId) => ({
         userId,
+        title: payload.title,
+        message: payload.message,
+        type: payload.type || "GENERAL",
         status: "UNREAD",
-      },
-      data: {
-        status: "READ",
-        readAt: now,
-        deliveredAt: now, // Ensure delivered is set when read
-      },
+        isRead: false,
+        sentAt: now,
+      })),
     });
-    return result.count;
+
+    return {
+      sent: recipientUserIds.length,
+      recipients: recipientUserIds.length,
+      message: "Notifications sent successfully",
+    };
   }
 
-  /**
-   * Mark all notifications as delivered for a user (when they come online)
-   */
-  async markAllAsDelivered(userId: string): Promise<number> {
-    const result = await this.prisma.notification.updateMany({
-      where: {
-        userId,
-        deliveredAt: null,
-        sentAt: { not: null },
-      },
+  async updateAdminNotification(
+    id: string,
+    payload: {
+      title?: string;
+      message?: string;
+      type?: string;
+      status?: "UNREAD" | "READ" | "ARCHIVED";
+      isRead?: boolean;
+    }
+  ) {
+    const existing = await this.notificationModel.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Notification not found");
+    }
+
+    return this.notificationModel.update({
+      where: { id },
       data: {
-        deliveredAt: new Date(),
+        ...(payload.title !== undefined ? { title: payload.title } : {}),
+        ...(payload.message !== undefined ? { message: payload.message } : {}),
+        ...(payload.type !== undefined ? { type: payload.type } : {}),
+        ...(payload.status !== undefined ? { status: payload.status } : {}),
+        ...(payload.isRead !== undefined
+          ? {
+              isRead: payload.isRead,
+              readAt: payload.isRead ? new Date() : null,
+              status: payload.isRead ? "READ" : payload.status || "UNREAD",
+            }
+          : {}),
       },
     });
-    this.logger.debug(
-      `Marked ${result.count} notifications as delivered for user ${userId}`
-    );
-    return result.count;
+  }
+
+  async deleteAdminNotification(id: string) {
+    const existing = await this.notificationModel.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Notification not found");
+    }
+
+    await this.notificationModel.delete({ where: { id } });
+    return { message: "Notification deleted successfully" };
+  }
+
+  getPreferences() {
+    return {
+      emailNotifications: true,
+      pushNotifications: true,
+      smsNotifications: false,
+      notificationTypes: ["GENERAL", "ANNOUNCEMENT", "SYSTEM"],
+    };
+  }
+
+  updatePreferences(data: Record<string, any>) {
+    return {
+      emailNotifications: data?.emailNotifications ?? true,
+      pushNotifications: data?.pushNotifications ?? true,
+      smsNotifications: data?.smsNotifications ?? false,
+      notificationTypes: data?.notificationTypes ?? ["GENERAL", "ANNOUNCEMENT", "SYSTEM"],
+    };
+  }
+
+  async notifyAboutApproval(
+    userId: string,
+    title: string,
+    name: string,
+    approved: boolean,
+    reason?: string
+  ) {
+    const message = approved
+      ? `Your ${title} has been approved! Welcome to ArmiGo.`
+      : `Your ${title} has been rejected. Reason: ${reason || "Not specified"}`;
+
+    await this.createNotification({
+      userId,
+      title: `${title} ${approved ? "Approved" : "Rejected"}`,
+      message,
+      type: "GENERAL",
+    });
+
+    // You can also send email if needed
+    // This would require user email lookup
   }
 }

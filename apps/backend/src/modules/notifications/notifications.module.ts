@@ -1,58 +1,15 @@
-import { Module } from "@nestjs/common";
-import { JwtModule } from "@nestjs/jwt";
-import { ConfigModule, ConfigService } from "@nestjs/config";
-import { NotificationsService } from "./notifications.service";
+// src/modules/notifications/notifications.module.ts
+import { Module, forwardRef } from "@nestjs/common";
+import { PrismaService } from "@database/prisma.service";
 import { NotificationsController } from "./notifications.controller";
-import { NotificationsGateway } from "@infrastructure/websocket/notifications.gateway";
-import { PrismaModule } from "@database/prisma.module";
+import { NotificationsService } from "./notifications.service";
 import { EmailService } from "./services/email.service";
-import { SocketNotificationService } from "./services/socket-notification.service";
-import { SmsService } from "./services/sms.service";
+import { UsersModule } from "@modules/users/users.module";
 
 @Module({
-  imports: [
-    PrismaModule,
-    ConfigModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>("JWT_SECRET"),
-        signOptions: {
-          expiresIn: configService.get<string>("JWT_EXPIRATION", "7d"),
-        },
-      }),
-      inject: [ConfigService],
-    }),
-  ],
+  imports: [forwardRef(() => UsersModule)],
   controllers: [NotificationsController],
-  providers: [
-    NotificationsService,
-    NotificationsGateway,
-    EmailService,
-    SocketNotificationService,
-    SmsService,
-  ],
-  exports: [
-    NotificationsService,
-    NotificationsGateway,
-    EmailService,
-    SocketNotificationService,
-    SmsService,
-  ],
+  providers: [NotificationsService, EmailService, PrismaService],
+  exports: [NotificationsService, EmailService],
 })
-export class NotificationsModule {
-  constructor(
-    private notificationsService: NotificationsService,
-    private notificationsGateway: NotificationsGateway,
-    private socketNotificationService: SocketNotificationService
-  ) {
-    // Wire up the gateway to the service to avoid circular dependency
-    this.notificationsService.setNotificationsGateway(
-      this.notificationsGateway
-    );
-    // Wire up the socket notification service with the notifications service
-    this.socketNotificationService.setNotificationsService(
-      this.notificationsService
-    );
-  }
-}
+export class NotificationsModule {}

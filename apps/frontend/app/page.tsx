@@ -2,18 +2,37 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthRedirect } from "@/hooks/use-auth-redirect";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function Home() {
   const router = useRouter();
-
-  // Automatically redirect authenticated users to their dashboard
-  useAuthRedirect();
+  const user = useAuthStore((state) => state.user);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   useEffect(() => {
-    // Redirect to sign-in page by default
-    router.push("/sign-in");
-  }, [router]);
+    if (isLoading) return;
+
+    if (!user) {
+      router.replace("/sign-in");
+      return;
+    }
+
+    switch (user.role) {
+      case "SUPER_ADMIN":
+      case "ADMIN":
+        router.replace("/admin");
+        break;
+      case "INTERNAL_TEACHER":
+        router.replace("/teacher");
+        break;
+      case "EXTERNAL_TEACHER":
+        router.replace("/teacher/transfers");
+        break;
+      default:
+        router.replace("/sign-in");
+        break;
+    }
+  }, [isLoading, user, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center">

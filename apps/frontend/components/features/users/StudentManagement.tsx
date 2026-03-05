@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,22 +14,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -36,1254 +37,1421 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Search,
-  UserPlus,
-  Edit,
-  Trash2,
-  Eye,
-  Loader2,
-  Download,
-  RefreshCw,
-  Users,
-  CheckCircle2,
-  Clock,
-  Ban,
-  AlertTriangle,
-  TrendingUp,
-  Calendar,
-  ShieldCheck,
-  Mail,
-  Phone,
-  Shield,
-  MoreVertical,
-  ExternalLink,
-  XCircle,
-  MapPin,
-  UserCheck,
-  UserX,
-  Key,
-  Lock,
-  Heart,
-  Activity,
-  FileText,
-} from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power, Users, Activity } from "lucide-react";
+import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { useTranslations } from "next-intl";
+import { useAuthStore } from "@/stores/auth-store";
 
-// Dummy patient data
-const dummyPatients = [
-  {
-    id: "pat-001",
-    firstName: "Ranasinghe",
-    lastName: "Silva",
-    email: "ranasinghe.silva@hospital.lk",
-    phone: "+94 701234567",
-    patientId: "PAT-2024-001",
-    status: "ACTIVE",
-    bloodType: "O+",
-    dateOfBirth: "1985-03-15",
-    gender: "Male",
-    ward: "General Ward",
-    admissionDate: "2024-01-10",
-    doctorAssigned: "Dr. Fernando",
-    emergencyContact: "Kandy Silva",
-    emergencyPhone: "+94 701234568",
-    medicalHistory: "Hypertension, Diabetes",
-    emailVerified: true,
-    phoneVerified: true,
-    twoFactorEnabled: true,
-    createdAt: "2024-01-10",
-  },
-  {
-    id: "pat-002",
-    firstName: "Perera",
-    lastName: "Kumari",
-    email: "perera.kumari@hospital.lk",
-    phone: "+94 702234567",
-    patientId: "PAT-2024-002",
-    status: "ACTIVE",
-    bloodType: "A+",
-    dateOfBirth: "1990-07-22",
-    gender: "Female",
-    ward: "ICU",
-    admissionDate: "2024-02-15",
-    doctorAssigned: "Dr. Perera",
-    emergencyContact: "Suneth Kumari",
-    emergencyPhone: "+94 702234568",
-    medicalHistory: "Asthma",
-    emailVerified: true,
-    phoneVerified: false,
-    twoFactorEnabled: false,
-    createdAt: "2024-02-15",
-  },
-  {
-    id: "pat-003",
-    firstName: "Jayasinghe",
-    lastName: "Mendis",
-    email: "jayasinghe.mendis@hospital.lk",
-    phone: "+94 703234567",
-    patientId: "PAT-2024-003",
-    status: "PENDING",
-    bloodType: "B-",
-    dateOfBirth: "1988-11-08",
-    gender: "Male",
-    ward: "Surgical Ward",
-    admissionDate: "2024-03-05",
-    doctorAssigned: "Dr. Silva",
-    emergencyContact: "Nimal Mendis",
-    emergencyPhone: "+94 703234568",
-    medicalHistory: "None",
-    emailVerified: false,
-    phoneVerified: true,
-    twoFactorEnabled: false,
-    createdAt: "2024-03-05",
-  },
-];
-
-// Dummy stats
-const dummyStats = {
-  totalUsers: 156,
-  activeUsers: 128,
-  pendingUsers: 18,
-  suspendedUsers: 10,
-  newUsersToday: 5,
-  newUsersThisWeek: 23,
-  verifiedUsers: 142,
-  unverifiedUsers: 14,
+type Hospital = {
+  id: string;
+  name: string;
 };
 
-// Extended User type with profile information
-interface Patient {
+type Physiotherapist = {
   id: string;
-  email?: string;
-  phone?: string;
+  name: string;
+  specialization?: string | null;
+  hospitalId: string;
+};
+
+type District = {
+  id: string;
+  name: string;
+  code?: string;
+  province?: {
+    id: string;
+    name: string;
+    code?: string;
+  };
+};
+
+type Zone = {
+  id: string;
+  name: string;
+  code?: string;
+  districtId?: string;
+};
+
+type Patient = {
+  id: string;
   firstName: string;
   lastName: string;
-  status?: string;
-  patientId?: string;
-  bloodType?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  ward?: string;
-  admissionDate?: string;
-  doctorAssigned?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
-  medicalHistory?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  lastLogin?: string;
-  lastLoginAt?: string;
-  emailVerified?: boolean;
-  phoneVerified?: boolean;
-  twoFactorEnabled?: boolean;
-}
+  address?: string;
+  dateOfBirth: string;
+  age?: number;
+  gender: string;
+  diagnosis?: string;
+  assignedDoctor?: string;
+  hospitalId?: string;
+  hospital?: {
+    id: string;
+    name: string;
+  };
+  district?: {
+    id: string;
+    name: string;
+    code?: string;
+  };
+  zone?: {
+    id: string;
+    name: string;
+    code?: string;
+  };
+  province?: {
+    id: string;
+    name: string;
+    code?: string;
+  };
+  parentName?: string;
+  parentEmail?: string;
+  parentPhone?: string;
+  parentCredentials?: {
+    email: string;
+    phone: string;
+    password: string;
+  };
+  progressTracker?: {
+    startProgress: number;
+    currentProgress: number;
+    playTimeMinutes: number;
+    playedDays: number;
+  };
+  isActive: boolean;
+};
 
-interface PatientStats {
-  totalUsers: number;
-  activeUsers: number;
-  pendingUsers: number;
-  suspendedUsers: number;
-  newUsersToday: number;
-  newUsersThisWeek: number;
-  verifiedUsers: number;
-  unverifiedUsers: number;
-}
+type PatientForm = {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  gender: string;
+  diagnosis: string;
+  address: string;
+  districtId: string;
+  zoneId: string;
+  parentName: string;
+  parentEmail: string;
+  parentPhone: string;
+  parentPassword: string;
+  hospitalId: string;
+  physiotherapistId: string;
+};
 
-const PatientManagement: React.FC = () => {
-  const t = useTranslations("users");
-  const [activeTab, setActiveTab] = useState<string>("INPATIENT");
-  const [patients, setPatients] = useState<Patient[]>(dummyPatients);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterWard, setFilterWard] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+const initialForm: PatientForm = {
+  firstName: "",
+  lastName: "",
+  dateOfBirth: "",
+  gender: "Male",
+  diagnosis: "",
+  address: "",
+  districtId: "",
+  zoneId: "",
+  parentName: "",
+  parentEmail: "",
+  parentPhone: "",
+  parentPassword: "",
+  hospitalId: "",
+  physiotherapistId: "",
+};
+
+export default function StudentManagement() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const userRoles = Array.isArray((user as any)?.roles)
+    ? ((user as any).roles as string[])
+    : ([user?.role].filter(Boolean) as string[]);
+  const isHospitalScopedUser =
+    userRoles.includes("HOSPITAL_ADMIN") && user?.email !== "armigo@gmail.com";
+  const [scopedHospital, setScopedHospital] = useState<Hospital | null>(null);
+  const [search, setSearch] = useState("");
+  const [hospitalFilter, setHospitalFilter] = useState("all");
+  const [physiotherapistFilter, setPhysiotherapistFilter] = useState("all");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [patientToDelete, setPatientToDelete] = useState<string | null>(null);
-  const [quickViewOpen, setQuickViewOpen] = useState(false);
-  const [quickViewPatient, setQuickViewPatient] = useState<Patient | null>(
-    null
-  );
-  const [loadingQuickView, setLoadingQuickView] = useState(false);
-  const [addPatientOpen, setAddPatientOpen] = useState(false);
-  const [newPatientForm, setNewPatientForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    dateOfBirth: "",
-    gender: "Male",
-    bloodType: "O+",
-    ward: "General Ward",
-    doctorAssigned: "Dr. Fernando",
-    emergencyContact: "",
-    emergencyPhone: "",
-    medicalHistory: "",
-  });
-  const [stats, setStats] = useState<PatientStats>(dummyStats);
+  const [viewingPatient, setViewingPatient] = useState<Patient | null>(null);
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
+  const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
+  const [parentCredentials, setParentCredentials] = useState<
+    Patient["parentCredentials"] | null
+  >(null);
+  const [showParentPassword, setShowParentPassword] = useState(false);
+  const [formData, setFormData] = useState<PatientForm>(initialForm);
 
-  // Load reference data on mount
   useEffect(() => {
-    setStats(dummyStats);
-  }, []);
+    if (!isHospitalScopedUser) return;
 
-  const handleAddPatient = () => {
-    if (!newPatientForm.firstName || !newPatientForm.lastName) {
-      toast.error("Please fill in first and last name");
+    let mounted = true;
+
+    const loadHospitalScope = async () => {
+      try {
+        const response = await ApiClient.get<any>("/users/profile");
+        const payload = response?.data ?? response ?? {};
+        const hospital = payload?.hospitalProfile?.hospital;
+        if (!mounted || !hospital?.id) return;
+
+        const resolvedHospital = {
+          id: hospital.id,
+          name: hospital.name || "Hospital",
+        };
+
+        setScopedHospital(resolvedHospital);
+        setHospitalFilter(hospital.id);
+        setFormData((prev) => ({
+          ...prev,
+          hospitalId: hospital.id,
+          physiotherapistId: "",
+        }));
+      } catch {
+        // Keep UI usable even if profile fetch fails.
+      }
+    };
+
+    loadHospitalScope();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isHospitalScopedUser]);
+
+  const scopedHospitalId = scopedHospital?.id || "";
+
+  const generatePassword = () => {
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const digits = "0123456789";
+    const symbols = "@#$%&*!";
+    const all = `${lower}${upper}${digits}${symbols}`;
+
+    const values = [
+      lower[Math.floor(Math.random() * lower.length)],
+      upper[Math.floor(Math.random() * upper.length)],
+      digits[Math.floor(Math.random() * digits.length)],
+      symbols[Math.floor(Math.random() * symbols.length)],
+    ];
+
+    while (values.length < 12) {
+      values.push(all[Math.floor(Math.random() * all.length)]);
+    }
+
+    return values.sort(() => Math.random() - 0.5).join("");
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Failed to copy ${label.toLowerCase()}`);
+    }
+  };
+
+  const { data: patients = [], isLoading: patientsLoading } = useQuery({
+    queryKey: ["patients-management", "patients", scopedHospitalId],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients", {
+        params: {
+          limit: 1000,
+          ...(isHospitalScopedUser && scopedHospitalId
+            ? { hospitalId: scopedHospitalId }
+            : {}),
+        },
+      });
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list) ? list : [];
+    },
+    enabled: !isHospitalScopedUser || !!scopedHospitalId,
+  });
+
+  const { data: hospitals = [], isLoading: hospitalsLoading } = useQuery({
+    queryKey: ["patients-management", "hospitals"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients/locations/hospitals");
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list)
+        ? list.filter((item: any) => item?.id && item?.name)
+        : [];
+    },
+  });
+
+  const { data: physiotherapists = [], isLoading: physiotherapistsLoading } =
+    useQuery({
+      queryKey: ["patients-management", "physiotherapists", scopedHospitalId],
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+      queryFn: async () => {
+        const response = await ApiClient.get<any>(
+          "/patients/locations/physiotherapists",
+          {
+            params: {
+              ...(isHospitalScopedUser && scopedHospitalId
+                ? { hospitalId: scopedHospitalId }
+                : {}),
+            },
+          }
+        );
+        const payload = response?.data ?? response ?? {};
+        const list = payload?.data || payload || [];
+        return Array.isArray(list)
+          ? list.filter((item: any) => item?.id && item?.name)
+          : [];
+      },
+      enabled: !isHospitalScopedUser || !!scopedHospitalId,
+    });
+
+  const { data: districts = [], isLoading: districtsLoading } = useQuery({
+    queryKey: ["patients-management", "districts"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/patients/locations/districts");
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list)
+        ? list.filter((item: any) => item?.id && item?.name)
+        : [];
+    },
+  });
+
+  const { data: zones = [], isLoading: zonesLoading } = useQuery({
+    queryKey: ["patients-management", "district-zones", formData.districtId],
+    enabled: !!formData.districtId,
+    queryFn: async () => {
+      const response = await ApiClient.get<any>(
+        `/patients/locations/districts/${formData.districtId}/zones`
+      );
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list)
+        ? list.filter((item: any) => item?.id && item?.name)
+        : [];
+    },
+  });
+
+  const createPatientMutation = useMutation({
+    mutationFn: (data: any) => ApiClient.post("/patients", data),
+    onSuccess: (response: any) => {
+      queryClient.setQueryData(
+        ["patients-management", "patients"],
+        (previous: Patient[] = []) => {
+          if (!response?.id) return previous;
+          const withoutDuplicate = previous.filter(
+            (item) => item.id !== response.id
+          );
+          return [response, ...withoutDuplicate];
+        }
+      );
+      toast.success("Child added successfully");
+      queryClient.invalidateQueries({ queryKey: ["patients-management"] });
+      if (response?.parentCredentials) {
+        setParentCredentials(response.parentCredentials);
+        setCredentialsDialogOpen(true);
+      }
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to add child");
+    },
+  });
+
+  const updatePatientMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      ApiClient.put(`/patients/${id}`, data),
+    onSuccess: () => {
+      toast.success("Child updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["patients-management"] });
+      handleCloseDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update child");
+    },
+  });
+
+  const deletePatientMutation = useMutation({
+    mutationFn: (id: string) =>
+      ApiClient.delete(`/patients/${id}`, {
+        params: { mode: "permanent" },
+      }),
+    onSuccess: () => {
+      toast.success("Child permanently deleted");
+      queryClient.invalidateQueries({ queryKey: ["patients-management"] });
+      setDeleteDialogOpen(false);
+      setPatientToDelete(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to delete child");
+    },
+  });
+
+  const updatePatientStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      ApiClient.put(`/patients/${id}/status`, { isActive }),
+    onSuccess: (_response: any, variables) => {
+      toast.success(
+        variables.isActive
+          ? "Child marked as active"
+          : "Child marked as inactive"
+      );
+      queryClient.invalidateQueries({ queryKey: ["patients-management"] });
+      setDeleteDialogOpen(false);
+      setPatientToDelete(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update child status");
+    },
+  });
+
+  const availableHospitals = useMemo(() => {
+    if (!isHospitalScopedUser) return hospitals;
+    if (!scopedHospitalId) return [];
+    return hospitals.filter((hospital: Hospital) => hospital.id === scopedHospitalId);
+  }, [hospitals, isHospitalScopedUser, scopedHospitalId]);
+
+  const filteredPhysiotherapists = useMemo(() => {
+    if (!formData.hospitalId) return [];
+    return physiotherapists.filter(
+      (item: Physiotherapist) => item.hospitalId === formData.hospitalId
+    );
+  }, [physiotherapists, formData.hospitalId]);
+
+  const physiotherapistFilterOptions = useMemo(() => {
+    if (hospitalFilter === "all") {
+      return physiotherapists;
+    }
+    return physiotherapists.filter(
+      (item: Physiotherapist) => item.hospitalId === hospitalFilter
+    );
+  }, [physiotherapists, hospitalFilter]);
+
+  const filteredPatients = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    let list = patients;
+
+    if (hospitalFilter !== "all") {
+      list = list.filter((patient: Patient) => patient.hospitalId === hospitalFilter);
+    }
+
+    if (physiotherapistFilter !== "all") {
+      const selectedPhysio = physiotherapists.find(
+        (item: Physiotherapist) => item.id === physiotherapistFilter
+      );
+
+      if (selectedPhysio) {
+        list = list.filter(
+          (patient: Patient) => patient.assignedDoctor === selectedPhysio.name
+        );
+      }
+    }
+
+    if (!term) return list;
+
+    return list.filter((patient: Patient) =>
+      [
+        patient.firstName,
+        patient.lastName,
+        patient.parentName,
+        patient.parentEmail,
+        patient.parentPhone,
+        patient.hospital?.name,
+        patient.assignedDoctor,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [patients, search, hospitalFilter, physiotherapistFilter, physiotherapists]);
+
+  const stats = useMemo(() => {
+    const total = patients.length;
+    const active = patients.filter((patient: Patient) => patient.isActive).length;
+    const inactive = total - active;
+    return { total, active, inactive };
+  }, [patients]);
+
+  const handleOpenAddDialog = () => {
+    setEditingPatient(null);
+    setFormData({
+      ...initialForm,
+      hospitalId: isHospitalScopedUser ? scopedHospitalId : "",
+    });
+    setShowParentPassword(false);
+    setDialogOpen(true);
+  };
+
+  const handleOpenViewDialog = (patient: Patient) => {
+    setViewingPatient(patient);
+    setViewDialogOpen(true);
+  };
+
+  const handleCloseViewDialog = () => {
+    setViewDialogOpen(false);
+    setViewingPatient(null);
+  };
+
+  const handleOpenEditDialog = (patient: Patient) => {
+    const matchedPhysio = physiotherapists.find(
+      (item: Physiotherapist) =>
+        item.hospitalId === patient.hospitalId && item.name === patient.assignedDoctor
+    );
+
+    setEditingPatient(patient);
+    setFormData({
+      firstName: patient.firstName || "",
+      lastName: patient.lastName || "",
+      dateOfBirth: patient.dateOfBirth || "",
+      gender: patient.gender || "Male",
+      diagnosis: patient.diagnosis || "",
+      address: patient.address || "",
+      districtId: patient.district?.id || "",
+      zoneId: patient.zone?.id || "",
+      parentName: patient.parentName || "",
+      parentEmail: patient.parentEmail || "",
+      parentPhone: patient.parentPhone || "",
+      parentPassword: "",
+      hospitalId: patient.hospitalId || "",
+      physiotherapistId: matchedPhysio?.id || "",
+    });
+    setShowParentPassword(false);
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setEditingPatient(null);
+    setFormData(initialForm);
+    setShowParentPassword(false);
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (
+      !formData.firstName.trim() ||
+      !formData.lastName.trim() ||
+      !formData.dateOfBirth ||
+      !formData.gender ||
+      !formData.address.trim() ||
+      (!isHospitalScopedUser && !formData.districtId) ||
+      !formData.parentName.trim() ||
+      !formData.parentEmail.trim() ||
+      !formData.parentPhone.trim() ||
+      (!editingPatient && !formData.parentPassword.trim()) ||
+      !formData.hospitalId ||
+      !formData.physiotherapistId
+    ) {
+      toast.error("Please fill all required fields");
       return;
     }
 
-    const newPatient: Patient = {
-      id: `pat-${Date.now()}`,
-      firstName: newPatientForm.firstName,
-      lastName: newPatientForm.lastName,
-      email: newPatientForm.email,
-      phone: newPatientForm.phone,
-      patientId: `PAT-2024-${String(patients.length + 1).padStart(3, "0")}`,
-      status: "ACTIVE",
-      bloodType: newPatientForm.bloodType,
-      dateOfBirth: newPatientForm.dateOfBirth,
-      gender: newPatientForm.gender,
-      ward: newPatientForm.ward,
-      admissionDate: new Date().toISOString().split("T")[0],
-      doctorAssigned: newPatientForm.doctorAssigned,
-      emergencyContact: newPatientForm.emergencyContact,
-      emergencyPhone: newPatientForm.emergencyPhone,
-      medicalHistory: newPatientForm.medicalHistory,
-      emailVerified: false,
-      phoneVerified: false,
-      twoFactorEnabled: false,
-      createdAt: new Date().toISOString().split("T")[0],
+    const selectedPhysio = physiotherapists.find(
+      (item: Physiotherapist) => item.id === formData.physiotherapistId
+    );
+
+    if (!selectedPhysio) {
+      toast.error("Please select a valid physiotherapist");
+      return;
+    }
+
+    const resolvedHospitalId = isHospitalScopedUser
+      ? scopedHospitalId || formData.hospitalId
+      : formData.hospitalId;
+
+    if (!resolvedHospitalId) {
+      toast.error("Hospital is required");
+      return;
+    }
+
+    const payload = {
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      dateOfBirth: formData.dateOfBirth,
+      gender: formData.gender,
+      diagnosis: formData.diagnosis.trim() || undefined,
+      address: formData.address.trim(),
+      ...(isHospitalScopedUser
+        ? {}
+        : {
+            districtId: formData.districtId,
+            zoneId: formData.zoneId || undefined,
+          }),
+      parentName: formData.parentName.trim(),
+      parentEmail: formData.parentEmail.trim(),
+      parentPhone: formData.parentPhone.trim(),
+      ...(formData.parentPassword.trim()
+        ? { parentPassword: formData.parentPassword.trim() }
+        : {}),
+      hospitalId: resolvedHospitalId,
+      assignedDoctor: selectedPhysio.name,
     };
 
-    setPatients([newPatient, ...patients]);
-    toast.success("Patient added successfully");
-    setAddPatientOpen(false);
-    setNewPatientForm({
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      dateOfBirth: "",
-      gender: "Male",
-      bloodType: "O+",
-      ward: "General Ward",
-      doctorAssigned: "Dr. Fernando",
-      emergencyContact: "",
-      emergencyPhone: "",
-      medicalHistory: "",
+    if (editingPatient) {
+      updatePatientMutation.mutate({ id: editingPatient.id, data: payload });
+      return;
+    }
+
+    createPatientMutation.mutate(payload);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!patientToDelete) return;
+    deletePatientMutation.mutate(patientToDelete.id);
+  };
+
+  const handleMarkInactive = () => {
+    if (!patientToDelete) return;
+    updatePatientStatusMutation.mutate({
+      id: patientToDelete.id,
+      isActive: false,
     });
   };
 
-  // Filter patients based on search and filters
-  const filteredPatients = patients.filter((patient) => {
-    if (activeTab === "INPATIENT" && patient.ward === "General Ward")
-      return false;
-    if (activeTab === "OUTPATIENT" && patient.ward !== "General Ward")
-      return false;
+  const selectedDistrict = districts.find(
+    (item: District) => item.id === formData.districtId
+  );
+  const tableColumnCount = isHospitalScopedUser ? 13 : 16;
 
-    const matchesSearch =
-      searchTerm === "" ||
-      `${patient.firstName} ${patient.lastName}`
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      patient.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.patientId?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesWard = filterWard === "all" || patient.ward === filterWard;
-
-    const matchesStatus =
-      filterStatus === "all" || patient.status === filterStatus;
-
-    return matchesSearch && matchesWard && matchesStatus;
-  });
-
-  const handleDelete = async () => {
-    if (!patientToDelete) return;
-
-    setPatients(patients.filter((p) => p.id !== patientToDelete));
-    toast.success("Patient deleted successfully");
-    setDeleteDialogOpen(false);
-    setPatientToDelete(null);
-  };
-
-  const fetchQuickViewData = async (patient: Patient) => {
-    setLoadingQuickView(true);
-    setQuickViewPatient(patient);
-    setQuickViewOpen(true);
-    setLoadingQuickView(false);
-  };
-
-  const openDeleteDialog = (patientId: string) => {
-    setPatientToDelete(patientId);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleExport = () => {
-    toast.success("Export started");
-  };
-
-  const handleRefresh = () => {
-    toast.success("Data refreshed");
-  };
-
-  // Verification badges component
-  const getVerificationBadges = (patient: Patient) => {
-    const badges: React.ReactNode[] = [];
-
-    if (patient.emailVerified) {
-      badges.push(
-        <TooltipProvider key="email">
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge
-                variant="outline"
-                className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1"
-              >
-                <Mail className="h-3 w-3" />
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>Email Verified</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
-
-    if (patient.phoneVerified) {
-      badges.push(
-        <TooltipProvider key="phone">
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge
-                variant="outline"
-                className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1"
-              >
-                <Phone className="h-3 w-3" />
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>Phone Verified</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
-
-    if (patient.twoFactorEnabled) {
-      badges.push(
-        <TooltipProvider key="2fa">
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge
-                variant="outline"
-                className="bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-1"
-              >
-                <Shield className="h-3 w-3" />
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>2FA Enabled</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
-
-    return badges.length > 0 ? (
-      <div className="flex items-center gap-1">{badges}</div>
-    ) : (
-      <span className="text-xs text-muted-foreground">-</span>
-    );
+  const toProgressValue = (value?: number) => {
+    const parsed = Number(value ?? 0);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.min(100, parsed));
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Heart className="h-6 w-6 text-primary" />
-            Patient Management
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Manage patient records and admissions
-          </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <Users className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold">Children Management</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage children with parent details, hospital and physiotherapist
+              assignment
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={handleRefresh}>
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Refresh Data</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-1.5" />
-            Export
-          </Button>
-          <Button size="sm" onClick={() => setAddPatientOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-1.5" />
-            Add Patient
-          </Button>
-        </div>
+        <Button onClick={handleOpenAddDialog}>
+          <Plus className="h-4 w-4 mr-2" /> Add Child
+        </Button>
       </div>
 
-      {/* Statistics Dashboard */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Total Patients</p>
-                <p className="text-xl font-bold">{stats.totalUsers}</p>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/40 dark:to-blue-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Children</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Active</p>
-                <p className="text-xl font-bold text-green-600">
-                  {stats.activeUsers}
-                </p>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Active</p>
+                <p className="text-2xl font-bold text-emerald-600">{stats.active}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40">
+                <Users className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
               <div>
-                <p className="text-xs text-muted-foreground">Pending</p>
-                <p className="text-xl font-bold text-yellow-600">
-                  {stats.pendingUsers}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Discharged</p>
-                <p className="text-xl font-bold text-red-600">
-                  {stats.suspendedUsers}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <Ban className="h-4 w-4 text-red-600 dark:text-red-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">New Today</p>
-                <p className="text-xl font-bold">{stats.newUsersToday}</p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                <TrendingUp className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">This Week</p>
-                <p className="text-xl font-bold">{stats.newUsersThisWeek}</p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <Calendar className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Verified</p>
-                <p className="text-xl font-bold text-green-600">
-                  {stats.verifiedUsers}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Unverified</p>
-                <p className="text-xl font-bold text-orange-600">
-                  {stats.unverifiedUsers}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                <p className="text-xs text-muted-foreground font-medium">Inactive</p>
+                <p className="text-2xl font-bold text-rose-600">{stats.inactive}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs for Inpatient/Outpatient */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="INPATIENT" className="flex items-center gap-2">
-            <Heart className="h-4 w-4" />
-            Inpatients
-          </TabsTrigger>
-          <TabsTrigger value="OUTPATIENT" className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            Outpatients
-          </TabsTrigger>
-        </TabsList>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Children List</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by child, parent, hospital, physiotherapist..."
+                className="pl-9"
+              />
+            </div>
 
-        <TabsContent value={activeTab} className="space-y-4 mt-4">
-          {/* Filters */}
-          <Card>
-            <CardContent className="py-4">
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {!isHospitalScopedUser ? (
+              <Select
+                value={hospitalFilter}
+                onValueChange={(value) => {
+                  setHospitalFilter(value);
+                  setPhysiotherapistFilter("all");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by hospital" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Hospitals</SelectItem>
+                  {hospitals.map((hospital: Hospital) => (
+                    <SelectItem key={hospital.id} value={hospital.id}>
+                      {hospital.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+
+            <Select
+              value={physiotherapistFilter}
+              onValueChange={setPhysiotherapistFilter}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by physiotherapist" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Physiotherapists</SelectItem>
+                {physiotherapistFilterOptions.map((item: Physiotherapist) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Child Name</TableHead>
+                  <TableHead>Age</TableHead>
+                  <TableHead>Parent</TableHead>
+                  <TableHead>Parent Mobile</TableHead>
+                  <TableHead>Hospital</TableHead>
+                  <TableHead>Address</TableHead>
+                  {!isHospitalScopedUser ? <TableHead>Province</TableHead> : null}
+                  {!isHospitalScopedUser ? <TableHead>District</TableHead> : null}
+                  {!isHospitalScopedUser ? <TableHead>Zone</TableHead> : null}
+                  <TableHead>Physiotherapist</TableHead>
+                  <TableHead>Start Progress</TableHead>
+                  <TableHead>Current Progress</TableHead>
+                  <TableHead>Play Time</TableHead>
+                  <TableHead>Played Days</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {patientsLoading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={tableColumnCount}>
+                        <div className="h-10 rounded-lg bg-muted animate-pulse" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredPatients.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={tableColumnCount}>
+                      <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+                        <div className="p-3 rounded-full bg-muted">
+                          <Users className="h-6 w-6" />
+                        </div>
+                        <p className="font-medium">No children found</p>
+                        <p className="text-xs">Add a child or adjust your search/filters</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredPatients.map((patient: Patient) => (
+                    <TableRow key={patient.id}>
+                      <TableCell className="font-medium">
+                        {patient.firstName} {patient.lastName}
+                      </TableCell>
+                      <TableCell>{patient.age ?? "-"}</TableCell>
+                      <TableCell>{patient.parentName || "-"}</TableCell>
+                      <TableCell>{patient.parentPhone || "-"}</TableCell>
+                      <TableCell>{patient.hospital?.name || "-"}</TableCell>
+                      <TableCell>{patient.address || "-"}</TableCell>
+                      {!isHospitalScopedUser ? <TableCell>{patient.province?.name || "-"}</TableCell> : null}
+                      {!isHospitalScopedUser ? <TableCell>{patient.district?.name || "-"}</TableCell> : null}
+                      {!isHospitalScopedUser ? <TableCell>{patient.zone?.name || "-"}</TableCell> : null}
+                      <TableCell>{patient.assignedDoctor || "-"}</TableCell>
+                      <TableCell className="min-w-[140px]">
+                        <div className="space-y-1">
+                          <Progress
+                            value={toProgressValue(
+                              patient.progressTracker?.startProgress
+                            )}
+                            className="h-2"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {patient.progressTracker?.startProgress ?? 0}%
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="min-w-[140px]">
+                        <div className="space-y-1">
+                          <Progress
+                            value={toProgressValue(
+                              patient.progressTracker?.currentProgress
+                            )}
+                            className="h-2"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {patient.progressTracker?.currentProgress ?? 0}%
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {patient.progressTracker?.playTimeMinutes ?? 0} min
+                      </TableCell>
+                      <TableCell>{patient.progressTracker?.playedDays ?? 0}</TableCell>
+                      <TableCell>
+                        <Badge variant={patient.isActive ? "default" : "secondary"}>
+                          {patient.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 hover:bg-sky-500/10 hover:text-sky-600"
+                            onClick={() => handleOpenViewDialog(patient)}
+                            title="View details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
+                            onClick={() => handleOpenEditDialog(patient)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 hover:bg-amber-500/10 hover:text-amber-600"
+                            onClick={() =>
+                              updatePatientStatusMutation.mutate({
+                                id: patient.id,
+                                isActive: !patient.isActive,
+                              })
+                            }
+                            title={patient.isActive ? "Mark inactive" : "Mark active"}
+                          >
+                            <Power className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => {
+                              setPatientToDelete(patient);
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-3xl h-[95dvh] max-h-[95dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>{editingPatient ? "Update Child" : "Add Child"}</DialogTitle>
+          </DialogHeader>
+
+          <form
+            onSubmit={handleSubmit}
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain overflow-x-hidden space-y-4 px-6 pb-6 pt-4"
+          >
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-medium">Child Details</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">Child First Name</Label>
                   <Input
-                    placeholder="Search by name, email, or patient ID..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8 h-9"
+                    id="firstName"
+                    value={formData.firstName}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, firstName: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Child Last Name</Label>
+                  <Input
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, lastName: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth">Birthday</Label>
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, dateOfBirth: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Gender</Label>
+                  <Select
+                    value={formData.gender}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, gender: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Male">Male</SelectItem>
+                      <SelectItem value="Female">Female</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="diagnosis">Diagnosis</Label>
+                <Input
+                  id="diagnosis"
+                  value={formData.diagnosis}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, diagnosis: event.target.value }))
+                  }
+                  placeholder="Optional"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="address">Child Address</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, address: event.target.value }))
+                  }
+                  placeholder="Enter child home address"
+                />
+              </div>
+
+              {!isHospitalScopedUser ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>District</Label>
+                  <Select
+                    value={formData.districtId}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        districtId: value,
+                        zoneId: "",
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          districtsLoading ? "Loading districts..." : "Select district"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {districts.length === 0 && !districtsLoading ? (
+                        <SelectItem value="__NO_DISTRICTS__" disabled>
+                          No districts available
+                        </SelectItem>
+                      ) : null}
+                      {districts.map((district: District) => (
+                        <SelectItem key={district.id} value={district.id}>
+                          {district.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Province</Label>
+                  <Input
+                    value={selectedDistrict?.province?.name || ""}
+                    placeholder="Auto from district"
+                    disabled
                   />
                 </div>
 
-                <Select value={filterWard} onValueChange={setFilterWard}>
-                  <SelectTrigger className="w-[130px] h-9">
-                    <SelectValue placeholder="Ward" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Wards</SelectItem>
-                    <SelectItem value="General Ward">General Ward</SelectItem>
-                    <SelectItem value="ICU">ICU</SelectItem>
-                    <SelectItem value="Surgical Ward">Surgical Ward</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[120px] h-9">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="ACTIVE">Active</SelectItem>
-                    <SelectItem value="PENDING">Pending</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Results count */}
-                <div className="text-xs text-muted-foreground ml-auto">
-                  Showing {filteredPatients.length} of {patients.length}
+                <div className="space-y-2">
+                  <Label>Zone</Label>
+                  <Select
+                    value={formData.zoneId}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, zoneId: value }))
+                    }
+                    disabled={!formData.districtId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          !formData.districtId
+                            ? "Select district first"
+                            : zonesLoading
+                              ? "Loading zones..."
+                              : "Select zone"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {zones.length === 0 && formData.districtId && !zonesLoading ? (
+                        <SelectItem value="__NO_ZONES__" disabled>
+                          No zones available
+                        </SelectItem>
+                      ) : null}
+                      {zones.map((zone: Zone) => (
+                        <SelectItem key={zone.id} value={zone.id}>
+                          {zone.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
 
-          {/* Patients Table */}
-          <Card>
-            <CardContent className="pt-6">
-              {loading ? (
-                <div className="flex justify-center items-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-medium">Parent Details</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="parentName">Parent Name</Label>
+                  <Input
+                    id="parentName"
+                    value={formData.parentName}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, parentName: event.target.value }))
+                    }
+                  />
                 </div>
-              ) : filteredPatients.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  No patients found
+                <div className="space-y-2">
+                  <Label htmlFor="parentEmail">Parent Email</Label>
+                  <Input
+                    id="parentEmail"
+                    type="email"
+                    value={formData.parentEmail}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, parentEmail: event.target.value }))
+                    }
+                  />
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Patient ID</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>Ward</TableHead>
-                        <TableHead>Doctor Assigned</TableHead>
-                        <TableHead>Blood Type</TableHead>
-                        <TableHead>Verified</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredPatients.map((patient) => (
-                        <TableRow key={patient.id}>
-                          <TableCell className="font-mono text-sm">
-                            {patient.patientId || "-"}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {patient.firstName} {patient.lastName}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {patient.email}
-                          </TableCell>
-                          <TableCell>{patient.phone || "-"}</TableCell>
-                          <TableCell>{patient.ward || "-"}</TableCell>
-                          <TableCell>{patient.doctorAssigned || "-"}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {patient.bloodType || "-"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {getVerificationBadges(patient)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                patient.status === "ACTIVE"
-                                  ? "success"
-                                  : "secondary"
-                              }
-                            >
-                              {patient.status === "ACTIVE"
-                                ? "Active"
-                                : "Pending"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() =>
-                                        fetchQuickViewData(patient)
-                                      }
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Quick View</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="w-48"
-                                >
-                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      console.log("View profile:", patient.id);
-                                    }}
-                                  >
-                                    <ExternalLink className="h-4 w-4 mr-2" />
-                                    View Profile
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      console.log("Edit patient:", patient.id);
-                                    }}
-                                  >
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      const newStatus =
-                                        patient.status === "ACTIVE"
-                                          ? "PENDING"
-                                          : "ACTIVE";
-                                      setPatients(
-                                        patients.map((p) =>
-                                          p.id === patient.id
-                                            ? { ...p, status: newStatus }
-                                            : p
-                                        )
-                                      );
-                                      toast.success(
-                                        "Status updated successfully"
-                                      );
-                                    }}
-                                  >
-                                    {patient.status === "ACTIVE" ? (
-                                      <>
-                                        <UserX className="h-4 w-4 mr-2" />
-                                        Mark Pending
-                                      </>
-                                    ) : (
-                                      <>
-                                        <UserCheck className="h-4 w-4 mr-2" />
-                                        Mark Active
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => openDeleteDialog(patient.id)}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Patient</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this patient? This action cannot
-              be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <div className="space-y-2">
+                <Label htmlFor="parentPhone">Parent Mobile Number</Label>
+                <Input
+                  id="parentPhone"
+                  value={formData.parentPhone}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, parentPhone: event.target.value }))
+                  }
+                />
+              </div>
 
-      {/* Quick View Sheet */}
-      <Sheet open={quickViewOpen} onOpenChange={setQuickViewOpen}>
-        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-3">
-              {quickViewPatient && (
-                <>
-                  <Avatar className="h-12 w-12">
-                    <AvatarFallback className="bg-primary/10 text-primary font-medium text-lg">
-                      {quickViewPatient.firstName?.[0]}
-                      {quickViewPatient.lastName?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
+              <div className="space-y-2">
+                <Label htmlFor="parentPassword">
+                  Parent Password {editingPatient ? "(Optional)" : ""}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    className="flex-1"
+                    id="parentPassword"
+                    type={showParentPassword ? "text" : "password"}
+                    value={formData.parentPassword}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        parentPassword: event.target.value,
+                      }))
+                    }
+                    placeholder={
+                      editingPatient
+                        ? "Leave blank to keep current password"
+                        : "Set parent account password"
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowParentPassword((prev) => !prev)}
+                  >
+                    {showParentPassword ? (
+                      <>
+                        <EyeOff className="h-4 w-4 mr-1" /> Hide
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="h-4 w-4 mr-1" /> Show
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        parentPassword: generatePassword(),
+                      }));
+                      setShowParentPassword(true);
+                    }}
+                  >
+                    Generate
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-medium">Assignment</p>
+              <div className="space-y-2">
+                <Label>Hospital</Label>
+                <Select
+                  value={formData.hospitalId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      hospitalId: value,
+                      physiotherapistId: "",
+                    }))
+                  }
+                  disabled={isHospitalScopedUser}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        isHospitalScopedUser
+                          ? scopedHospital?.name || "Loading hospital..."
+                          : hospitalsLoading
+                            ? "Loading hospitals..."
+                            : "Select hospital"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableHospitals.length === 0 && !hospitalsLoading ? (
+                      <SelectItem value="__NO_HOSPITALS__" disabled>
+                        No hospitals available
+                      </SelectItem>
+                    ) : null}
+                    {availableHospitals.map((hospital: Hospital) => (
+                      <SelectItem key={hospital.id} value={hospital.id}>
+                        {hospital.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Physiotherapist</Label>
+                <Select
+                  value={formData.physiotherapistId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, physiotherapistId: value }))
+                  }
+                  disabled={!formData.hospitalId}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        !formData.hospitalId
+                          ? "Select hospital first"
+                          : physiotherapistsLoading
+                            ? "Loading physiotherapists..."
+                            : "Select physiotherapist"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredPhysiotherapists.length === 0 && formData.hospitalId ? (
+                      <SelectItem value="__NO_PHYSIO__" disabled>
+                        No physiotherapists available for this hospital
+                      </SelectItem>
+                    ) : null}
+                    {filteredPhysiotherapists.map((item: Physiotherapist) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                        {item.specialization ? ` - ${item.specialization}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-3 border-t bg-background">
+              <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  createPatientMutation.isPending || updatePatientMutation.isPending
+                }
+              >
+                {editingPatient ? "Update Child" : "Add Child"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-3xl h-[90dvh] max-h-[90dvh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle>Child Details</DialogTitle>
+          </DialogHeader>
+
+          {viewingPatient ? (
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain overflow-x-hidden space-y-4 px-6 pb-6 pt-4">
+              <div className="rounded-lg border p-4 space-y-4">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold">
-                      {quickViewPatient.firstName} {quickViewPatient.lastName}
-                    </p>
-                    <p className="text-sm text-muted-foreground font-normal">
-                      {quickViewPatient.email}
+                    <h3 className="text-lg font-semibold">
+                      {viewingPatient.firstName} {viewingPatient.lastName}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Age: {viewingPatient.age ?? "-"} • Gender: {viewingPatient.gender}
                     </p>
                   </div>
-                </>
-              )}
-            </SheetTitle>
-            <SheetDescription>Patient Quick View</SheetDescription>
-          </SheetHeader>
-
-          {loadingQuickView ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            quickViewPatient && (
-              <div className="mt-6 space-y-6">
-                {/* Status Badge */}
-                <div className="flex items-center justify-between">
-                  <Badge
-                    variant={
-                      quickViewPatient.status === "ACTIVE"
-                        ? "success"
-                        : "secondary"
-                    }
-                  >
-                    {quickViewPatient.status === "ACTIVE"
-                      ? "Active"
-                      : "Pending"}
+                  <Badge variant={viewingPatient.isActive ? "default" : "secondary"}>
+                    {viewingPatient.isActive ? "Active" : "Inactive"}
                   </Badge>
                 </div>
 
-                <Separator />
-
-                {/* Contact Information */}
-                <div className="space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
-                    Contact Information
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Phone</p>
-                      <p className="font-medium">
-                        {quickViewPatient.phone || "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Email</p>
-                      <p className="font-medium truncate">
-                        {quickViewPatient.email}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Admission Date</p>
-                      <p className="font-medium">
-                        {quickViewPatient.admissionDate || "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Patient ID</p>
-                      <p className="font-medium font-mono text-xs">
-                        {quickViewPatient.patientId || "-"}
-                      </p>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Parent</p>
+                    <p className="font-medium">{viewingPatient.parentName || "-"}</p>
                   </div>
-                </div>
-
-                <Separator />
-
-                {/* Medical Information */}
-                <div className="space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <Heart className="h-4 w-4" />
-                    Medical Information
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Blood Type</p>
-                      <p className="font-medium">
-                        {quickViewPatient.bloodType || "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Date of Birth</p>
-                      <p className="font-medium">
-                        {quickViewPatient.dateOfBirth || "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Ward</p>
-                      <p className="font-medium">
-                        {quickViewPatient.ward || "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Gender</p>
-                      <p className="font-medium">
-                        {quickViewPatient.gender || "-"}
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-muted-foreground">Parent Mobile</p>
+                    <p className="font-medium">{viewingPatient.parentPhone || "-"}</p>
                   </div>
-                </div>
-
-                <Separator />
-
-                {/* Doctor & Emergency */}
-                <div className="space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Healthcare Team
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <p className="text-muted-foreground">Doctor Assigned</p>
-                      <p className="font-medium">
-                        {quickViewPatient.doctorAssigned || "-"}
-                      </p>
-                    </div>
-                    <div className="flex justify-between">
-                      <p className="text-muted-foreground">Emergency Contact</p>
-                      <p className="font-medium">
-                        {quickViewPatient.emergencyContact || "-"}
-                      </p>
-                    </div>
-                    <div className="flex justify-between">
-                      <p className="text-muted-foreground">Emergency Phone</p>
-                      <p className="font-medium">
-                        {quickViewPatient.emergencyPhone || "-"}
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-muted-foreground">Hospital</p>
+                    <p className="font-medium">{viewingPatient.hospital?.name || "-"}</p>
                   </div>
-                </div>
-
-                <Separator />
-
-                {/* Medical History */}
-                {quickViewPatient.medicalHistory && (
-                  <>
-                    <div className="space-y-3">
-                      <h4 className="font-medium flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Medical History
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        {quickViewPatient.medicalHistory}
-                      </p>
-                    </div>
-                    <Separator />
-                  </>
-                )}
-
-                {/* Verification Status */}
-                <div className="space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <Shield className="h-4 w-4" />
-                    Verification Status
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                      <span className="flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        Email Verified
-                      </span>
-                      {quickViewPatient.emailVerified ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                      <span className="flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
-                        Phone Verified
-                      </span>
-                      {quickViewPatient.phoneVerified ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-                      <span className="flex items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        2FA Enabled
-                      </span>
-                      {quickViewPatient.twoFactorEnabled ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </div>
+                  <div>
+                    <p className="text-muted-foreground">Physiotherapist</p>
+                    <p className="font-medium">{viewingPatient.assignedDoctor || "-"}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-muted-foreground">Address</p>
+                    <p className="font-medium">{viewingPatient.address || "-"}</p>
                   </div>
                 </div>
               </div>
-            )
-          )}
-        </SheetContent>
-      </Sheet>
 
-      {/* Add Patient Dialog */}
-      <Dialog open={addPatientOpen} onOpenChange={setAddPatientOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5" />
-              Add New Patient
-            </DialogTitle>
-            <DialogDescription>
-              Enter patient details to add them to the system
-            </DialogDescription>
-          </DialogHeader>
+              <div className="rounded-lg border p-4 space-y-4">
+                <h4 className="text-sm font-medium">Progress Tracker</h4>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* First Name */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">First Name *</label>
-              <Input
-                placeholder="John"
-                value={newPatientForm.firstName}
-                onChange={(e) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    firstName: e.target.value,
-                  })
-                }
-              />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Start Progress</span>
+                    <span className="font-medium">
+                      {viewingPatient.progressTracker?.startProgress ?? 0}%
+                    </span>
+                  </div>
+                  <Progress
+                    value={toProgressValue(viewingPatient.progressTracker?.startProgress)}
+                    className="h-2"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Current Progress</span>
+                    <span className="font-medium">
+                      {viewingPatient.progressTracker?.currentProgress ?? 0}%
+                    </span>
+                  </div>
+                  <Progress
+                    value={toProgressValue(viewingPatient.progressTracker?.currentProgress)}
+                    className="h-2"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Play Time</p>
+                    <p className="font-semibold">
+                      {viewingPatient.progressTracker?.playTimeMinutes ?? 0} min
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Played Days</p>
+                    <p className="font-semibold">
+                      {viewingPatient.progressTracker?.playedDays ?? 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
+          ) : null}
 
-            {/* Last Name */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Last Name *</label>
-              <Input
-                placeholder="Doe"
-                value={newPatientForm.lastName}
-                onChange={(e) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    lastName: e.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* Email */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
-              <Input
-                type="email"
-                placeholder="john@example.com"
-                value={newPatientForm.email}
-                onChange={(e) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    email: e.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* Phone */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Phone</label>
-              <Input
-                placeholder="+94 70 123 4567"
-                value={newPatientForm.phone}
-                onChange={(e) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    phone: e.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* Date of Birth */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Date of Birth</label>
-              <Input
-                type="date"
-                value={newPatientForm.dateOfBirth}
-                onChange={(e) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    dateOfBirth: e.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* Gender */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Gender</label>
-              <Select
-                value={newPatientForm.gender}
-                onValueChange={(value) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    gender: value,
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Male">Male</SelectItem>
-                  <SelectItem value="Female">Female</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Blood Type */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Blood Type</label>
-              <Select
-                value={newPatientForm.bloodType}
-                onValueChange={(value) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    bloodType: value,
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="O+">O+</SelectItem>
-                  <SelectItem value="A+">A+</SelectItem>
-                  <SelectItem value="B+">B+</SelectItem>
-                  <SelectItem value="AB+">AB+</SelectItem>
-                  <SelectItem value="O-">O-</SelectItem>
-                  <SelectItem value="A-">A-</SelectItem>
-                  <SelectItem value="B-">B-</SelectItem>
-                  <SelectItem value="AB-">AB-</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Ward */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Ward</label>
-              <Select
-                value={newPatientForm.ward}
-                onValueChange={(value) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    ward: value,
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="General Ward">General Ward</SelectItem>
-                  <SelectItem value="ICU">ICU</SelectItem>
-                  <SelectItem value="Surgical Ward">Surgical Ward</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Doctor Assigned */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Doctor Assigned</label>
-              <Select
-                value={newPatientForm.doctorAssigned}
-                onValueChange={(value) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    doctorAssigned: value,
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Dr. Fernando">Dr. Fernando</SelectItem>
-                  <SelectItem value="Dr. Perera">Dr. Perera</SelectItem>
-                  <SelectItem value="Dr. Silva">Dr. Silva</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Emergency Contact */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Emergency Contact</label>
-              <Input
-                placeholder="Family member name"
-                value={newPatientForm.emergencyContact}
-                onChange={(e) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    emergencyContact: e.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* Emergency Phone */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Emergency Phone</label>
-              <Input
-                placeholder="+94 70 987 6543"
-                value={newPatientForm.emergencyPhone}
-                onChange={(e) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    emergencyPhone: e.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* Medical History */}
-            <div className="space-y-2 col-span-2">
-              <label className="text-sm font-medium">Medical History</label>
-              <Input
-                placeholder="e.g., Hypertension, Diabetes"
-                value={newPatientForm.medicalHistory}
-                onChange={(e) =>
-                  setNewPatientForm({
-                    ...newPatientForm,
-                    medicalHistory: e.target.value,
-                  })
-                }
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddPatientOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddPatient}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Add Patient
+          <DialogFooter className="px-6 py-3 border-t bg-background">
+            <Button type="button" variant="outline" onClick={handleCloseViewDialog}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={credentialsDialogOpen} onOpenChange={setCredentialsDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Parent Credentials</DialogTitle>
+          </DialogHeader>
+
+          {parentCredentials ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>Email</Label>
+                <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                  <span>{parentCredentials.email}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      copyToClipboard(parentCredentials.email, "Email")
+                    }
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Mobile</Label>
+                <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                  <span>{parentCredentials.phone}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      copyToClipboard(parentCredentials.phone, "Mobile")
+                    }
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Password</Label>
+                <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                  <span>{parentCredentials.password}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      copyToClipboard(parentCredentials.password, "Password")
+                    }
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" onClick={() => setCredentialsDialogOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete child</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose whether to mark this child inactive or permanently delete the
+              child and related records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleMarkInactive}
+              disabled={
+                updatePatientStatusMutation.isPending ||
+                deletePatientMutation.isPending
+              }
+            >
+              Make Inactive
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={
+                updatePatientStatusMutation.isPending ||
+                deletePatientMutation.isPending
+              }
+            >
+              Delete Permanently
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-};
-
-export default PatientManagement;
+}

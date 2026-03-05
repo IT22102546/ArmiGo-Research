@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Mail, Lock, Shield } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLoginMutation } from "@/lib/hooks/queries/useAuth";
+import Link from "next/link";
 
 export default function AdminSignIn() {
   const [identifier, setIdentifier] = useState("");
@@ -75,6 +76,10 @@ export default function AdminSignIn() {
           },
           onError: (err: any) => {
             logger.error("❌ Login failed:", getErrorMessage(err));
+            const message = String(err?.message || "").toLowerCase();
+            if (message.includes("account is inactive") || message.includes("inactive")) {
+              setError("Account is inactive. Please contact administrator.");
+            } else
             // Handle different error types with specific admin-focused messages
             if (err.response?.status === 401) {
               setError("Invalid credentials");
@@ -191,14 +196,14 @@ export default function AdminSignIn() {
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              Need Doctor Access?{" "}
-              <a
-                href="/sign-in"
-                className="text-primary font-medium hover:underline"
-              >
-                Doctor Portal
-              </a>
+              Hospital users should use Hospital Login.
             </p>
+            <Link
+              href="/hospital/sign-in"
+              className="flex items-center justify-center w-full h-10 text-sm font-medium text-muted-foreground hover:text-primary border border-border rounded-lg hover:border-primary transition-colors"
+            >
+              Hospital Login
+            </Link>
           </form>
         </div>
       </div>
