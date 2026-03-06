@@ -8,19 +8,78 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Modal,
+  Pressable,
 } from "react-native";
-import { Ionicons, MaterialIcons, Entypo } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
+import Animated, { 
+  FadeInDown, 
+  FadeInUp, 
+  Layout,
+  SlideInRight,
+  SlideOutLeft 
+} from "react-native-reanimated";
 import useNotificationStore, {
   NotificationItem,
   AnnouncementItem,
 } from "@/stores/notificationStore";
 
+// ─── Premium Color Palette ───────────────────────────────────────
+const COLORS = {
+  primary: "#6366F1",
+  primaryLight: "#818CF8",
+  primarySoft: "#EEF2FF",
+  secondary: "#8B5CF6",
+  success: "#10B981",
+  warning: "#F59E0B",
+  danger: "#EF4444",
+  info: "#3B82F6",
+  purple: "#8B5CF6",
+  pink: "#EC4899",
+  orange: "#F97316",
+  teal: "#14B8A6",
+  maroon: "#9A2143",
+  
+  slate: {
+    50: "#F8FAFC",
+    100: "#F1F5F9",
+    200: "#E2E8F0",
+    300: "#CBD5E1",
+    400: "#94A3B8",
+    500: "#64748B",
+    600: "#475569",
+    700: "#334155",
+    800: "#1E293B",
+    900: "#0F172A",
+  },
+  white: "#FFFFFF",
+  black: "#000000",
+  transparent: "transparent",
+};
+
 type TabType = "notifications" | "announcements";
+
+// ─── Notification Type Icons ─────────────────────────────────────
+const NOTIFICATION_ICONS: Record<string, { icon: string; color: string; bg: string; family?: string }> = {
+  SESSION_ONLINE: { icon: "videocam", color: COLORS.primary, bg: "#EEF2FF" },
+  SESSION_PHYSICAL: { icon: "fitness", color: COLORS.teal, bg: "#E6FFFA" },
+  SESSION_REMINDER: { icon: "alarm", color: COLORS.warning, bg: "#FFFBEB" },
+  ASSIGNMENT_NEW: { icon: "document-text", color: COLORS.secondary, bg: "#F5F3FF" },
+  ANNOUNCEMENT: { icon: "megaphone", color: COLORS.maroon, bg: "#FDF2F8" },
+  SUCCESS: { icon: "checkmark-circle", color: COLORS.success, bg: "#ECFDF5" },
+  WARNING: { icon: "warning", color: COLORS.warning, bg: "#FFFBEB", family: "MaterialIcons" },
+  ERROR: { icon: "alert-circle", color: COLORS.danger, bg: "#FEF2F2" },
+  GENERAL: { icon: "notifications", color: COLORS.primary, bg: "#EEF2FF" },
+};
 
 export default function Notifications() {
   const [activeTab, setActiveTab] = useState<TabType>("notifications");
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AnnouncementItem | null>(null);
 
   const {
     notifications,
@@ -34,10 +93,12 @@ export default function Notifications() {
     markAsRead,
     markAllAsRead,
     deleteNotification,
+    markAnnouncementRead,
+    unreadAnnouncementCount,
     refresh,
   } = useNotificationStore();
 
-  // Format date to relative time
+  // Format date to relative time with better formatting
   const formatTimeAgo = (dateString: string | Date): string => {
     try {
       const date = new Date(dateString);
@@ -48,100 +109,93 @@ export default function Notifications() {
       const diffDays = Math.floor(diffMs / 86400000);
 
       if (diffMins < 1) return "Just now";
-      if (diffMins < 60)
-        return `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`;
-      if (diffHours < 24)
-        return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-      if (diffDays < 7)
-        return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
 
       return date.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
       });
     } catch {
       return "Recently";
     }
   };
 
-  // Get icon based on notification type
-  const getIconForType = (type: string, title: string) => {
+  // Get icon configuration for notification
+  const getIconConfig = (type: string, title: string) => {
     const upperType = type?.toUpperCase() || "GENERAL";
-
-    // Match by type first for precision
-    switch (upperType) {
-      case "SESSION_ONLINE":
-        return <Ionicons name="videocam" size={28} color="#6366f1" />;
-      case "SESSION_PHYSICAL":
-        return <Ionicons name="body" size={28} color="#0d9488" />;
-      case "SESSION_REMINDER":
-        return <Ionicons name="alarm" size={28} color="#f59e0b" />;
-      case "ASSIGNMENT_NEW":
-        return <MaterialIcons name="assignment" size={28} color="#6366f1" />;
-      case "ANNOUNCEMENT":
-        return <Ionicons name="megaphone" size={28} color="#9A2143" />;
-      case "SUCCESS":
-        return <Ionicons name="checkmark-circle" size={28} color="#10b981" />;
-      case "WARNING":
-        return <MaterialIcons name="warning" size={28} color="#f59e0b" />;
-      case "ERROR":
-        return <Ionicons name="alert-circle" size={28} color="#ef4444" />;
+    
+    if (NOTIFICATION_ICONS[upperType]) {
+      return NOTIFICATION_ICONS[upperType];
     }
 
-    // Fallback: match by title keywords
+    // Fallback to title-based matching
     const lowerTitle = title.toLowerCase();
-    if (lowerTitle.includes("reminder")) {
-      return <Ionicons name="alarm" size={28} color="#f59e0b" />;
-    }
-    if (lowerTitle.includes("online session")) {
-      return <Ionicons name="videocam" size={28} color="#6366f1" />;
-    }
-    if (lowerTitle.includes("physical session") || lowerTitle.includes("session")) {
-      return <Ionicons name="body" size={28} color="#0d9488" />;
-    }
-    if (lowerTitle.includes("assignment")) {
-      return <MaterialIcons name="assignment" size={28} color="#6366f1" />;
-    }
-    if (lowerTitle.includes("approved") || lowerTitle.includes("success")) {
-      return <Ionicons name="checkmark-circle" size={28} color="#10b981" />;
-    }
-    if (lowerTitle.includes("rejected") || lowerTitle.includes("denied")) {
-      return <Ionicons name="close-circle" size={28} color="#ef4444" />;
-    }
-
-    return <Ionicons name="notifications" size={28} color="#0057FF" />;
+    if (lowerTitle.includes("reminder")) return NOTIFICATION_ICONS.SESSION_REMINDER;
+    if (lowerTitle.includes("online session")) return NOTIFICATION_ICONS.SESSION_ONLINE;
+    if (lowerTitle.includes("physical session")) return NOTIFICATION_ICONS.SESSION_PHYSICAL;
+    if (lowerTitle.includes("assignment")) return NOTIFICATION_ICONS.ASSIGNMENT_NEW;
+    if (lowerTitle.includes("approved") || lowerTitle.includes("success")) return NOTIFICATION_ICONS.SUCCESS;
+    if (lowerTitle.includes("rejected") || lowerTitle.includes("denied")) return NOTIFICATION_ICONS.ERROR;
+    
+    return NOTIFICATION_ICONS.GENERAL;
   };
 
-  // Get announcement priority color
+  // Get announcement priority style
   const getPriorityStyle = (priority: string) => {
     switch (priority?.toUpperCase()) {
       case "HIGH":
       case "URGENT":
-        return { borderLeftColor: "#ef4444", bg: "#fef2f2" };
+        return { color: COLORS.danger, bg: "#FEF2F2", borderColor: COLORS.danger };
       case "NORMAL":
-        return { borderLeftColor: "#0057FF", bg: "#eff6ff" };
+        return { color: COLORS.primary, bg: "#EEF2FF", borderColor: COLORS.primary };
       case "LOW":
-        return { borderLeftColor: "#10b981", bg: "#ecfdf5" };
+        return { color: COLORS.success, bg: "#ECFDF5", borderColor: COLORS.success };
       default:
-        return { borderLeftColor: "#6b7280", bg: "#f9fafb" };
+        return { color: COLORS.slate[500], bg: COLORS.slate[100], borderColor: COLORS.slate[400] };
     }
   };
 
   const handleMarkAsRead = async (id: string) => {
+    setSelectedId(id);
     await markAsRead(id);
+    setTimeout(() => setSelectedId(null), 300);
+  };
+
+  const handleOpenNotification = async (notification: NotificationItem) => {
+    setSelectedNotification(notification);
+    if (!notification.isRead) {
+      await markAsRead(notification.id);
+    }
+  };
+
+  const handleOpenAnnouncement = (announcement: AnnouncementItem) => {
+    setSelectedAnnouncement(announcement);
+    markAnnouncementRead(announcement.id);
   };
 
   const handleMarkAllAsRead = async () => {
-    await markAllAsRead();
-    Alert.alert("Success", "All notifications marked as read");
+    Alert.alert(
+      "Mark All as Read",
+      "Are you sure you want to mark all notifications as read?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Mark All",
+          onPress: async () => {
+            await markAllAsRead();
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteNotification = (id: string) => {
     Alert.alert(
       "Delete Notification",
-      "Are you sure you want to delete this notification?",
+      "This action cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -159,38 +213,49 @@ export default function Notifications() {
     setRefreshing(false);
   }, [refresh]);
 
-  // Load data on focus
   useFocusEffect(
     useCallback(() => {
       refresh();
     }, [refresh])
   );
 
-  // Separate today's and older notifications
-  const todayNotifications = notifications.filter((n) => {
+  // Group notifications by date
+  const groupedNotifications = notifications.reduce((groups, notification) => {
     try {
-      const date = new Date(n.createdAt || n.sentAt);
-      return date.toDateString() === new Date().toDateString();
-    } catch {
-      return false;
-    }
-  });
+      const date = new Date(notification.createdAt || notification.sentAt || "");
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
 
-  const olderNotifications = notifications.filter((n) => {
-    try {
-      const date = new Date(n.createdAt || n.sentAt);
-      return date.toDateString() !== new Date().toDateString();
+      let group = "Older";
+      if (date.toDateString() === today.toDateString()) {
+        group = "Today";
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        group = "Yesterday";
+      } else if (date > new Date(today.setDate(today.getDate() - 7))) {
+        group = "This Week";
+      }
+
+      if (!groups[group]) groups[group] = [];
+      groups[group].push(notification);
+      return groups;
     } catch {
-      return true;
+      if (!groups["Older"]) groups["Older"] = [];
+      groups["Older"].push(notification);
+      return groups;
     }
-  });
+  }, {} as Record<string, NotificationItem[]>);
+
+  const orderedGroups = ["Today", "Yesterday", "This Week", "Older"];
 
   // Loading state
   if (loading && notifications.length === 0 && announcements.length === 0) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#0057FF" />
-        <Text style={styles.loadingText}>Loading notifications...</Text>
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading notifications...</Text>
+        </View>
       </View>
     );
   }
@@ -198,173 +263,215 @@ export default function Notifications() {
   // Error state
   if (error && notifications.length === 0) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Ionicons name="alert-circle-outline" size={64} color="#FF3B30" />
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={refresh}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <View style={styles.errorIconContainer}>
+            <Ionicons name="alert-circle" size={48} color={COLORS.danger} />
+          </View>
+          <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refresh}>
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.secondary]}
+              style={styles.retryGradient}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
-  const renderNotificationCard = (notification: NotificationItem) => (
-    <TouchableOpacity
-      key={notification.id}
-      style={[styles.card, !notification.isRead && styles.cardUnread]}
-      onPress={() => handleMarkAsRead(notification.id)}
-      onLongPress={() => handleDeleteNotification(notification.id)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardIcon}>
-        {getIconForType(notification.type, notification.title || "Notification")}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.cardTitle}>
-          {notification.title || "Notification"}
-        </Text>
-        <Text style={styles.cardMsg} numberOfLines={3}>
-          {notification.message || "No message"}
-        </Text>
-        <View style={styles.cardMeta}>
-          <Text style={styles.cardTime}>
-            {notification.sentAt
-              ? formatTimeAgo(notification.sentAt)
-              : notification.createdAt
-              ? formatTimeAgo(notification.createdAt)
-              : "Recently"}
-          </Text>
-          {notification.type && (
-            <View style={styles.typeBadge}>
-              <Text style={styles.typeBadgeText}>
-                {notification.type.replace(/_/g, " ")}
+  const renderNotificationCard = (notification: NotificationItem, index: number) => {
+    const iconConfig = getIconConfig(notification.type, notification.title || "");
+    const IconComponent = iconConfig.family === "MaterialIcons" ? MaterialIcons : Ionicons;
+    const isSelected = selectedId === notification.id;
+
+    return (
+      <Animated.View
+        key={notification.id}
+        entering={SlideInRight.delay(index * 50).springify()}
+        exiting={SlideOutLeft}
+        layout={Layout.springify()}
+      >
+        <TouchableOpacity
+          style={[
+            styles.notificationCard,
+            !notification.isRead && styles.notificationCardUnread,
+            isSelected && styles.notificationCardSelected,
+          ]}
+          onPress={() => handleOpenNotification(notification)}
+          onLongPress={() => handleDeleteNotification(notification.id)}
+          activeOpacity={0.7}
+          delayPressIn={50}
+        >
+          <LinearGradient
+            colors={[iconConfig.bg, iconConfig.bg]}
+            style={styles.notificationIconContainer}
+          >
+            <IconComponent 
+              name={iconConfig.icon as any} 
+              size={24} 
+              color={iconConfig.color} 
+            />
+          </LinearGradient>
+
+          <View style={styles.notificationContent}>
+            <View style={styles.notificationHeader}>
+              <Text style={styles.notificationTitle} numberOfLines={1}>
+                {notification.title || "Notification"}
+              </Text>
+              <Text style={styles.notificationTime}>
+                {formatTimeAgo(notification.sentAt || notification.createdAt || "")}
               </Text>
             </View>
-          )}
-        </View>
-      </View>
-      {!notification.isRead && <View style={styles.unreadDot} />}
-    </TouchableOpacity>
-  );
 
-  const renderAnnouncementCard = (announcement: AnnouncementItem) => {
-    const priorityStyle = getPriorityStyle(announcement.priority);
+            <Text style={styles.notificationMessage} numberOfLines={2}>
+              {notification.message || "No message"}
+            </Text>
+
+            <View style={styles.notificationFooter}>
+              {notification.type && (
+                <View style={[styles.notificationTypeBadge, { backgroundColor: iconConfig.bg }]}>
+                  <Text style={[styles.notificationTypeText, { color: iconConfig.color }]}>
+                    {notification.type.replace(/_/g, " ")}
+                  </Text>
+                </View>
+              )}
+              {!notification.isRead && (
+                <View style={styles.unreadIndicator}>
+                  <View style={styles.unreadDot} />
+                  <Text style={styles.unreadText}>New</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {!notification.isRead && <View style={styles.unreadBadge} />}
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
+  const renderAnnouncementCard = (announcement: AnnouncementItem, index: number) => {
+    const priority = getPriorityStyle(announcement.priority);
+    
     return (
-      <View
+      <Animated.View
         key={announcement.id}
-        style={[
-          styles.announcementCard,
-          { borderLeftColor: priorityStyle.borderLeftColor },
-        ]}
+        entering={FadeInDown.delay(index * 50).springify()}
+        style={styles.announcementCardWrapper}
       >
-        <View style={styles.announcementHeader}>
-          <Ionicons name="megaphone" size={22} color="#9A2143" />
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.announcementTitle}>{announcement.title}</Text>
-            {announcement.priority?.toUpperCase() !== "NORMAL" && (
-              <View
-                style={[
-                  styles.priorityBadge,
-                  {
-                    backgroundColor:
-                      announcement.priority?.toUpperCase() === "HIGH" ||
-                      announcement.priority?.toUpperCase() === "URGENT"
-                        ? "#fef2f2"
-                        : "#ecfdf5",
-                  },
-                ]}
+        <LinearGradient
+          colors={[COLORS.white, COLORS.slate[50]]}
+          style={[styles.announcementCard, { borderLeftColor: priority.borderColor }]}
+        >
+          <View style={styles.announcementHeader}>
+            <View style={styles.announcementHeaderLeft}>
+              <LinearGradient
+                colors={[COLORS.maroon + "20", COLORS.maroon + "10"]}
+                style={styles.announcementIconContainer}
               >
-                <Text
-                  style={[
-                    styles.priorityBadgeText,
-                    {
-                      color:
-                        announcement.priority?.toUpperCase() === "HIGH" ||
-                        announcement.priority?.toUpperCase() === "URGENT"
-                          ? "#ef4444"
-                          : "#10b981",
-                    },
-                  ]}
-                >
-                  {announcement.priority.toUpperCase()}
+                <Ionicons name="megaphone" size={22} color={COLORS.maroon} />
+              </LinearGradient>
+              <View style={styles.announcementTitleContainer}>
+                <Text style={styles.announcementTitle} numberOfLines={1}>
+                  {announcement.title}
                 </Text>
+                <View style={[styles.priorityBadge, { backgroundColor: priority.bg }]}>
+                  <Text style={[styles.priorityText, { color: priority.color }]}>
+                    {announcement.priority?.toUpperCase() || "NORMAL"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity activeOpacity={0.7} onPress={() => handleOpenAnnouncement(announcement)}>
+            <Text style={styles.announcementContent} numberOfLines={3}>
+              {announcement.content}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.announcementFooter}>
+            <View style={styles.announcementMeta}>
+              <Ionicons name="time-outline" size={14} color={COLORS.slate[400]} />
+              <Text style={styles.announcementTime}>
+                {formatTimeAgo(announcement.publishedAt || announcement.createdAt)}
+              </Text>
+            </View>
+            {announcement.type && announcement.type !== "GENERAL" && (
+              <View style={[styles.announcementTypeBadge, { backgroundColor: COLORS.slate[100] }]}>
+                <Text style={styles.announcementTypeText}>{announcement.type}</Text>
               </View>
             )}
           </View>
-        </View>
-        <Text style={styles.announcementContent} numberOfLines={4}>
-          {announcement.content}
-        </Text>
-        <View style={styles.announcementMeta}>
-          <Text style={styles.announcementTime}>
-            {announcement.publishedAt
-              ? formatTimeAgo(announcement.publishedAt)
-              : formatTimeAgo(announcement.createdAt)}
-          </Text>
-          {announcement.type && announcement.type !== "GENERAL" && (
-            <View style={styles.typeBadge}>
-              <Text style={styles.typeBadgeText}>{announcement.type}</Text>
-            </View>
-          )}
-        </View>
-      </View>
+        </LinearGradient>
+      </Animated.View>
     );
   };
 
   const renderNotificationsTab = () => {
     if (notifications.length === 0) {
       return (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="notifications-off-outline" size={64} color="#999" />
-          <Text style={styles.emptyText}>No notifications yet</Text>
-          <Text style={styles.emptySubtext}>
-            You'll see notifications here when you have new updates
+        <Animated.View entering={FadeInUp.springify()} style={styles.emptyContainer}>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="notifications-off-outline" size={48} color={COLORS.slate[300]} />
+          </View>
+          <Text style={styles.emptyTitle}>No notifications yet</Text>
+          <Text style={styles.emptyMessage}>
+            When you get notifications, they'll appear here
           </Text>
-        </View>
+        </Animated.View>
       );
     }
 
     return (
       <>
-        {/* Mark all as read */}
+        {/* Action Bar */}
         {unreadCount > 0 && (
-          <View style={styles.actionRow}>
-            <Text style={styles.unreadBadge}>
-              {unreadCount} unread
-            </Text>
+          <Animated.View entering={FadeInDown.springify()} style={styles.actionBar}>
+            <View style={styles.unreadSummary}>
+              <View style={styles.unreadSummaryDot} />
+              <Text style={styles.unreadSummaryText}>
+                {unreadCount} unread notification{unreadCount > 1 ? 's' : ''}
+              </Text>
+            </View>
             <TouchableOpacity
               style={styles.markAllButton}
               onPress={handleMarkAllAsRead}
             >
-              <Ionicons name="checkmark-done" size={16} color="#0057FF" />
-              <Text style={styles.markAllButtonText}>Mark all read</Text>
+              <LinearGradient
+                colors={[COLORS.primarySoft, COLORS.primarySoft]}
+                style={styles.markAllGradient}
+              >
+                <Ionicons name="checkmark-done" size={16} color={COLORS.primary} />
+                <Text style={styles.markAllText}>Mark all read</Text>
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         )}
 
-        {/* Today */}
-        {todayNotifications.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>
-              Today{" "}
-              {new Date().toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              })}
-            </Text>
-            {todayNotifications.map(renderNotificationCard)}
-          </>
-        )}
+        {/* Grouped Notifications */}
+        {orderedGroups.map((group) => {
+          const groupNotifications = groupedNotifications[group];
+          if (!groupNotifications?.length) return null;
 
-        {/* Older */}
-        {olderNotifications.length > 0 && (
-          <>
-            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>
-              Earlier
-            </Text>
-            {olderNotifications.map(renderNotificationCard)}
-          </>
-        )}
+          return (
+            <View key={group} style={styles.notificationGroup}>
+              <View style={styles.groupHeader}>
+                <Text style={styles.groupTitle}>{group}</Text>
+                <View style={styles.groupCount}>
+                  <Text style={styles.groupCountText}>{groupNotifications.length}</Text>
+                </View>
+              </View>
+              {groupNotifications.map((notification, index) => 
+                renderNotificationCard(notification, index)
+              )}
+            </View>
+          );
+        })}
       </>
     );
   };
@@ -372,85 +479,129 @@ export default function Notifications() {
   const renderAnnouncementsTab = () => {
     if (announcements.length === 0) {
       return (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="megaphone-outline" size={64} color="#999" />
-          <Text style={styles.emptyText}>No announcements</Text>
-          <Text style={styles.emptySubtext}>
+        <Animated.View entering={FadeInUp.springify()} style={styles.emptyContainer}>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="megaphone-outline" size={48} color={COLORS.slate[300]} />
+          </View>
+          <Text style={styles.emptyTitle}>No announcements</Text>
+          <Text style={styles.emptyMessage}>
             Important announcements from ArmiGo will appear here
           </Text>
-        </View>
+        </Animated.View>
       );
     }
 
     return (
-      <>
-        <Text style={styles.sectionTitle}>
-          {announcements.length} Active Announcement
-          {announcements.length === 1 ? "" : "s"}
-        </Text>
-        {announcements.map(renderAnnouncementCard)}
-      </>
+      <View style={styles.announcementsContainer}>
+        <View style={styles.announcementsHeader}>
+          <LinearGradient
+            colors={[COLORS.maroon + "10", COLORS.maroon + "05"]}
+            style={styles.announcementsHeaderContent}
+          >
+            <Ionicons name="megaphone" size={20} color={COLORS.maroon} />
+            <Text style={styles.announcementsHeaderText}>
+              {announcements.length} Active Announcement{announcements.length > 1 ? 's' : ''}
+            </Text>
+          </LinearGradient>
+        </View>
+        {announcements.map((announcement, index) => renderAnnouncementCard(announcement, index))}
+      </View>
     );
   };
 
   return (
     <View style={styles.container}>
+      {/* Header Card */}
+      <View style={styles.headerCard}>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerIconWrap}>
+            <Ionicons name="notifications-outline" size={24} color={COLORS.primary} />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.title}>Notifications</Text>
+            <Text style={styles.subtitle}>
+              Stay updated with your latest activities
+            </Text>
+          </View>
+        </View>
+
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statChip, styles.statChipBlue]}>
+            <Text style={styles.statValue}>{notifications.length}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
+          <View style={[styles.statChip, styles.statChipGreen]}>
+            <Text style={styles.statValue}>{unreadCount}</Text>
+            <Text style={styles.statLabel}>Unread</Text>
+          </View>
+          <View style={[styles.statChip, styles.statChipPurple]}>
+            <Text style={styles.statValue}>{unreadAnnouncementCount()}</Text>
+            <Text style={styles.statLabel}>Announce</Text>
+          </View>
+        </View>
+      </View>
+
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[
-            styles.tab,
-            activeTab === "notifications" && styles.tabActive,
-          ]}
+          style={[styles.tab, activeTab === "notifications" && styles.tabActive]}
           onPress={() => setActiveTab("notifications")}
+          activeOpacity={0.7}
         >
-          <Ionicons
-            name="notifications"
-            size={18}
-            color={activeTab === "notifications" ? "#0057FF" : "#9ca3af"}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "notifications" && styles.tabTextActive,
-            ]}
-          >
-            Notifications
-          </Text>
-          {unreadCount > 0 && (
-            <View style={styles.tabBadge}>
-              <Text style={styles.tabBadgeText}>
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </Text>
-            </View>
-          )}
+          <View style={styles.tabContent}>
+            <Ionicons
+              name="notifications"
+              size={18}
+              color={activeTab === "notifications" ? COLORS.primary : COLORS.slate[400]}
+            />
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "notifications" && styles.tabTextActive,
+              ]}
+            >
+              Notifications
+            </Text>
+            {unreadCount > 0 && (
+              <View style={[styles.tabBadge, activeTab === "notifications" && styles.tabBadgeActive]}>
+                <Text style={styles.tabBadgeText}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Text>
+              </View>
+            )}
+          </View>
+          {activeTab === "notifications" && <View style={styles.tabIndicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            styles.tab,
-            activeTab === "announcements" && styles.tabActive,
-          ]}
+          style={[styles.tab, activeTab === "announcements" && styles.tabActive]}
           onPress={() => setActiveTab("announcements")}
+          activeOpacity={0.7}
         >
-          <Ionicons
-            name="megaphone"
-            size={18}
-            color={activeTab === "announcements" ? "#9A2143" : "#9ca3af"}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === "announcements" && styles.tabTextActive,
-            ]}
-          >
-            Announcements
-          </Text>
-          {announcements.length > 0 && (
-            <View style={[styles.tabBadge, { backgroundColor: "#9A2143" }]}>
-              <Text style={styles.tabBadgeText}>{announcements.length}</Text>
-            </View>
-          )}
+          <View style={styles.tabContent}>
+            <Ionicons
+              name="megaphone"
+              size={18}
+              color={activeTab === "announcements" ? COLORS.maroon : COLORS.slate[400]}
+            />
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "announcements" && styles.tabTextActive,
+              ]}
+            >
+              Announcements
+            </Text>
+            {unreadAnnouncementCount() > 0 && (
+              <View style={[styles.tabBadge, { backgroundColor: COLORS.maroon + "20" }]}>
+                <Text style={[styles.tabBadgeText, { color: COLORS.maroon }]}>
+                  {unreadAnnouncementCount()}
+                </Text>
+              </View>
+            )}
+          </View>
+          {activeTab === "announcements" && <View style={[styles.tabIndicator, { backgroundColor: COLORS.maroon }]} />}
         </TouchableOpacity>
       </View>
 
@@ -458,7 +609,12 @@ export default function Notifications() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
         }
         contentContainerStyle={styles.scrollContent}
       >
@@ -468,17 +624,145 @@ export default function Notifications() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            {activeTab === "notifications"
-              ? `${notifications.length} notification${
-                  notifications.length === 1 ? "" : "s"
-                }`
-              : `${announcements.length} announcement${
-                  announcements.length === 1 ? "" : "s"
-                }`}
-          </Text>
+          <LinearGradient
+            colors={[COLORS.slate[100], COLORS.slate[50]]}
+            style={styles.footerContent}
+          >
+            <Ionicons name="checkmark-circle-outline" size={14} color={COLORS.slate[400]} />
+            <Text style={styles.footerText}>
+              {activeTab === "notifications"
+                ? `${notifications.length} notification${notifications.length !== 1 ? 's' : ''}`
+                : `${announcements.length} announcement${announcements.length !== 1 ? 's' : ''}`}
+            </Text>
+          </LinearGradient>
         </View>
       </ScrollView>
+
+      {/* Notification Detail Modal */}
+      <Modal
+        visible={!!selectedNotification}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedNotification(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setSelectedNotification(null)}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            {selectedNotification && (() => {
+              const iconConfig = getIconConfig(selectedNotification.type, selectedNotification.title || "");
+              const IconComponent = iconConfig.family === "MaterialIcons" ? MaterialIcons : Ionicons;
+              return (
+                <>
+                  <View style={styles.modalHeader}>
+                    <LinearGradient
+                      colors={[iconConfig.bg, iconConfig.bg]}
+                      style={styles.modalIconContainer}
+                    >
+                      <IconComponent name={iconConfig.icon as any} size={32} color={iconConfig.color} />
+                    </LinearGradient>
+                    <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedNotification(null)}>
+                      <Ionicons name="close" size={22} color={COLORS.slate[500]} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.modalTitle}>{selectedNotification.title || "Notification"}</Text>
+                  {selectedNotification.type && (
+                    <View style={[styles.modalTypeBadge, { backgroundColor: iconConfig.bg }]}>
+                      <Text style={[styles.modalTypeText, { color: iconConfig.color }]}>
+                        {selectedNotification.type.replace(/_/g, " ")}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.modalDivider} />
+                  <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                    <Text style={styles.modalMessage}>{selectedNotification.message || "No message"}</Text>
+                  </ScrollView>
+                  <View style={styles.modalFooter}>
+                    <Ionicons name="time-outline" size={14} color={COLORS.slate[400]} />
+                    <Text style={styles.modalTime}>
+                      {formatTimeAgo(selectedNotification.sentAt || selectedNotification.createdAt || "")}
+                    </Text>
+                  </View>
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={styles.modalDeleteBtn}
+                      onPress={() => {
+                        setSelectedNotification(null);
+                        handleDeleteNotification(selectedNotification.id);
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
+                      <Text style={styles.modalDeleteText}>Delete</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modalDoneBtn}
+                      onPress={() => setSelectedNotification(null)}
+                    >
+                      <Text style={styles.modalDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Announcement Detail Modal */}
+      <Modal
+        visible={!!selectedAnnouncement}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedAnnouncement(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setSelectedAnnouncement(null)}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            {selectedAnnouncement && (() => {
+              const priority = getPriorityStyle(selectedAnnouncement.priority);
+              return (
+                <>
+                  <View style={styles.modalHeader}>
+                    <LinearGradient
+                      colors={[COLORS.maroon + "20", COLORS.maroon + "10"]}
+                      style={styles.modalIconContainer}
+                    >
+                      <Ionicons name="megaphone" size={32} color={COLORS.maroon} />
+                    </LinearGradient>
+                    <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedAnnouncement(null)}>
+                      <Ionicons name="close" size={22} color={COLORS.slate[500]} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.modalTitle}>{selectedAnnouncement.title}</Text>
+                  <View style={[styles.modalTypeBadge, { backgroundColor: priority.bg }]}>
+                    <Text style={[styles.modalTypeText, { color: priority.color }]}>
+                      {selectedAnnouncement.priority?.toUpperCase() || "NORMAL"}
+                    </Text>
+                  </View>
+                  <View style={styles.modalDivider} />
+                  <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                    <Text style={styles.modalMessage}>{selectedAnnouncement.content}</Text>
+                  </ScrollView>
+                  <View style={styles.modalFooter}>
+                    <Ionicons name="time-outline" size={14} color={COLORS.slate[400]} />
+                    <Text style={styles.modalTime}>
+                      {formatTimeAgo(selectedAnnouncement.publishedAt || selectedAnnouncement.createdAt)}
+                    </Text>
+                    {selectedAnnouncement.type && selectedAnnouncement.type !== "GENERAL" && (
+                      <View style={[styles.announcementTypeBadge, { backgroundColor: COLORS.slate[100], marginLeft: 8 }]}>
+                        <Text style={styles.announcementTypeText}>{selectedAnnouncement.type}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.modalCloseBtnFull}
+                    onPress={() => setSelectedAnnouncement(null)}
+                  >
+                    <Text style={styles.modalDoneText}>Close</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -486,269 +770,661 @@ export default function Notifications() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
-    paddingTop: 10,
+    backgroundColor: COLORS.slate[50],
   },
-  scrollContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 20,
+  headerCard: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    backgroundColor: "#eff6ff",
+    padding: 12,
+    gap: 10,
   },
-  centerContent: {
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  headerIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#dbeafe",
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#0f172a",
+    fontFamily: "Poppins-Bold",
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  statChip: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+  },
+  statChipBlue: {
+    backgroundColor: "#eef2ff",
+    borderColor: "#c7d2fe",
+  },
+  statChipGreen: {
+    backgroundColor: "#ecfdf5",
+    borderColor: "#86efac",
+  },
+  statChipPurple: {
+    backgroundColor: "#f3e8ff",
+    borderColor: "#d8b4fe",
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1e3a8a",
+    fontFamily: "Poppins-Bold",
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#64748b",
+    marginTop: 2,
+    fontFamily: "Poppins-Regular",
+  },
+  loadingContainer: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    backgroundColor: COLORS.white,
+    gap: 16,
   },
   loadingText: {
-    marginTop: 20,
     fontSize: 16,
-    color: "#666",
     fontFamily: "Poppins-Regular",
+    color: COLORS.slate[500],
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 24,
+  },
+  errorIconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: COLORS.danger + "10",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-Bold",
+    color: COLORS.slate[800],
+    marginBottom: 8,
+    textAlign: "center",
   },
   errorText: {
-    marginTop: 20,
-    fontSize: 16,
-    color: "#FF3B30",
-    textAlign: "center",
-    marginBottom: 20,
+    fontSize: 14,
     fontFamily: "Poppins-Regular",
+    color: COLORS.slate[500],
+    textAlign: "center",
+    marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: "#0057FF",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 14,
+    overflow: "hidden",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  retryGradient: {
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    alignItems: "center",
   },
   retryButtonText: {
-    color: "#fff",
+    color: COLORS.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
   },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-  },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-  },
-  emptySubtext: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    paddingHorizontal: 30,
-  },
-  /* Tabs */
+
+  // Tabs
   tabContainer: {
     flexDirection: "row",
-    paddingHorizontal: 18,
-    marginBottom: 16,
-    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slate[100],
+    gap: 12,
   },
   tab: {
     flex: 1,
+    alignItems: "center",
+  },
+  tabContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#fff",
-    borderWidth: 1.5,
-    borderColor: "#e5e7eb",
+    paddingHorizontal: 16,
+    borderRadius: 12,
     gap: 6,
+    width: "100%",
   },
   tabActive: {
-    borderColor: "#0057FF",
-    backgroundColor: "#eff6ff",
+    backgroundColor: COLORS.transparent,
   },
   tabText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#9ca3af",
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: COLORS.slate[500],
   },
   tabTextActive: {
-    color: "#111827",
+    color: COLORS.slate[900],
   },
   tabBadge: {
-    backgroundColor: "#0057FF",
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: COLORS.primary + "15",
     paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    minWidth: 22,
+    alignItems: "center",
+  },
+  tabBadgeActive: {
+    backgroundColor: COLORS.primary + "20",
   },
   tabBadgeText: {
-    color: "#fff",
     fontSize: 11,
-    fontWeight: "700",
+    fontFamily: "Poppins-Bold",
+    color: COLORS.primary,
+  },
+  tabIndicator: {
+    height: 3,
+    width: 40,
+    backgroundColor: COLORS.primary,
+    borderRadius: 1.5,
+    marginTop: 6,
   },
 
-  /* Action Row */
-  actionRow: {
+  // Scroll Content
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+
+  // Action Bar
+  actionBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginVertical: 16,
+    paddingHorizontal: 4,
   },
-  unreadBadge: {
-    fontSize: 14,
-    color: "#ef4444",
-    fontWeight: "600",
-  },
-  markAllButton: {
+  unreadSummary: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#eff6ff",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 4,
-  },
-  markAllButtonText: {
-    color: "#0057FF",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  /* Section */
-  sectionTitle: {
-    fontSize: 15,
-    color: "#6b7280",
-    marginBottom: 12,
-    fontWeight: "600",
-  },
-
-  /* Notification Cards */
-  card: {
-    backgroundColor: "#fff",
-    padding: 14,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardUnread: {
-    backgroundColor: "#fafbff",
-    borderLeftWidth: 3,
-    borderLeftColor: "#0057FF",
-  },
-  cardIcon: {
-    marginRight: 12,
-    marginTop: 2,
-    width: 36,
-    alignItems: "center",
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  cardMsg: {
-    marginTop: 3,
-    color: "#6b7280",
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  cardMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
     gap: 8,
   },
-  cardTime: {
-    color: "#9ca3af",
-    fontSize: 12,
-  },
-  typeBadge: {
-    backgroundColor: "#f3f4f6",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  unreadSummaryDot: {
+    width: 8,
+    height: 8,
     borderRadius: 4,
+    backgroundColor: COLORS.primary,
   },
-  typeBadgeText: {
-    fontSize: 10,
-    color: "#6b7280",
-    fontWeight: "600",
-    textTransform: "capitalize",
+  unreadSummaryText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Medium",
+    color: COLORS.primary,
   },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    backgroundColor: "#0057FF",
-    borderRadius: 5,
-    marginLeft: 8,
-    marginTop: 6,
+  markAllButton: {
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  markAllGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  markAllText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Medium",
+    color: COLORS.primary,
   },
 
-  /* Announcement Cards */
-  announcementCard: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
+  // Notification Groups
+  notificationGroup: {
+    marginBottom: 20,
+  },
+  groupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: "#0057FF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    paddingHorizontal: 4,
+  },
+  groupTitle: {
+    fontSize: 15,
+    fontFamily: "Poppins-SemiBold",
+    color: COLORS.slate[600],
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  groupCount: {
+    backgroundColor: COLORS.slate[200],
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  groupCountText: {
+    fontSize: 11,
+    fontFamily: "Poppins-Medium",
+    color: COLORS.slate[600],
+  },
+
+  // Notification Cards
+  notificationCard: {
+    flexDirection: "row",
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
+    shadowColor: COLORS.slate[900],
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: COLORS.slate[100],
+  },
+  notificationCardUnread: {
+    backgroundColor: COLORS.primarySoft,
+    borderColor: COLORS.primary + "30",
+  },
+  notificationCardSelected: {
+    transform: [{ scale: 0.98 }],
+  },
+  notificationIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  notificationTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: "Poppins-SemiBold",
+    color: COLORS.slate[800],
+    marginRight: 8,
+  },
+  notificationTime: {
+    fontSize: 11,
+    fontFamily: "Poppins-Regular",
+    color: COLORS.slate[400],
+  },
+  notificationMessage: {
+    fontSize: 13,
+    fontFamily: "Poppins-Regular",
+    color: COLORS.slate[600],
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  notificationFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  notificationTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  notificationTypeText: {
+    fontSize: 9,
+    fontFamily: "Poppins-Medium",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  unreadIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  unreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+  },
+  unreadText: {
+    fontSize: 10,
+    fontFamily: "Poppins-Medium",
+    color: COLORS.primary,
+  },
+  unreadBadge: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+  },
+
+  // Announcements Container
+  announcementsContainer: {
+    marginTop: 8,
+  },
+  announcementsHeader: {
+    marginBottom: 16,
+  },
+  announcementsHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  announcementsHeaderText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Medium",
+    color: COLORS.maroon,
+  },
+
+  // Announcement Cards
+  announcementCardWrapper: {
+    marginBottom: 12,
+  },
+  announcementCard: {
+    borderRadius: 16,
+    padding: 16,
+    borderLeftWidth: 4,
+    shadowColor: COLORS.slate[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 2,
   },
   announcementHeader: {
+    marginBottom: 12,
+  },
+  announcementHeaderLeft: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 8,
+    alignItems: "center",
+    gap: 12,
+  },
+  announcementIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  announcementTitleContainer: {
+    flex: 1,
   },
   announcementTitle: {
     fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  announcementContent: {
-    fontSize: 14,
-    color: "#4b5563",
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  announcementMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  announcementTime: {
-    fontSize: 12,
-    color: "#9ca3af",
+    fontFamily: "Poppins-SemiBold",
+    color: COLORS.slate[800],
+    marginBottom: 4,
   },
   priorityBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
-    marginTop: 4,
     alignSelf: "flex-start",
   },
-  priorityBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
+  priorityText: {
+    fontSize: 9,
+    fontFamily: "Poppins-Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  announcementContent: {
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    color: COLORS.slate[600],
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  announcementFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  announcementMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  announcementTime: {
+    fontSize: 11,
+    fontFamily: "Poppins-Regular",
+    color: COLORS.slate[400],
+  },
+  announcementTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  announcementTypeText: {
+    fontSize: 9,
+    fontFamily: "Poppins-Medium",
+    color: COLORS.slate[500],
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 
-  /* Footer */
+  // Empty States
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+  },
+  emptyIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: COLORS.slate[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontFamily: "Poppins-SemiBold",
+    color: COLORS.slate[700],
+    marginBottom: 8,
+  },
+  emptyMessage: {
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    color: COLORS.slate[400],
+    textAlign: "center",
+    lineHeight: 20,
+  },
+
+  // Footer
   footer: {
-    paddingVertical: 20,
+    marginTop: 24,
     alignItems: "center",
   },
+  footerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
   footerText: {
-    fontSize: 13,
-    color: "#9ca3af",
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    color: COLORS.slate[500],
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxHeight: "80%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  modalIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.slate[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-Bold",
+    color: COLORS.slate[900],
+    marginBottom: 8,
+  },
+  modalTypeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginBottom: 12,
+  },
+  modalTypeText: {
+    fontSize: 10,
+    fontFamily: "Poppins-Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: COLORS.slate[100],
+    marginBottom: 16,
+  },
+  modalBody: {
+    maxHeight: 300,
+    marginBottom: 16,
+  },
+  modalMessage: {
+    fontSize: 15,
+    fontFamily: "Poppins-Regular",
+    color: COLORS.slate[700],
+    lineHeight: 24,
+  },
+  modalFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 16,
+  },
+  modalTime: {
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    color: COLORS.slate[400],
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  modalDeleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.danger + "10",
+  },
+  modalDeleteText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: COLORS.danger,
+  },
+  modalDoneBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+  },
+  modalDoneText: {
+    fontSize: 14,
+    fontFamily: "Poppins-SemiBold",
+    color: COLORS.white,
+  },
+  modalCloseBtnFull: {
+    width: "100%",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
   },
 });
-

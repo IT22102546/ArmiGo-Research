@@ -71,7 +71,7 @@ const TabsLayout = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Blue Status Bar */}
-      <StatusBar style="light" backgroundColor="#f8fafc" translucent={false} />
+      <StatusBar style="light" backgroundColor="#0057FF" translucent={false} />
 
       <Tabs
         initialRouteName="TeacherHome"
@@ -254,6 +254,9 @@ const TabsLayout = () => {
           options={{
             title: "",
             headerShown: true,
+            headerStyle: {
+              backgroundColor: "#0057FF",
+            },
           }}
         />
         <Tabs.Screen

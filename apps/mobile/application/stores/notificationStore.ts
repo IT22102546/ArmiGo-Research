@@ -32,6 +32,7 @@ export interface AnnouncementItem {
 interface NotificationState {
   notifications: NotificationItem[];
   announcements: AnnouncementItem[];
+  readAnnouncementIds: Set<string>;
   unreadCount: number;
   loading: boolean;
   error: string | null;
@@ -44,6 +45,8 @@ interface NotificationState {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
+  markAnnouncementRead: (id: string) => void;
+  unreadAnnouncementCount: () => number;
   addNotification: (notification: NotificationItem) => void;
   setExpoPushToken: (token: string) => void;
   registerPushToken: (token: string) => Promise<void>;
@@ -53,6 +56,7 @@ interface NotificationState {
 const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   announcements: [],
+  readAnnouncementIds: new Set<string>(),
   unreadCount: 0,
   loading: false,
   error: null,
@@ -212,6 +216,19 @@ const useNotificationStore = create<NotificationState>((set, get) => ({
       notifications: [notification, ...state.notifications],
       unreadCount: state.unreadCount + 1,
     }));
+  },
+
+  markAnnouncementRead: (id: string) => {
+    set((state) => {
+      const updated = new Set(state.readAnnouncementIds);
+      updated.add(id);
+      return { readAnnouncementIds: updated };
+    });
+  },
+
+  unreadAnnouncementCount: () => {
+    const state = get();
+    return state.announcements.filter((a) => !state.readAnnouncementIds.has(a.id)).length;
   },
 
   setExpoPushToken: (token: string) => {

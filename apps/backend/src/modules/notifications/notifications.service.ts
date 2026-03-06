@@ -135,6 +135,36 @@ export class NotificationsService {
     return notification;
   }
 
+  /**
+   * Send a notification to the hospital admin linked to a given hospital.
+   * Silently skips if there is no admin profile for the hospital.
+   */
+  async notifyHospitalAdmin(
+    hospitalId: string | null | undefined,
+    data: { title: string; message: string; type: string; metadata?: Record<string, any> },
+  ) {
+    if (!hospitalId) return;
+
+    try {
+      const profile = await this.prisma.hospitalProfile.findFirst({
+        where: { hospitalId },
+        select: { userId: true },
+      });
+
+      if (!profile?.userId) return;
+
+      await this.createNotification({
+        userId: profile.userId,
+        title: data.title,
+        message: data.message,
+        type: data.type,
+        metadata: data.metadata,
+      });
+    } catch (err: any) {
+      this.logger.warn(`Failed to notify hospital admin for hospital ${hospitalId}: ${err?.message}`);
+    }
+  }
+
   async getMyNotifications(userId: string, params?: { isRead?: boolean; type?: string }) {
     return this.notificationModel.findMany({
       where: {

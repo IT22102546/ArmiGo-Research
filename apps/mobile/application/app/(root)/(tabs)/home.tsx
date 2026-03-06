@@ -289,7 +289,7 @@ const Home = () => {
 
   const scheduledOnline = onlineSessions.filter((s) => String(s.status || "").toUpperCase() === "SCHEDULED").length;
   const scheduledPhysical = physicalSessions.filter((s) => { const st = String(s.status || "").toUpperCase(); return st === "SCHEDULED" || st === "ACTIVE"; }).length;
-  const totalSessions = onlineSessions.length + physicalSessions.length;
+  const totalSessions = onlineSessions.length + physicalSessions.length + assignments.length;
 
   const displayName = childName || `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim() || "User";
   const initials = (childName ? childName.split(" ").map((w: string) => w[0]).join("").slice(0, 2) : "") || `${currentUser?.firstName?.[0] || ""}${currentUser?.lastName?.[0] || ""}` || "U";

@@ -44,6 +44,7 @@ export class SessionReminderService {
               firstName: true,
               lastName: true,
               parentId: true,
+              hospitalId: true,
             },
           },
           physiotherapist: { select: { id: true, name: true } },
@@ -95,6 +96,23 @@ export class SessionReminderService {
                 reminderKey,
               },
             });
+
+            // Also notify hospital admin
+            const hospitalId = (session.child as any)?.hospitalId;
+            if (hospitalId) {
+              await this.notificationsService.notifyHospitalAdmin(hospitalId, {
+                title: isUrgent ? `⏰ Session Starting Soon!` : `Session Reminder`,
+                message: `${childName}'s ${sessionType} session starts in ${timeLabel} (at ${session.startTime}).`,
+                type: 'SESSION_REMINDER',
+                metadata: {
+                  admissionTrackingId: session.id,
+                  admissionType: session.admissionType,
+                  childId: session.childId,
+                  startTime: session.startTime,
+                  reminderKey,
+                },
+              });
+            }
 
             this.logger.log(
               `Sent reminder for session ${session.id} to user ${parentId} (${minutesUntilSession} min away)`,
