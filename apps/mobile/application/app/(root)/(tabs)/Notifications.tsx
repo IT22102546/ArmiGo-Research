@@ -509,6 +509,116 @@ export default function Notifications() {
     );
   };
 
+  // Helper function to render notification modal content
+  const renderNotificationModalContent = () => {
+    if (!selectedNotification) return null;
+    
+    const iconConfig = getIconConfig(selectedNotification.type, selectedNotification.title || "");
+    const IconComponent = iconConfig.family === "MaterialIcons" ? MaterialIcons : Ionicons;
+    
+    return (
+      <>
+        <View style={styles.modalHeader}>
+          <LinearGradient
+            colors={[iconConfig.bg, iconConfig.bg]}
+            style={styles.modalIconContainer}
+          >
+            <IconComponent name={iconConfig.icon as any} size={32} color={iconConfig.color} />
+          </LinearGradient>
+          <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedNotification(null)}>
+            <Ionicons name="close" size={22} color={COLORS.slate[500]} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.modalTitle}>{selectedNotification.title || "Notification"}</Text>
+        {selectedNotification.type && (
+          <View style={[styles.modalTypeBadge, { backgroundColor: iconConfig.bg }]}>
+            <Text style={[styles.modalTypeText, { color: iconConfig.color }]}>
+              {selectedNotification.type.replace(/_/g, " ")}
+            </Text>
+          </View>
+        )}
+        <View style={styles.modalDivider} />
+        <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+          <Text style={styles.modalMessage}>{selectedNotification.message || "No message"}</Text>
+        </ScrollView>
+        <View style={styles.modalFooter}>
+          <Ionicons name="time-outline" size={14} color={COLORS.slate[400]} />
+          <Text style={styles.modalTime}>
+            {formatTimeAgo(selectedNotification.sentAt || selectedNotification.createdAt || "")}
+          </Text>
+        </View>
+        <View style={styles.modalActions}>
+          <TouchableOpacity
+            style={styles.modalDeleteBtn}
+            onPress={() => {
+              setSelectedNotification(null);
+              handleDeleteNotification(selectedNotification.id);
+            }}
+          >
+            <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
+            <Text style={styles.modalDeleteText}>Delete</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.modalDoneBtn}
+            onPress={() => setSelectedNotification(null)}
+          >
+            <Text style={styles.modalDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    );
+  };
+
+  // Helper function to render announcement modal content
+  const renderAnnouncementModalContent = () => {
+    if (!selectedAnnouncement) return null;
+    
+    const priority = getPriorityStyle(selectedAnnouncement.priority);
+    
+    return (
+      <>
+        <View style={styles.modalHeader}>
+          <LinearGradient
+            colors={[COLORS.maroon + "20", COLORS.maroon + "10"]}
+            style={styles.modalIconContainer}
+          >
+            <Ionicons name="megaphone" size={32} color={COLORS.maroon} />
+          </LinearGradient>
+          <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedAnnouncement(null)}>
+            <Ionicons name="close" size={22} color={COLORS.slate[500]} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.modalTitle}>{selectedAnnouncement.title}</Text>
+        <View style={[styles.modalTypeBadge, { backgroundColor: priority.bg }]}>
+          <Text style={[styles.modalTypeText, { color: priority.color }]}>
+            {selectedAnnouncement.priority?.toUpperCase() || "NORMAL"}
+          </Text>
+        </View>
+        <View style={styles.modalDivider} />
+        <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+          <Text style={styles.modalMessage}>{selectedAnnouncement.content}</Text>
+        </ScrollView>
+        <View style={styles.modalFooter}>
+          <Ionicons name="time-outline" size={14} color={COLORS.slate[400]} />
+          <Text style={styles.modalTime}>
+            {formatTimeAgo(selectedAnnouncement.publishedAt || selectedAnnouncement.createdAt)}
+          </Text>
+          {selectedAnnouncement.type && selectedAnnouncement.type !== "GENERAL" && (
+            <View style={[styles.announcementTypeBadge, { backgroundColor: COLORS.slate[100], marginLeft: 8 }]}>
+              <Text style={styles.announcementTypeText}>{selectedAnnouncement.type}</Text>
+            </View>
+          )}
+        </View>
+        <TouchableOpacity
+          style={styles.modalCloseBtnFull}
+          onPress={() => setSelectedAnnouncement(null)}
+        >
+          <Text style={styles.modalDoneText}>Close</Text>
+        </TouchableOpacity>
+      </>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Header Card */}
@@ -647,61 +757,7 @@ export default function Notifications() {
       >
         <Pressable style={styles.modalOverlay} onPress={() => setSelectedNotification(null)}>
           <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            {selectedNotification && (() => {
-              const iconConfig = getIconConfig(selectedNotification.type, selectedNotification.title || "");
-              const IconComponent = iconConfig.family === "MaterialIcons" ? MaterialIcons : Ionicons;
-              return (
-                <>
-                  <View style={styles.modalHeader}>
-                    <LinearGradient
-                      colors={[iconConfig.bg, iconConfig.bg]}
-                      style={styles.modalIconContainer}
-                    >
-                      <IconComponent name={iconConfig.icon as any} size={32} color={iconConfig.color} />
-                    </LinearGradient>
-                    <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedNotification(null)}>
-                      <Ionicons name="close" size={22} color={COLORS.slate[500]} />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.modalTitle}>{selectedNotification.title || "Notification"}</Text>
-                  {selectedNotification.type && (
-                    <View style={[styles.modalTypeBadge, { backgroundColor: iconConfig.bg }]}>
-                      <Text style={[styles.modalTypeText, { color: iconConfig.color }]}>
-                        {selectedNotification.type.replace(/_/g, " ")}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={styles.modalDivider} />
-                  <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                    <Text style={styles.modalMessage}>{selectedNotification.message || "No message"}</Text>
-                  </ScrollView>
-                  <View style={styles.modalFooter}>
-                    <Ionicons name="time-outline" size={14} color={COLORS.slate[400]} />
-                    <Text style={styles.modalTime}>
-                      {formatTimeAgo(selectedNotification.sentAt || selectedNotification.createdAt || "")}
-                    </Text>
-                  </View>
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={styles.modalDeleteBtn}
-                      onPress={() => {
-                        setSelectedNotification(null);
-                        handleDeleteNotification(selectedNotification.id);
-                      }}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
-                      <Text style={styles.modalDeleteText}>Delete</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.modalDoneBtn}
-                      onPress={() => setSelectedNotification(null)}
-                    >
-                      <Text style={styles.modalDoneText}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              );
-            })()}
+            {renderNotificationModalContent()}
           </Pressable>
         </Pressable>
       </Modal>
@@ -715,51 +771,7 @@ export default function Notifications() {
       >
         <Pressable style={styles.modalOverlay} onPress={() => setSelectedAnnouncement(null)}>
           <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            {selectedAnnouncement && (() => {
-              const priority = getPriorityStyle(selectedAnnouncement.priority);
-              return (
-                <>
-                  <View style={styles.modalHeader}>
-                    <LinearGradient
-                      colors={[COLORS.maroon + "20", COLORS.maroon + "10"]}
-                      style={styles.modalIconContainer}
-                    >
-                      <Ionicons name="megaphone" size={32} color={COLORS.maroon} />
-                    </LinearGradient>
-                    <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedAnnouncement(null)}>
-                      <Ionicons name="close" size={22} color={COLORS.slate[500]} />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.modalTitle}>{selectedAnnouncement.title}</Text>
-                  <View style={[styles.modalTypeBadge, { backgroundColor: priority.bg }]}>
-                    <Text style={[styles.modalTypeText, { color: priority.color }]}>
-                      {selectedAnnouncement.priority?.toUpperCase() || "NORMAL"}
-                    </Text>
-                  </View>
-                  <View style={styles.modalDivider} />
-                  <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                    <Text style={styles.modalMessage}>{selectedAnnouncement.content}</Text>
-                  </ScrollView>
-                  <View style={styles.modalFooter}>
-                    <Ionicons name="time-outline" size={14} color={COLORS.slate[400]} />
-                    <Text style={styles.modalTime}>
-                      {formatTimeAgo(selectedAnnouncement.publishedAt || selectedAnnouncement.createdAt)}
-                    </Text>
-                    {selectedAnnouncement.type && selectedAnnouncement.type !== "GENERAL" && (
-                      <View style={[styles.announcementTypeBadge, { backgroundColor: COLORS.slate[100], marginLeft: 8 }]}>
-                        <Text style={styles.announcementTypeText}>{selectedAnnouncement.type}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    style={styles.modalCloseBtnFull}
-                    onPress={() => setSelectedAnnouncement(null)}
-                  >
-                    <Text style={styles.modalDoneText}>Close</Text>
-                  </TouchableOpacity>
-                </>
-              );
-            })()}
+            {renderAnnouncementModalContent()}
           </Pressable>
         </Pressable>
       </Modal>
@@ -767,6 +779,7 @@ export default function Notifications() {
   );
 }
 
+// ─── SINGLE StyleSheet ───────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
