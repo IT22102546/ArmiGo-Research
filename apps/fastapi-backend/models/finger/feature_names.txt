@@ -1,0 +1,34 @@
+Feature Names used in the model:
+========================================
+
+1. Thumb
+2. Index
+3. Middle
+4. Ring
+5. Pinky
+6. AngleThumb
+7. AngleIndex
+8. AngleMiddle
+9. AngleRing
+10. AnglePinky
+11. AccelX
+12. AccelY
+13. AccelZ
+14. GyroX
+15. GyroY
+16. GyroZ
+17. AngleX
+18. AngleY
+19. AngleZ
+20. AbductionAngle
+21. RotationAngle
+22. MovementMagnitude
+23. Age
+24. Gender
+25. Hand
+26. movement_ABDUCTION
+27. movement_ADDUCTION
+28. movement_CIRCUMDUCTION
+29. movement_EXTENSION
+30. movement_FLEXION
+31. movement_STEADY

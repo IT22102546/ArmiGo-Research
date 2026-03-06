@@ -1,0 +1,72 @@
+{
+  "kfold_results": {
+    "phase_accuracies": [
+      0.6024463772773743,
+      0.43422141671180725,
+      0.6214057803153992,
+      0.6590359210968018,
+      0.6944718360900879
+    ],
+    "status_accuracies": [
+      0.8087431788444519,
+      0.8469945192337036,
+      0.7417582273483276,
+      0.7252747416496277,
+      0.7197802066802979
+    ],
+    "phase_mean": 0.602316266298294,
+    "phase_std": 0.08981099399950077,
+    "status_mean": 0.7685101747512817,
+    "status_std": 0.050473886517155876
+  },
+  "test_results": {
+    "phase_accuracy": 0.5042322278022766,
+    "status_accuracy": 0.7675438523292542
+  },
+  "model_info": {
+    "phase_classes": [
+      "END",
+      "MID",
+      "START",
+      "STEADY"
+    ],
+    "status_classes": [
+      "H"
+    ],
+    "feature_names": [
+      "Thumb",
+      "Index",
+      "Middle",
+      "Ring",
+      "Pinky",
+      "AngleThumb",
+      "AngleIndex",
+      "AngleMiddle",
+      "AngleRing",
+      "AnglePinky",
+      "AccelX",
+      "AccelY",
+      "AccelZ",
+      "GyroX",
+      "GyroY",
+      "GyroZ",
+      "AngleX",
+      "AngleY",
+      "AngleZ",
+      "AbductionAngle",
+      "RotationAngle",
+      "MovementMagnitude",
+      "Age",
+      "Gender",
+      "Hand",
+      "movement_ABDUCTION",
+      "movement_ADDUCTION",
+      "movement_CIRCUMDUCTION",
+      "movement_EXTENSION",
+      "movement_FLEXION",
+      "movement_STEADY"
+    ],
+    "input_shape": "(None, 20, 31)"
+  },
+  "timestamp": "2026-03-06T08:27:21.606781"
+}

@@ -1,0 +1,63 @@
+{
+  "model_name": "Shoulder Movement LSTM",
+  "timestamp": "20260306_124111",
+  "input_shape": [
+    30,
+    13
+  ],
+  "num_classes": 1,
+  "classes": [
+    "UNKNOWN"
+  ],
+  "num_features": 13,
+  "feature_names": [
+    "AccelX",
+    "AccelY",
+    "AccelZ",
+    "GyroX",
+    "GyroY",
+    "GyroZ",
+    "AngleX",
+    "AngleY",
+    "AngleZ",
+    "FlexionAngle",
+    "AbductionAngle",
+    "RotationAngle",
+    "ShoulderElevation"
+  ],
+  "sequence_length": 30,
+  "step_size": 15,
+  "model_architecture": {
+    "layer1": "LSTM(32, return_sequences=True)",
+    "layer2": "BatchNormalization",
+    "layer3": "Dropout(0.3)",
+    "layer4": "LSTM(16)",
+    "layer5": "BatchNormalization",
+    "layer6": "Dropout(0.3)",
+    "layer7": "Dense(8, activation='relu')",
+    "layer8": "Dense(1, activation='softmax')"
+  },
+  "training_config": {
+    "optimizer": "Adam",
+    "learning_rate": 0.001,
+    "loss": "categorical_crossentropy",
+    "batch_size": 16,
+    "epochs": 30,
+    "early_stopping_patience": 10
+  },
+  "performance_metrics": {
+    "test_accuracy": 1.0,
+    "test_precision": 1.0,
+    "test_recall": 1.0,
+    "test_loss": 0.0
+  },
+  "data_info": {
+    "total_sequences": 3689,
+    "train_sequences": 2360,
+    "val_sequences": 591,
+    "test_sequences": 738,
+    "class_distribution": {
+      "UNKNOWN": 3689
+    }
+  }
+}

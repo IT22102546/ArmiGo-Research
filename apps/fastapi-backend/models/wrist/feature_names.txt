@@ -1,0 +1,11 @@
+AccelX
+AccelY
+AccelZ
+GyroX
+GyroY
+GyroZ
+AngleX
+AngleY
+AngleZ
+FlexionAngle
+DeviationAngle

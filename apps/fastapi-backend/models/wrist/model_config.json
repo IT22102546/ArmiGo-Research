@@ -1,0 +1,33 @@
+{
+  "input_shape": [
+    50,
+    11
+  ],
+  "num_classes": 7,
+  "features": [
+    "AccelX",
+    "AccelY",
+    "AccelZ",
+    "GyroX",
+    "GyroY",
+    "GyroZ",
+    "AngleX",
+    "AngleY",
+    "AngleZ",
+    "FlexionAngle",
+    "DeviationAngle"
+  ],
+  "classes": [
+    "EXTENSION",
+    "FLEXION",
+    "RADIAL_DEVIATION",
+    "RIGHTADIAL_DEVIATION",
+    "STEADY",
+    "ULNARIGHT_DEVIATION",
+    "ULNAR_DEVIATION"
+  ],
+  "sequence_length": 50,
+  "test_accuracy": 0.8307692408561707,
+  "test_loss": 0.6272628307342529,
+  "model_type": "advanced"
+}
