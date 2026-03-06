@@ -400,6 +400,12 @@ model Child {
   diagnosisDate   DateTime?
   medicalNotes    String?
   assignedDoctor  String?         // Name or ID of primary doctor
+
+  // Exercise types
+  exerciseFingers  Boolean        @default(false)
+  exerciseWrist    Boolean        @default(false)
+  exerciseElbow    Boolean        @default(false)
+  exerciseShoulder Boolean        @default(false)
   
   // Status
   isActive        Boolean         @default(true)

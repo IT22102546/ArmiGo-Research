@@ -143,4 +143,21 @@ export class CreatePatientDto {
   @IsString()
   @IsOptional()
   subHospitalId?: string;
+
+  // Exercise type selections
+  @ApiProperty({ example: true, required: false, description: 'Whether child does finger exercises' })
+  @IsOptional()
+  exerciseFingers?: boolean;
+
+  @ApiProperty({ example: false, required: false, description: 'Whether child does wrist exercises' })
+  @IsOptional()
+  exerciseWrist?: boolean;
+
+  @ApiProperty({ example: false, required: false, description: 'Whether child does elbow exercises' })
+  @IsOptional()
+  exerciseElbow?: boolean;
+
+  @ApiProperty({ example: false, required: false, description: 'Whether child does shoulder exercises' })
+  @IsOptional()
+  exerciseShoulder?: boolean;
 }

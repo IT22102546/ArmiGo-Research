@@ -25,7 +25,7 @@ export default function DashboardRedirectPage() {
         router.replace("/dashboard/admin");
         break;
       case "HOSPITAL_ADMIN":
-        router.replace("/hospital-dashboard");
+        router.replace("/dashboard/admin");
         break;
       case "PARENT":
         router.replace("/parent-dashboard");
