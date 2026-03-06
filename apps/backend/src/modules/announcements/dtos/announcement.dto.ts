@@ -108,6 +108,11 @@ export class AnnouncementListQueryDto {
   @IsString()
   status?: string;
 
+  @ApiPropertyOptional({ example: 'CUSTOMER', description: 'Filter announcements by target role' })
+  @IsOptional()
+  @IsString()
+  role?: string;
+
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()
   page?: number;

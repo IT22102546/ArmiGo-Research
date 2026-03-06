@@ -1,126 +1,41 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator, Alert } from "react-native";
+import React, { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { Ionicons, MaterialIcons, Entypo } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { apiFetch } from "@/utils/api";
+import useNotificationStore, {
+  NotificationItem,
+  AnnouncementItem,
+} from "@/stores/notificationStore";
 
-// Define types matching your backend interface
-interface Notification {
-  id: string;
-  userId: string;
-  title: string;
-  message: string;
-  type: string;
-  isRead: boolean;
-  link?: string;
-  metadata?: any;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-}
-
-interface NotificationsResponse {
-  notifications: Notification[];
-}
-
-interface UnreadCountResponse {
-  count: number;
-}
+type TabType = "notifications" | "announcements";
 
 export default function Notifications() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>("notifications");
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch all notifications with better error handling
-  const fetchNotifications = async () => {
-    try {
-      console.log("🔍 Starting fetchNotifications...");
-      setError(null);
-      const response = await apiFetch("/api/v1/notifications");
-      
-      console.log("📡 Notifications response status:", response.status);
-      
-      if (!response.ok) {
-        if (response.status === 401) {
-          setError('Please login to view notifications');
-        } else {
-          setError(`Failed to load notifications (${response.status})`);
-        }
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      const data = await response.json();
-      console.log("📊 Notifications API response data:", data);
-      console.log("📊 Type of data:", typeof data);
-      console.log("📊 Data keys:", Object.keys(data));
-      
-      // Check if data has notifications property or if data itself is the array
-      if (data && Array.isArray(data)) {
-        // If API returns array directly
-        setNotifications(data);
-        console.log(`📱 Set ${data.length} notifications from array`);
-      } else if (data && data.notifications && Array.isArray(data.notifications)) {
-        // If API returns { notifications: [...] }
-        setNotifications(data.notifications);
-        console.log(`📱 Set ${data.notifications.length} notifications from notifications property`);
-      } else if (data && data.data && Array.isArray(data.data)) {
-        // If API returns { data: [...] }
-        setNotifications(data.data);
-        console.log(`📱 Set ${data.data.length} notifications from data property`);
-      } else {
-        console.warn("⚠️ Unexpected API response format:", data);
-        setNotifications([]);
-      }
-    } catch (error) {
-      console.error('❌ Error fetching notifications:', error);
-      setError('Network error. Please check your connection.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  // Fetch unread count with better error handling
-  const fetchUnreadCount = async () => {
-    try {
-      console.log("🔍 Starting fetchUnreadCount...");
-      const response = await apiFetch("/api/v1/notifications/unread-count");
-      
-      console.log("📡 Unread count response status:", response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log("📊 Unread count API response data:", data);
-        console.log("📊 Type of data:", typeof data);
-        console.log("📊 Data keys:", Object.keys(data));
-        
-        // Check different possible response formats
-        if (typeof data === 'number') {
-          setUnreadCount(data);
-        } else if (data && typeof data.count === 'number') {
-          setUnreadCount(data.count);
-        } else if (data && typeof data.unreadCount === 'number') {
-          setUnreadCount(data.unreadCount);
-        } else if (data && typeof data.total === 'number') {
-          setUnreadCount(data.total);
-        } else {
-          console.warn("⚠️ Unexpected unread count format:", data);
-          // Count unread notifications locally as fallback
-          const unread = notifications.filter(n => !n.isRead).length;
-          setUnreadCount(unread);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error fetching unread count:', error);
-      // Count unread notifications locally as fallback
-      const unread = notifications.filter(n => !n.isRead).length;
-      setUnreadCount(unread);
-    }
-  };
+  const {
+    notifications,
+    announcements,
+    unreadCount,
+    loading,
+    error,
+    fetchNotifications,
+    fetchAnnouncements,
+    fetchUnreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    refresh,
+  } = useNotificationStore();
 
   // Format date to relative time
   const formatTimeAgo = (dateString: string | Date): string => {
@@ -133,100 +48,97 @@ export default function Notifications() {
       const diffDays = Math.floor(diffMs / 86400000);
 
       if (diffMins < 1) return "Just now";
-      if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`;
-      if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-      if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
-      
-      // For older dates, show actual date
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      if (diffMins < 60)
+        return `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`;
+      if (diffHours < 24)
+        return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+      if (diffDays < 7)
+        return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
-    } catch (error) {
+    } catch {
       return "Recently";
     }
   };
 
   // Get icon based on notification type
   const getIconForType = (type: string, title: string) => {
-    // Check title first for specific cases
-    const lowerTitle = title.toLowerCase();
-    if (lowerTitle.includes("exam") || lowerTitle.includes("schedule") || lowerTitle.includes("math")) {
-      return <Ionicons name="school" size={32} color="#0057FF" />;
-    }
-    if (lowerTitle.includes("assignment") || lowerTitle.includes("reminder")) {
-      return <MaterialIcons name="warning" size={32} color="#FFC400" />;
-    }
-    if (lowerTitle.includes("course") || lowerTitle.includes("available")) {
-      return <Entypo name="info-with-circle" size={32} color="#00C853" />;
-    }
+    const upperType = type?.toUpperCase() || "GENERAL";
 
-    // Fallback to type-based icons
-    const upperType = type?.toUpperCase() || 'INFO';
+    // Match by type first for precision
     switch (upperType) {
+      case "SESSION_ONLINE":
+        return <Ionicons name="videocam" size={28} color="#6366f1" />;
+      case "SESSION_PHYSICAL":
+        return <Ionicons name="body" size={28} color="#0d9488" />;
+      case "SESSION_REMINDER":
+        return <Ionicons name="alarm" size={28} color="#f59e0b" />;
+      case "ASSIGNMENT_NEW":
+        return <MaterialIcons name="assignment" size={28} color="#6366f1" />;
+      case "ANNOUNCEMENT":
+        return <Ionicons name="megaphone" size={28} color="#9A2143" />;
       case "SUCCESS":
-        return <Ionicons name="checkmark-circle" size={32} color="#00C853" />;
+        return <Ionicons name="checkmark-circle" size={28} color="#10b981" />;
       case "WARNING":
-        return <MaterialIcons name="warning" size={32} color="#FFC400" />;
+        return <MaterialIcons name="warning" size={28} color="#f59e0b" />;
       case "ERROR":
-        return <Ionicons name="alert-circle" size={32} color="#FF3B30" />;
-      case "INFO":
+        return <Ionicons name="alert-circle" size={28} color="#ef4444" />;
+    }
+
+    // Fallback: match by title keywords
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes("reminder")) {
+      return <Ionicons name="alarm" size={28} color="#f59e0b" />;
+    }
+    if (lowerTitle.includes("online session")) {
+      return <Ionicons name="videocam" size={28} color="#6366f1" />;
+    }
+    if (lowerTitle.includes("physical session") || lowerTitle.includes("session")) {
+      return <Ionicons name="body" size={28} color="#0d9488" />;
+    }
+    if (lowerTitle.includes("assignment")) {
+      return <MaterialIcons name="assignment" size={28} color="#6366f1" />;
+    }
+    if (lowerTitle.includes("approved") || lowerTitle.includes("success")) {
+      return <Ionicons name="checkmark-circle" size={28} color="#10b981" />;
+    }
+    if (lowerTitle.includes("rejected") || lowerTitle.includes("denied")) {
+      return <Ionicons name="close-circle" size={28} color="#ef4444" />;
+    }
+
+    return <Ionicons name="notifications" size={28} color="#0057FF" />;
+  };
+
+  // Get announcement priority color
+  const getPriorityStyle = (priority: string) => {
+    switch (priority?.toUpperCase()) {
+      case "HIGH":
+      case "URGENT":
+        return { borderLeftColor: "#ef4444", bg: "#fef2f2" };
+      case "NORMAL":
+        return { borderLeftColor: "#0057FF", bg: "#eff6ff" };
+      case "LOW":
+        return { borderLeftColor: "#10b981", bg: "#ecfdf5" };
       default:
-        return <Entypo name="info-with-circle" size={32} color="#0057FF" />;
+        return { borderLeftColor: "#6b7280", bg: "#f9fafb" };
     }
   };
 
-  // Mark notification as read
-  const handleMarkAsRead = async (notificationId: string) => {
-    try {
-      const response = await apiFetch(`/api/v1/notifications/${notificationId}/read`, {
-        method: 'PATCH',
-      });
-
-      if (response.ok) {
-        // Update local state
-        setNotifications(prev =>
-          prev.map(notification =>
-            notification.id === notificationId
-              ? { ...notification, isRead: true }
-              : notification
-          )
-        );
-        // Update unread count
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      Alert.alert("Error", "Failed to mark notification as read");
-    }
+  const handleMarkAsRead = async (id: string) => {
+    await markAsRead(id);
   };
 
-  // Mark all as read
   const handleMarkAllAsRead = async () => {
-    try {
-      const response = await apiFetch("/api/v1/notifications/mark-all-read", {
-        method: 'PATCH',
-      });
-
-      if (response.ok) {
-        // Update all notifications to read
-        setNotifications(prev =>
-          prev.map(notification => ({ ...notification, isRead: true }))
-        );
-        // Reset unread count
-        setUnreadCount(0);
-        Alert.alert("Success", "All notifications marked as read");
-      }
-    } catch (error) {
-      console.error('Error marking all as read:', error);
-      Alert.alert("Error", "Failed to mark all notifications as read");
-    }
+    await markAllAsRead();
+    Alert.alert("Success", "All notifications marked as read");
   };
 
-  // Delete notification
-  const handleDeleteNotification = async (notificationId: string) => {
+  const handleDeleteNotification = (id: string) => {
     Alert.alert(
       "Delete Notification",
       "Are you sure you want to delete this notification?",
@@ -235,61 +147,46 @@ export default function Notifications() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            try {
-              const response = await apiFetch(`/api/v1/notifications/${notificationId}`, {
-                method: 'DELETE',
-              });
-
-              if (response.ok) {
-                // Remove from local state
-                setNotifications(prev =>
-                  prev.filter(notification => notification.id !== notificationId)
-                );
-                // Update unread count if notification was unread
-                const deletedNotification = notifications.find(n => n.id === notificationId);
-                if (deletedNotification && !deletedNotification.isRead) {
-                  setUnreadCount(prev => Math.max(0, prev - 1));
-                }
-              }
-            } catch (error) {
-              console.error('Error deleting notification:', error);
-              Alert.alert("Error", "Failed to delete notification");
-            }
-          }
-        }
+          onPress: () => deleteNotification(id),
+        },
       ]
     );
   };
 
-  // Handle pull to refresh
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    fetchNotifications();
-    fetchUnreadCount();
-  }, []);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
 
   // Load data on focus
   useFocusEffect(
     useCallback(() => {
-      console.log("🎯 Notifications screen focused, loading data...");
-      setLoading(true);
-      fetchNotifications();
-      fetchUnreadCount();
-    }, [])
+      refresh();
+    }, [refresh])
   );
 
-  // Update unread count when notifications change
-  useEffect(() => {
-    const unread = notifications.filter(n => !n.isRead).length;
-    console.log(`📊 Local unread count: ${unread}`);
-    if (unread !== unreadCount) {
-      setUnreadCount(unread);
+  // Separate today's and older notifications
+  const todayNotifications = notifications.filter((n) => {
+    try {
+      const date = new Date(n.createdAt || n.sentAt);
+      return date.toDateString() === new Date().toDateString();
+    } catch {
+      return false;
     }
-  }, [notifications]);
+  });
+
+  const olderNotifications = notifications.filter((n) => {
+    try {
+      const date = new Date(n.createdAt || n.sentAt);
+      return date.toDateString() !== new Date().toDateString();
+    } catch {
+      return true;
+    }
+  });
 
   // Loading state
-  if (loading) {
+  if (loading && notifications.length === 0 && announcements.length === 0) {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color="#0057FF" />
@@ -299,188 +196,302 @@ export default function Notifications() {
   }
 
   // Error state
-  if (error) {
+  if (error && notifications.length === 0) {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <Ionicons name="alert-circle-outline" size={64} color="#FF3B30" />
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchNotifications}>
+        <TouchableOpacity style={styles.retryButton} onPress={refresh}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // Empty state
-  if (!notifications || notifications.length === 0) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Ionicons name="notifications-off-outline" size={64} color="#999" />
-        <Text style={styles.emptyText}>No notifications yet</Text>
-        <Text style={styles.emptySubtext}>
-          You'll see notifications here when you have new updates
-        </Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-          <Ionicons name="refresh" size={20} color="#0057FF" />
-          <Text style={styles.refreshButtonText}>Refresh</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  console.log(`📱 Rendering ${notifications.length} notifications`);
-
-  // Filter today's notifications
-  const todayNotifications = notifications.filter(notification => {
-    try {
-      if (!notification || !notification.createdAt) return false;
-      const notificationDate = new Date(notification.createdAt);
-      const today = new Date();
-      return notificationDate.toDateString() === today.toDateString();
-    } catch (error) {
-      return false;
-    }
-  });
-
-  // Filter older notifications
-  const olderNotifications = notifications.filter(notification => {
-    try {
-      if (!notification || !notification.createdAt) return false;
-      const notificationDate = new Date(notification.createdAt);
-      const today = new Date();
-      return notificationDate.toDateString() !== today.toDateString();
-    } catch (error) {
-      return true; // Show as older if we can't parse date
-    }
-  });
-
-  return (
-    <ScrollView 
-      style={styles.container} 
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
+  const renderNotificationCard = (notification: NotificationItem) => (
+    <TouchableOpacity
+      key={notification.id}
+      style={[styles.card, !notification.isRead && styles.cardUnread]}
+      onPress={() => handleMarkAsRead(notification.id)}
+      onLongPress={() => handleDeleteNotification(notification.id)}
+      activeOpacity={0.7}
     >
-      {/* Header with Mark All as Read button */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.mainTitle}>Latest Notifications</Text>
-          {unreadCount > 0 && (
-            <Text style={styles.unreadBadge}>
-              {unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
-            </Text>
+      <View style={styles.cardIcon}>
+        {getIconForType(notification.type, notification.title || "Notification")}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.cardTitle}>
+          {notification.title || "Notification"}
+        </Text>
+        <Text style={styles.cardMsg} numberOfLines={3}>
+          {notification.message || "No message"}
+        </Text>
+        <View style={styles.cardMeta}>
+          <Text style={styles.cardTime}>
+            {notification.sentAt
+              ? formatTimeAgo(notification.sentAt)
+              : notification.createdAt
+              ? formatTimeAgo(notification.createdAt)
+              : "Recently"}
+          </Text>
+          {notification.type && (
+            <View style={styles.typeBadge}>
+              <Text style={styles.typeBadgeText}>
+                {notification.type.replace(/_/g, " ")}
+              </Text>
+            </View>
           )}
         </View>
-        {unreadCount > 0 && (
-          <TouchableOpacity 
-            style={styles.markAllButton}
-            onPress={handleMarkAllAsRead}
-          >
-            <Text style={styles.markAllButtonText}>Mark all as read</Text>
-          </TouchableOpacity>
-        )}
       </View>
+      {!notification.isRead && <View style={styles.unreadDot} />}
+    </TouchableOpacity>
+  );
 
-      {/* Timetable Banner */}
-      <View style={styles.banner}>
-        <View>
-          <Text style={styles.bannerTitle}>Grade 10 Timetable</Text>
-          <Text style={styles.bannerSubtitle}>View Your Weekly schedule</Text>
-          <TouchableOpacity style={styles.button}>
-            <Text style={styles.buttonText}>View Schedule</Text>
-          </TouchableOpacity>
+  const renderAnnouncementCard = (announcement: AnnouncementItem) => {
+    const priorityStyle = getPriorityStyle(announcement.priority);
+    return (
+      <View
+        key={announcement.id}
+        style={[
+          styles.announcementCard,
+          { borderLeftColor: priorityStyle.borderLeftColor },
+        ]}
+      >
+        <View style={styles.announcementHeader}>
+          <Ionicons name="megaphone" size={22} color="#9A2143" />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.announcementTitle}>{announcement.title}</Text>
+            {announcement.priority?.toUpperCase() !== "NORMAL" && (
+              <View
+                style={[
+                  styles.priorityBadge,
+                  {
+                    backgroundColor:
+                      announcement.priority?.toUpperCase() === "HIGH" ||
+                      announcement.priority?.toUpperCase() === "URGENT"
+                        ? "#fef2f2"
+                        : "#ecfdf5",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.priorityBadgeText,
+                    {
+                      color:
+                        announcement.priority?.toUpperCase() === "HIGH" ||
+                        announcement.priority?.toUpperCase() === "URGENT"
+                          ? "#ef4444"
+                          : "#10b981",
+                    },
+                  ]}
+                >
+                  {announcement.priority.toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
-        <Ionicons name="calendar" size={40} color="#fff" style={{ marginTop: 10 }} />
-      </View>
-
-      {/* Page Indicators */}
-      <View style={styles.dotsContainer}>
-        <View style={[styles.dot, styles.activeDot]} />
-        <View style={styles.dot} />
-        <View style={styles.dot} />
-      </View>
-
-      {/* Today's Notifications */}
-      {todayNotifications.length > 0 && (
-        <>
-          <Text style={styles.dateText}>Today {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
-          
-          {todayNotifications.map((notification) => (
-            <TouchableOpacity 
-              key={notification.id || Math.random().toString()}
-              style={styles.card}
-              onPress={() => handleMarkAsRead(notification.id)}
-              onLongPress={() => handleDeleteNotification(notification.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.cardIcon}>
-                {getIconForType(notification.type, notification.title || 'Notification')}
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{notification.title || 'Notification'}</Text>
-                <Text style={styles.cardMsg}>{notification.message || 'No message'}</Text>
-                <Text style={styles.cardTime}>
-                  {notification.createdAt ? formatTimeAgo(notification.createdAt) : 'Recently'}
-                </Text>
-              </View>
-
-              {/* Unread dot */}
-              {!notification.isRead && <View style={styles.redDot} />}
-            </TouchableOpacity>
-          ))}
-        </>
-      )}
-
-      {/* Older Notifications */}
-      {olderNotifications.length > 0 && (
-        <>
-          <Text style={[styles.dateText, { marginTop: 20 }]}>Older Notifications</Text>
-          
-          {olderNotifications.map((notification) => (
-            <TouchableOpacity 
-              key={notification.id || Math.random().toString()}
-              style={styles.card}
-              onPress={() => handleMarkAsRead(notification.id)}
-              onLongPress={() => handleDeleteNotification(notification.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.cardIcon}>
-                {getIconForType(notification.type, notification.title || 'Notification')}
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{notification.title || 'Notification'}</Text>
-                <Text style={styles.cardMsg}>{notification.message || 'No message'}</Text>
-                <Text style={styles.cardTime}>
-                  {notification.createdAt ? formatTimeAgo(notification.createdAt) : 'Recently'}
-                </Text>
-              </View>
-
-              {/* Unread dot */}
-              {!notification.isRead && <View style={styles.redDot} />}
-            </TouchableOpacity>
-          ))}
-        </>
-      )}
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          {notifications.length} total notification{notifications.length === 1 ? '' : 's'}
+        <Text style={styles.announcementContent} numberOfLines={4}>
+          {announcement.content}
         </Text>
+        <View style={styles.announcementMeta}>
+          <Text style={styles.announcementTime}>
+            {announcement.publishedAt
+              ? formatTimeAgo(announcement.publishedAt)
+              : formatTimeAgo(announcement.createdAt)}
+          </Text>
+          {announcement.type && announcement.type !== "GENERAL" && (
+            <View style={styles.typeBadge}>
+              <Text style={styles.typeBadgeText}>{announcement.type}</Text>
+            </View>
+          )}
+        </View>
       </View>
-    </ScrollView>
+    );
+  };
+
+  const renderNotificationsTab = () => {
+    if (notifications.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="notifications-off-outline" size={64} color="#999" />
+          <Text style={styles.emptyText}>No notifications yet</Text>
+          <Text style={styles.emptySubtext}>
+            You'll see notifications here when you have new updates
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <>
+        {/* Mark all as read */}
+        {unreadCount > 0 && (
+          <View style={styles.actionRow}>
+            <Text style={styles.unreadBadge}>
+              {unreadCount} unread
+            </Text>
+            <TouchableOpacity
+              style={styles.markAllButton}
+              onPress={handleMarkAllAsRead}
+            >
+              <Ionicons name="checkmark-done" size={16} color="#0057FF" />
+              <Text style={styles.markAllButtonText}>Mark all read</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Today */}
+        {todayNotifications.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>
+              Today{" "}
+              {new Date().toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              })}
+            </Text>
+            {todayNotifications.map(renderNotificationCard)}
+          </>
+        )}
+
+        {/* Older */}
+        {olderNotifications.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>
+              Earlier
+            </Text>
+            {olderNotifications.map(renderNotificationCard)}
+          </>
+        )}
+      </>
+    );
+  };
+
+  const renderAnnouncementsTab = () => {
+    if (announcements.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="megaphone-outline" size={64} color="#999" />
+          <Text style={styles.emptyText}>No announcements</Text>
+          <Text style={styles.emptySubtext}>
+            Important announcements from ArmiGo will appear here
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <>
+        <Text style={styles.sectionTitle}>
+          {announcements.length} Active Announcement
+          {announcements.length === 1 ? "" : "s"}
+        </Text>
+        {announcements.map(renderAnnouncementCard)}
+      </>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Tabs */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === "notifications" && styles.tabActive,
+          ]}
+          onPress={() => setActiveTab("notifications")}
+        >
+          <Ionicons
+            name="notifications"
+            size={18}
+            color={activeTab === "notifications" ? "#0057FF" : "#9ca3af"}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "notifications" && styles.tabTextActive,
+            ]}
+          >
+            Notifications
+          </Text>
+          {unreadCount > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === "announcements" && styles.tabActive,
+          ]}
+          onPress={() => setActiveTab("announcements")}
+        >
+          <Ionicons
+            name="megaphone"
+            size={18}
+            color={activeTab === "announcements" ? "#9A2143" : "#9ca3af"}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "announcements" && styles.tabTextActive,
+            ]}
+          >
+            Announcements
+          </Text>
+          {announcements.length > 0 && (
+            <View style={[styles.tabBadge, { backgroundColor: "#9A2143" }]}>
+              <Text style={styles.tabBadgeText}>{announcements.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        contentContainerStyle={styles.scrollContent}
+      >
+        {activeTab === "notifications"
+          ? renderNotificationsTab()
+          : renderAnnouncementsTab()}
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            {activeTab === "notifications"
+              ? `${notifications.length} notification${
+                  notifications.length === 1 ? "" : "s"
+                }`
+              : `${announcements.length} announcement${
+                  announcements.length === 1 ? "" : "s"
+                }`}
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f8fafc",
+    paddingTop: 10,
+  },
+  scrollContent: {
     paddingHorizontal: 18,
-    paddingTop: 20,
-    backgroundColor: "#fff",
+    paddingBottom: 20,
   },
   centerContent: {
     justifyContent: "center",
@@ -491,6 +502,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 16,
     color: "#666",
+    fontFamily: "Poppins-Regular",
   },
   errorText: {
     marginTop: 20,
@@ -498,6 +510,7 @@ const styles = StyleSheet.create({
     color: "#FF3B30",
     textAlign: "center",
     marginBottom: 20,
+    fontFamily: "Poppins-Regular",
   },
   retryButton: {
     backgroundColor: "#0057FF",
@@ -510,163 +523,232 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
   emptyText: {
-    marginTop: 20,
+    marginTop: 16,
     fontSize: 18,
     fontWeight: "600",
     color: "#333",
   },
   emptySubtext: {
-    marginTop: 10,
+    marginTop: 8,
     fontSize: 14,
     color: "#666",
     textAlign: "center",
-    marginBottom: 20,
+    paddingHorizontal: 30,
   },
-  refreshButton: {
+  /* Tabs */
+  tabContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 18,
+    marginBottom: 16,
+    gap: 8,
+  },
+  tab: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F0F4FF",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    gap: 6,
   },
-  refreshButtonText: {
-    marginLeft: 8,
-    color: "#0057FF",
+  tabActive: {
+    borderColor: "#0057FF",
+    backgroundColor: "#eff6ff",
+  },
+  tabText: {
+    fontSize: 13,
     fontWeight: "600",
+    color: "#9ca3af",
   },
-  header: {
+  tabTextActive: {
+    color: "#111827",
+  },
+  tabBadge: {
+    backgroundColor: "#0057FF",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  tabBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  /* Action Row */
+  actionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
-  },
-  mainTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#333",
+    marginBottom: 16,
   },
   unreadBadge: {
     fontSize: 14,
-    color: "#FF3B30",
+    color: "#ef4444",
     fontWeight: "600",
-    marginTop: 4,
   },
   markAllButton: {
-    backgroundColor: "#F0F4FF",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#eff6ff",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 8,
+    gap: 4,
   },
   markAllButtonText: {
     color: "#0057FF",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
   },
-  /* Banner */
-  banner: {
-    backgroundColor: "#0057FF",
-    padding: 20,
-    borderRadius: 15,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
-  bannerTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-  bannerSubtitle: {
-    fontSize: 14,
-    color: "#E0E8FF",
-    marginTop: 4,
-  },
-  button: {
-    marginTop: 10,
-    backgroundColor: "#fff",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-  },
-  buttonText: {
-    color: "#0057FF",
-    fontWeight: "600",
-  },
-  /* Dots */
-  dotsContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 5,
-    backgroundColor: "#D0D0D0",
-    marginHorizontal: 5,
-  },
-  activeDot: {
-    backgroundColor: "#0057FF",
-  },
-  /* Date Text */
-  dateText: {
+
+  /* Section */
+  sectionTitle: {
     fontSize: 15,
-    color: "#555",
-    marginBottom: 15,
+    color: "#6b7280",
+    marginBottom: 12,
     fontWeight: "600",
   },
-  /* Cards */
+
+  /* Notification Cards */
   card: {
     backgroundColor: "#fff",
-    padding: 15,
+    padding: 14,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 15,
+    marginBottom: 10,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardUnread: {
+    backgroundColor: "#fafbff",
+    borderLeftWidth: 3,
+    borderLeftColor: "#0057FF",
   },
   cardIcon: {
     marginRight: 12,
-    marginTop: 4,
+    marginTop: 2,
+    width: 36,
+    alignItems: "center",
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#333",
+    color: "#111827",
   },
   cardMsg: {
-    marginTop: 4,
-    color: "#777",
-    lineHeight: 20,
+    marginTop: 3,
+    color: "#6b7280",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  cardMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+    gap: 8,
   },
   cardTime: {
-    marginTop: 6,
-    color: "#999",
-    fontSize: 13,
+    color: "#9ca3af",
+    fontSize: 12,
   },
-  redDot: {
+  typeBadge: {
+    backgroundColor: "#f3f4f6",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    color: "#6b7280",
+    fontWeight: "600",
+    textTransform: "capitalize",
+  },
+  unreadDot: {
     width: 10,
     height: 10,
-    backgroundColor: "red",
+    backgroundColor: "#0057FF",
     borderRadius: 5,
-    marginLeft: 10,
-    marginTop: 5,
+    marginLeft: 8,
+    marginTop: 6,
   },
+
+  /* Announcement Cards */
+  announcementCard: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: "#0057FF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  announcementHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  announcementTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  announcementContent: {
+    fontSize: 14,
+    color: "#4b5563",
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  announcementMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  announcementTime: {
+    fontSize: 12,
+    color: "#9ca3af",
+  },
+  priorityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+    alignSelf: "flex-start",
+  },
+  priorityBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
   /* Footer */
   footer: {
     paddingVertical: 20,
     alignItems: "center",
   },
   footerText: {
-    fontSize: 14,
-    color: "#999",
+    fontSize: 13,
+    color: "#9ca3af",
   },
 });
 

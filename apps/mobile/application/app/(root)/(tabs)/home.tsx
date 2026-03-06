@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import useAuthStore from "@/stores/authStore";
+import useNotificationStore from "@/stores/notificationStore";
 import { apiFetch } from "@/utils/api";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -127,7 +128,7 @@ const Home = () => {
   const [onlineSessions, setOnlineSessions] = useState<SessionItem[]>([]);
   const [physicalSessions, setPhysicalSessions] = useState<SessionItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
   const childDetailFetched = useRef(false);
 
   const greeting = (() => {
@@ -194,11 +195,13 @@ const Home = () => {
         setChildId(cid);
         if (!cid) { setLoading(false); setRefreshing(false); return; }
 
-        const [onlineRes, physicalRes, assignRes, unreadRes, childrenRes] = await Promise.all([
+        // Refresh notification count from the store
+        useNotificationStore.getState().fetchUnreadCount();
+
+        const [onlineRes, physicalRes, assignRes, childrenRes] = await Promise.all([
           apiFetch(`/api/v1/users/my-online-sessions?childId=${encodeURIComponent(cid)}`, { method: "GET" }).catch(() => null),
           apiFetch(`/api/v1/users/my-admission-trackings?childId=${encodeURIComponent(cid)}`, { method: "GET" }).catch(() => null),
           apiFetch(`/api/v1/users/my-assignments?childId=${encodeURIComponent(cid)}`, { method: "GET" }).catch(() => null),
-          apiFetch("/api/v1/notifications/unread-count", { method: "GET" }).catch(() => null),
           apiFetch("/api/v1/users/my-children", { method: "GET" }).catch(() => null),
         ]);
 
@@ -225,13 +228,6 @@ const Home = () => {
           else if (Array.isArray(root?.assignments)) items = root.assignments;
           else if (Array.isArray(root?.data?.assignments)) items = root.data.assignments;
           setAssignments(items);
-        }
-        if (unreadRes?.ok) {
-          try {
-            const json = await unreadRes.json();
-            const cnt = json?.data?.count ?? json?.count ?? 0;
-            setUnreadCount(typeof cnt === "number" ? cnt : parseInt(cnt, 10) || 0);
-          } catch {}
         }
         // Populate childDetail from my-children or mobile/profile fallback
         if (childrenRes?.ok) {

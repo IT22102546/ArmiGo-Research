@@ -71,6 +71,23 @@ export class NotificationsController {
     };
   }
 
+  @Post("push-token")
+  @ApiOperation({ summary: "Register push notification token" })
+  async registerPushToken(
+    @Request() req: any,
+    @Body() body: { token: string; platform?: string }
+  ) {
+    await this.notificationsService.registerPushToken(
+      req.user.id,
+      body.token,
+      body.platform || "expo"
+    );
+    return {
+      success: true,
+      message: "Push token registered successfully",
+    };
+  }
+
   @Patch(":id/read")
   @ApiOperation({ summary: "Mark notification as read" })
   async markAsRead(@Request() req: any, @Param("id") id: string) {

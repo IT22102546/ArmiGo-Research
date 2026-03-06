@@ -12,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { icons } from "@/constants";
 import useAuthStore from "@/stores/authStore";
+import useNotificationStore from "@/stores/notificationStore";
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import Overlay from "@/components/Overlay";
@@ -22,6 +23,7 @@ const TabsLayout = () => {
   const [activeTab, setActiveTab] = useState("home");
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const { currentUser } = useAuthStore();
+  const { unreadCount } = useNotificationStore();
 
   const handlePhoneCall = () => {
     Linking.openURL(`tel:${phoneNumber}`);
@@ -96,6 +98,28 @@ const TabsLayout = () => {
               onPress={() => router.push("/(root)/(tabs)/Notifications")}
             >
               <Ionicons name="notifications-outline" size={24} color="#111827" />
+              {unreadCount > 0 && (
+                <View style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -6,
+                  backgroundColor: "#ef4444",
+                  borderRadius: 9,
+                  minWidth: 18,
+                  height: 18,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingHorizontal: 4,
+                }}>
+                  <Text style={{
+                    color: "#fff",
+                    fontSize: 10,
+                    fontWeight: "700",
+                  }}>
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           ),
           headerStyle: {
@@ -225,6 +249,13 @@ const TabsLayout = () => {
           }}
         />
 
+        <Tabs.Screen
+          name="Notifications"
+          options={{
+            title: "",
+            headerShown: true,
+          }}
+        />
         <Tabs.Screen
           name="profile"
           options={{
