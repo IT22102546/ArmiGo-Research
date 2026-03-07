@@ -1,4 +1,4 @@
-// app/onBoard2.tsx
+// app/(auth)/onBoard2.tsx - ArmiGo Onboarding Screen 2
 import React, { useEffect, useRef } from "react";
 import {
   View,
@@ -7,23 +7,64 @@ import {
   Image,
   Animated,
   TouchableOpacity,
-  ImageSourcePropType,
   PanResponder,
   Dimensions,
 } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
-import { icons, images } from "@/constants";
+import { Ionicons } from "@expo/vector-icons";
+import { images } from "@/constants";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 
-const { width: screenWidth } = Dimensions.get("window");
+// Hospital & physiotherapy themed icons for floating background animation
+const MEDICAL_ICONS = [
+  "fitness-outline", "heart-outline", "pulse-outline",
+  "medkit-outline", "body-outline", "barbell-outline",
+  "walk-outline", "bandage-outline", "stopwatch-outline",
+  "heart-circle-outline", "fitness", "heart",
+  "pulse", "medkit", "body",
+] as const;
 
-interface Position {
-  top: number;
-  left: number;
-}
+// ─── Responsive helpers ──────────────────────────────────────────
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+const isSmallScreen  = screenHeight < 700;
+const isMedScreen    = screenHeight >= 700 && screenHeight < 850;
+const TOP_H          = Math.round(screenHeight * (isSmallScreen ? 0.28 : isMedScreen ? 0.30 : 0.32));
+const IMG_H          = Math.round(screenHeight * (isSmallScreen ? 0.24 : 0.27));
+const MASK_H         = isSmallScreen ? 50 : 72;
+const TITLE_FONT     = isSmallScreen ? 18 : 22;
+const TITLE_LINE     = isSmallScreen ? 26 : 32;
+const DESC_FONT      = isSmallScreen ? 13 : 15;
+const DESC_LINE      = isSmallScreen ? 20 : 24;
+const HEADER_FONT    = isSmallScreen ? 24 : 30;
+const TAGLINE_MB     = isSmallScreen ? 28 : 50;
+const _it = (base: number): number => Math.round((base / 230) * TOP_H);
+// ─────────────────────────────────────────────────────────────────
+
+// Explicit 4-row grid – icons evenly spread, no clustering
+const ICON_POSITIONS = [
+  // Row 1 – top strip
+  { name: "fitness-outline",      top: _it(12),  leftPct:  3, size: 20, baseOpacity: 0.60, rotation:  -5 },
+  { name: "heart-outline",        top: _it(18),  leftPct: 22, size: 16, baseOpacity: 0.55, rotation:   8 },
+  { name: "pulse-outline",        top: _it(10),  leftPct: 44, size: 18, baseOpacity: 0.50, rotation:  -3 },
+  { name: "medkit-outline",       top: _it(20),  leftPct: 68, size: 22, baseOpacity: 0.60, rotation:   6 },
+  { name: "body-outline",         top: _it(14),  leftPct: 88, size: 20, baseOpacity: 0.65, rotation:  -8 },
+  // Row 2 – upper-mid
+  { name: "barbell-outline",      top: _it(68),  leftPct:  5, size: 22, baseOpacity: 0.65, rotation:   5 },
+  { name: "walk-outline",         top: _it(72),  leftPct: 48, size: 18, baseOpacity: 0.55, rotation:  10 },
+  { name: "bandage-outline",      top: _it(62),  leftPct: 84, size: 20, baseOpacity: 0.60, rotation:  -6 },
+  // Row 3 – mid
+  { name: "stopwatch-outline",    top: _it(122), leftPct:  3, size: 20, baseOpacity: 0.60, rotation:   7 },
+  { name: "heart-circle-outline", top: _it(130), leftPct: 27, size: 18, baseOpacity: 0.55, rotation:  -4 },
+  { name: "fitness",              top: _it(120), leftPct: 60, size: 22, baseOpacity: 0.65, rotation:   3 },
+  { name: "heart",                top: _it(128), leftPct: 84, size: 20, baseOpacity: 0.60, rotation:  -7 },
+  // Row 4 – lower strip
+  { name: "pulse",                top: _it(175), leftPct:  7, size: 20, baseOpacity: 0.60, rotation:   4 },
+  { name: "medkit",               top: _it(178), leftPct: 45, size: 18, baseOpacity: 0.55, rotation:  -5 },
+  { name: "body",                 top: _it(170), leftPct: 80, size: 22, baseOpacity: 0.65, rotation:   6 },
+];
 
 const OnBoard2: React.FC = () => {
   const router = useRouter();
@@ -42,27 +83,10 @@ const OnBoard2: React.FC = () => {
   const animationRefs = useRef<Animated.CompositeAnimation[]>([]);
   const isNavigating = useRef(false); // Prevent multiple navigations
 
-  // Pick only the icons you want
-  const selectedIcons: ImageSourcePropType[] = [
-    icons.Icon1,
-    icons.Icon2,
-    icons.Icon3,
-    icons.Icon4,
-    icons.Icon5,
-    icons.Icon6,
-    icons.Icon1,
-    icons.Icon3,
-    icons.Icon2,
-    icons.Icon4,
-    icons.Icon3,
-    icons.Icon5,
-    icons.Icon1,
-    icons.Icon6,
-    icons.Icon2,
-  ];
-
-  // Create animated values for each icon
-  const animatedValues = selectedIcons.map(() => new Animated.Value(0));
+  // Animated values for floating hospital icons
+  const animatedValues = useRef(
+    MEDICAL_ICONS.map(() => new Animated.Value(0))
+  ).current;
 
   const startAnimations = () => {
     // Reset animation values to visible state
@@ -429,113 +453,48 @@ const OnBoard2: React.FC = () => {
     isNavigating.current = true;
     stopAnimations();
 
-    router.push("/home");
+    router.push("/(auth)/sign-in");
 
     setTimeout(() => {
       isNavigating.current = false;
     }, 1000);
   };
 
-  const getPredefinedPositions = (): Position[] => {
-    const positions: Position[] = [
-      // Top row
-      { top: 25, left: 10 },
-      { top: 25, left: 50 },
-      { top: 25, left: 90 },
-      // Upper middle row
-      { top: 60, left: 20 },
-      { top: 60, left: 80 },
-      // Middle row
-      { top: 95, left: 5 },
-      { top: 95, left: 35 },
-      { top: 95, left: 65 },
-      { top: 95, left: 95 },
-      // Lower middle row
-      { top: 130, left: 15 },
-      { top: 130, left: 50 },
-      { top: 130, left: 85 },
-      // Bottom row
-      { top: 165, left: 25 },
-      { top: 165, left: 75 },
-      // Very bottom row
-      { top: 200, left: 5 },
-      { top: 200, left: 40 },
-      { top: 200, left: 60 },
-      { top: 200, left: 95 },
-    ];
-    return positions;
-  };
-
-  const renderDistributedIcons = (): JSX.Element[] => {
-    const predefinedPositions = getPredefinedPositions();
-
-    return selectedIcons.map((icon: ImageSourcePropType, index: number) => {
-      let position: Position;
-
-      if (index < predefinedPositions.length) {
-        position = predefinedPositions[index];
-      } else {
-        position = {
-          top: 30 + Math.random() * 140,
-          left: 15 + Math.random() * 70,
-        };
-      }
-
-      const randomOpacity: number = 0.8 + Math.random() * 0.2;
-      // CHANGED: Made icon sizes smaller to match OnBoard1 - reduced from 32-48 to 20-32
-      const randomSize: number = 20 + Math.random() * 12; // Now ranges from 20 to 32
-      const randomRotation: number = Math.random() * 20 - 10;
-
-      // Animation transforms
+  // Render hospital-themed floating Ionicons in the gradient header
+  const renderFloatingIcons = (): JSX.Element[] =>
+    ICON_POSITIONS.map((item, index) => {
       const translateY = animatedValues[index].interpolate({
         inputRange: [0, 1],
-        outputRange: [0, -8],
+        outputRange: [0, -14],
       });
-
       const scale = animatedValues[index].interpolate({
         inputRange: [0, 1],
-        outputRange: [1, 1.05],
+        outputRange: [1, 1.12],
       });
-
       const rotate = animatedValues[index].interpolate({
         inputRange: [0, 1],
-        outputRange: [`${randomRotation}deg`, `${randomRotation + 5}deg`],
+        outputRange: [`${item.rotation}deg`, `${item.rotation + 8}deg`],
       });
-
       const opacity = animatedValues[index].interpolate({
         inputRange: [0, 0.5, 1],
-        outputRange: [randomOpacity, randomOpacity * 1.3, randomOpacity],
+        outputRange: [item.baseOpacity, Math.min(item.baseOpacity * 1.5, 1), item.baseOpacity],
       });
-
       return (
-        <Animated.Image
+        <Animated.View
           key={index}
-          source={icon}
           style={{
             position: "absolute",
-            top: position.top,
-            left: `${position.left}%`,
-            width: randomSize,
-            height: randomSize,
-            opacity: opacity,
-            tintColor: "#FFFFFF",
+            top: item.top,
+            left: `${item.leftPct}%` as any,
             zIndex: 2,
-            transform: [
-              { translateY: translateY },
-              { scale: scale },
-              { rotate: rotate },
-            ],
-            shadowColor: "#FFFFFF",
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.8,
-            shadowRadius: 4,
-            elevation: 4,
+            transform: [{ translateY }, { scale }, { rotate }],
+            opacity,
           }}
-          resizeMode="contain"
-        />
+        >
+          <Ionicons name={item.name as any} size={item.size} color="rgba(255,255,255,0.88)" />
+        </Animated.View>
       );
     });
-  };
 
   return (
     <View style={styles.container}>
@@ -548,11 +507,12 @@ const OnBoard2: React.FC = () => {
           end={{ x: 1, y: 1 }}
           style={styles.topSection}
         >
-          {/* Icons Layer */}
-          <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
+          {/* Floating hospital icons layer */}
+          <View style={styles.iconsLayer}>{renderFloatingIcons()}</View>
 
-          {/* Title */}
-          <Text style={styles.header}>ArmiGo</Text>
+          {/* App name */}
+          <Text style={styles.header}>Armigo</Text>
+          <Text style={styles.tagline}>Health · Recover · Thrive</Text>
 
           {/* Light Blue Wave - BELOW the white wave */}
           <View style={styles.lightBlueWaveContainer}>
@@ -630,13 +590,13 @@ const OnBoard2: React.FC = () => {
 
             {/* Text below the image */}
             <View style={styles.textContainer}>
-              {/* Gradient Text for "Take Exams Securely" */}
+              {/* Gradient title */}
               <MaskedView
                 style={styles.maskedView}
                 maskElement={
                   <View style={styles.maskElement}>
                     <Text style={styles.gradientTitleMask}>
-                      Therapy
+                      Virtual Therapy Sessions
                     </Text>
                   </View>
                 }
@@ -651,8 +611,7 @@ const OnBoard2: React.FC = () => {
 
               {/* Description text */}
               <Text style={styles.description}>
-                Therapy with ArmiGo Hand daily{"\n"}basis{"\n"}
-                security
+                Attend your child's daily therapy sessions online with ArmiGo's smart rehabilitation system.
               </Text>
 
               {/* Dots Indicator */}
@@ -709,7 +668,7 @@ const styles = StyleSheet.create({
   topSection: {
     position: "relative",
     width: "100%",
-    height: 230,
+    height: TOP_H,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
@@ -721,15 +680,23 @@ const styles = StyleSheet.create({
     zIndex: 7,
   },
   header: {
-    fontSize: 26,
+    fontSize: HEADER_FONT,
     fontWeight: "bold",
     color: "#fff",
-    marginBottom: 60,
+    marginBottom: 2,
     zIndex: 5,
     textShadowColor: "rgba(0, 0, 0, 0.3)",
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 4,
-    fontFamily: "PoppinsBold",
+    fontFamily: "Poppins-Bold",
+  },
+  tagline: {
+    fontSize: isSmallScreen ? 10 : 12,
+    color: "rgba(255,255,255,0.8)",
+    zIndex: 5,
+    fontFamily: "Poppins-Regular",
+    letterSpacing: 1.5,
+    marginBottom: TAGLINE_MB,
   },
   whiteWaveWrapper: {
     position: "absolute",
@@ -748,8 +715,8 @@ const styles = StyleSheet.create({
   lightBlueWaveSvg: {},
   bottomSection: {
     flex: 1,
-    paddingHorizontal: 30,
-    paddingTop: 10,
+    paddingHorizontal: Math.round(screenWidth * 0.07),
+    paddingTop: isSmallScreen ? 4 : 10,
     alignItems: "center",
     backgroundColor: "#fff",
     position: "relative",
@@ -769,7 +736,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     color: "#9BA3AB",
-    fontFamily: "PoppinsBold",
+    fontFamily: "Poppins-Bold",
   },
   // Next Button Styles - Bottom Right Corner with Quarter Circle
   nextButtonContainer: {
@@ -794,7 +761,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     color: "#353434",
-    fontFamily: "PoppinsBold",
+    fontFamily: "Poppins-Bold",
   },
   triangleContainer: {
     position: "absolute",
@@ -835,18 +802,20 @@ const styles = StyleSheet.create({
   ashCircle: {},
   bottomImage: {
     width: "100%",
-    height: 180,
-    marginBottom: 30,
-    marginTop: 5,
+    height: IMG_H,
+    marginBottom: isSmallScreen ? 6 : 10,
+    marginTop: isSmallScreen ? 2 : 5,
     zIndex: 1,
   },
   textContainer: {
     alignItems: "center",
-    marginTop: -15,
+    marginTop: 0,
+    paddingHorizontal: Math.round(screenWidth * 0.05),
   },
   maskedView: {
-    height: 40,
-    marginBottom: 8,
+    height: MASK_H,
+    marginBottom: isSmallScreen ? 6 : 10,
+    alignSelf: "stretch",
   },
   maskElement: {
     backgroundColor: "transparent",
@@ -855,24 +824,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   gradientTitleMask: {
-    fontSize: 20,
+    fontSize: TITLE_FONT,
     fontWeight: "bold",
     textAlign: "center",
-    fontFamily: "PoppinsBold",
+    fontFamily: "Poppins-Bold",
     backgroundColor: "transparent",
+    lineHeight: TITLE_LINE,
   },
   gradientFill: {
     flex: 1,
-    width: 200,
-    height: 40,
+    width: Math.round(screenWidth * 0.75),
+    height: MASK_H,
   },
   description: {
-    fontSize: 16,
+    fontSize: DESC_FONT,
     color: "#9BA3AB",
     textAlign: "center",
-    lineHeight: 22,
-    fontFamily: "Poppins",
-    marginBottom: 20,
+    lineHeight: DESC_LINE,
+    fontFamily: "Poppins-Regular",
+    marginBottom: isSmallScreen ? 6 : 12,
+    paddingHorizontal: Math.round(screenWidth * 0.03),
   },
   // Dots Indicator Styles
   dotsContainer: {

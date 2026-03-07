@@ -88,6 +88,63 @@ export class UsersController {
     );
   }
 
+  @Get("my-children")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get all children for the authenticated parent, with hospital and physio data" })
+  async getMyChildren(@Request() req: { user: { id: string } }): Promise<any> {
+    const children = await this.usersService.findChildrenForParent(req.user.id);
+    return { success: true, data: children };
+  }
+
+  @Get("my-assignments")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get assignments for authenticated user's linked children" })
+  async getMyAssignments(
+    @Request() req: { user: { id: string } },
+    @Query("childId") childId?: string
+  ): Promise<any> {
+    const assignments = await this.usersService.getMyAssignments(req.user.id, childId);
+    return { success: true, data: assignments };
+  }
+
+  @Get("my-online-sessions")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get online sessions for authenticated user's linked children" })
+  async getMyOnlineSessions(
+    @Request() req: { user: { id: string } },
+    @Query("childId") childId?: string
+  ): Promise<any> {
+    const sessions = await this.usersService.getMyOnlineSessions(req.user.id, childId);
+    return { success: true, data: sessions };
+  }
+
+  @Get("my-admission-trackings")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get admission tracking details for authenticated user's linked children" })
+  async getMyAdmissionTrackings(
+    @Request() req: { user: { id: string } },
+    @Query("childId") childId?: string
+  ): Promise<any> {
+    const admissions = await this.usersService.getMyAdmissionTrackings(req.user.id, childId);
+    return { success: true, data: admissions };
+  }
+
+  @Get("mobile/profile")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Mobile parent profile payload: parent + children (hospital + physio)" })
+  async getMobileProfile(@Request() req: { user: { id: string } }): Promise<any> {
+    const payload = await this.usersService.getMobileParentProfile(req.user.id);
+    if (!payload) {
+      throw AppException.notFound(ErrorCode.USER_NOT_FOUND, "User not found");
+    }
+    return { success: true, data: payload };
+  }
+
   @Get("profile")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -97,7 +154,8 @@ export class UsersController {
     if (!user) {
       throw AppException.notFound(ErrorCode.USER_NOT_FOUND, "User not found");
     }
-    return user;
+    // Wrap in { success, data } so mobile and web clients both work
+    return { success: true, data: user };
   }
 
   @Put("profile")

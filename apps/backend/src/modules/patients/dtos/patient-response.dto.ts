@@ -107,6 +107,19 @@ export class PatientResponseDto {
     code?: string;
   };
 
+  // Exercise type selections
+  @ApiProperty({ required: false, description: 'Whether child does finger exercises' })
+  exerciseFingers?: boolean;
+
+  @ApiProperty({ required: false, description: 'Whether child does wrist exercises' })
+  exerciseWrist?: boolean;
+
+  @ApiProperty({ required: false, description: 'Whether child does elbow exercises' })
+  exerciseElbow?: boolean;
+
+  @ApiProperty({ required: false, description: 'Whether child does shoulder exercises' })
+  exerciseShoulder?: boolean;
+
   @ApiProperty({
     required: false,
     description:
@@ -117,6 +130,10 @@ export class PatientResponseDto {
     currentProgress: number;
     playTimeMinutes: number;
     playedDays: number;
+    fingerProgress?: number;
+    wristProgress?: number;
+    elbowProgress?: number;
+    shoulderProgress?: number;
   };
 
   @ApiProperty({

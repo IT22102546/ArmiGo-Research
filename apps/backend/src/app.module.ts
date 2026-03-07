@@ -1,6 +1,7 @@
 // app.module.ts - Fixed version for ArmiGo
 import { Module, NestModule, MiddlewareConsumer, RequestMethod } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { APP_GUARD } from "@nestjs/core";
 
 // Configuration
@@ -41,6 +42,9 @@ import { CorrelationIdMiddleware } from "./common/middleware";
 
     // Database
     DatabaseModule,
+
+    // Scheduling (cron jobs)
+    ScheduleModule.forRoot(),
 
     // ARMIGO Feature Modules
     AuthModule,

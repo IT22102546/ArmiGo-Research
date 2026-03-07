@@ -43,7 +43,7 @@ export class AuthController {
 
     const result = await this.authService.login(user);
     
-    // Set httpOnly cookies for security
+    // Set httpOnly cookies for web clients
     res.cookie("access_token", result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -52,8 +52,8 @@ export class AuthController {
       path: "/",
     });
     
-    // Return user data in response body (not tokens)
-    return res.json({ user: result.user });
+    // Return tokens + user in body for mobile clients (mobile can't use httpOnly cookies)
+    return res.json({ accessToken: result.accessToken, user: result.user });
   }
 
   @Public()

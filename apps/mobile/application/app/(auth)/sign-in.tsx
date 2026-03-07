@@ -8,21 +8,60 @@ import {
   ActivityIndicator,
   StyleSheet,
   Animated,
-  Image,
-  ImageSourcePropType,
   Alert,
   KeyboardTypeOptions,
+  Dimensions,
 } from "react-native";
 import { Controller, useForm } from "react-hook-form";
 import { Ionicons } from "@expo/vector-icons";
 import CheckBox from "expo-checkbox";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
-import { icons } from "@/constants";
 import useAuthStore from "@/stores/authStore";
 
-const API = process.env.EXPO_PUBLIC_API_URL;
+// Hospital & physiotherapy themed icons for floating header animation
+const MEDICAL_ICONS = [
+  "fitness-outline", "heart-outline", "pulse-outline",
+  "medkit-outline", "body-outline", "barbell-outline",
+  "walk-outline", "bandage-outline", "stopwatch-outline",
+  "heart-circle-outline", "fitness", "heart",
+  "pulse", "medkit", "body",
+] as const;
+
+// Explicit 4-row grid – icons evenly spread, no clustering
+const ICON_POSITIONS = [
+  // Row 1 – top strip
+  { name: "fitness-outline",      top: 12,  leftPct:  3, size: 20, baseOpacity: 0.60, rotation:  -5 },
+  { name: "heart-outline",        top: 18,  leftPct: 22, size: 16, baseOpacity: 0.55, rotation:   8 },
+  { name: "pulse-outline",        top: 10,  leftPct: 44, size: 18, baseOpacity: 0.50, rotation:  -3 },
+  { name: "medkit-outline",       top: 20,  leftPct: 68, size: 22, baseOpacity: 0.60, rotation:   6 },
+  { name: "body-outline",         top: 14,  leftPct: 88, size: 20, baseOpacity: 0.65, rotation:  -8 },
+  // Row 2 – upper-mid
+  { name: "barbell-outline",      top: 68,  leftPct:  5, size: 22, baseOpacity: 0.65, rotation:   5 },
+  { name: "walk-outline",         top: 72,  leftPct: 48, size: 18, baseOpacity: 0.55, rotation:  10 },
+  { name: "bandage-outline",      top: 62,  leftPct: 84, size: 20, baseOpacity: 0.60, rotation:  -6 },
+  // Row 3 – mid
+  { name: "stopwatch-outline",    top: 122, leftPct:  3, size: 20, baseOpacity: 0.60, rotation:   7 },
+  { name: "heart-circle-outline", top: 130, leftPct: 27, size: 18, baseOpacity: 0.55, rotation:  -4 },
+  { name: "fitness",              top: 120, leftPct: 60, size: 22, baseOpacity: 0.65, rotation:   3 },
+  { name: "heart",                top: 128, leftPct: 84, size: 20, baseOpacity: 0.60, rotation:  -7 },
+  // Row 4 – lower strip
+  { name: "pulse",                top: 175, leftPct:  7, size: 20, baseOpacity: 0.60, rotation:   4 },
+  { name: "medkit",               top: 178, leftPct: 45, size: 18, baseOpacity: 0.55, rotation:  -5 },
+  { name: "body",                 top: 170, leftPct: 80, size: 22, baseOpacity: 0.65, rotation:   6 },
+];
+
+// ─── Responsive helpers ──────────────────────────────────────────
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+const isSmallScreen = screenHeight < 700;
+const TOP_H         = Math.round(screenHeight * (isSmallScreen ? 0.28 : screenHeight < 850 ? 0.30 : 0.32));
+const HEADER_FONT   = isSmallScreen ? 24 : 30;
+const TAGLINE_MB    = isSmallScreen ? 28 : 50;
+const _it = (base: number): number => Math.round((base / 230) * TOP_H);
+// ─────────────────────────────────────────────────────────────────
+
+const API = process.env.EXPO_PUBLIC_API_KEY;
 
 const isValidIdentifier = (value: string): boolean => {
   if (!value || value.trim() === "") return false;
@@ -129,7 +168,6 @@ const SignIn = () => {
   const [secureText, setSecureText] = useState(true);
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
   const [apiErrors, setApiErrors] = useState({
     identifier: "",
     password: "",
@@ -137,22 +175,14 @@ const SignIn = () => {
   
   const identifierValue = watch("identifier");
   const router = useRouter();
-  const params = useLocalSearchParams();
   const { signIn } = useAuthStore();
 
   const animatedValues = useRef(
-    Array(15)
-      .fill(0)
-      .map(() => new Animated.Value(0))
+    MEDICAL_ICONS.map(() => new Animated.Value(0))
   ).current;
   const animationRefs = useRef<Animated.CompositeAnimation[]>([]);
 
-  useEffect(() => {
-    if (params.role) {
-      setUserRole(params.role as string);
-      console.log("User role from params:", params.role);
-    }
-  }, [params.role]);
+  // No role param handling needed — this screen is parent-only
 
   const startAnimations = () => {
     animationRefs.current.forEach((animation) => animation.stop());
@@ -206,54 +236,6 @@ const SignIn = () => {
     clearErrors(field);
   };
 
-  const handleForgotPassword = () => {
-    router.push("/(auth)/forgetpassword");
-  };
-
-  const handleSignUp = () => {
-    router.push({
-      pathname: "/(auth)/sign-up",
-      params: { role: userRole }
-    });
-  };
-
-  const createMockUser = (matchedMock: any) => {
-    const baseUser = {
-      _id: `mock-${Date.now()}`,
-      firstName: matchedMock.firstName,
-      lastName: matchedMock.lastName,
-      email: matchedMock.identifier,
-      role: matchedMock.role,
-      mobile: "+94771234567",
-      phone: "+94771234567",
-      profilePicture: null,
-      dateOfBirth: null,
-      isAdmin: false,
-      username: matchedMock.identifier.split('@')[0],
-      status: "ACTIVE",
-      joinDate: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Add role-specific fields
-    if (matchedMock.role === "INTERNAL_PARENT") {
-      return {
-        ...baseUser,
-        children: [],
-        emergencyContact: "",
-        relationship: "Parent",
-      };
-    } else {
-      return {
-        ...baseUser,
-        specialization: "General Physiotherapy",
-        licenseNumber: "PT-12345",
-        experience: "5 years",
-      };
-    }
-  };
-
   const onSubmit = async (credentials: { identifier: string; password: string }) => {
     try {
       setLoading(true);
@@ -274,85 +256,7 @@ const SignIn = () => {
         formattedIdentifier = formatPhoneNumber(credentials.identifier);
       }
 
-      console.log("📤 Sending login request:", {
-        identifier: formattedIdentifier,
-        selectedRole: userRole,
-      });
-
-      // Mock accounts for testing
-      const mockAccounts = [
-        {
-          identifier: "parent@example.com",
-          password: "parent123",
-          role: "INTERNAL_PARENT",
-          firstName: "Randy",
-          lastName: "Perera",
-        },
-        {
-          identifier: "physio@example.com",
-          password: "physio123",
-          role: "INTERNAL_PHYSIOTHERAPIST",
-          firstName: "Dr. John",
-          lastName: "Doe",
-        },
-      ];
-
-      const matchedMock = mockAccounts.find(
-        (m) =>
-          m.identifier.toLowerCase() === formattedIdentifier.toLowerCase() &&
-          m.password === credentials.password
-      );
-
-      if (matchedMock) {
-        if (userRole) {
-          const isParentPortal = userRole === "Parent" || userRole === "PARENT";
-          const isPhysioPortal = userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST";
-
-          if ((isParentPortal && matchedMock.role !== "INTERNAL_PARENT") || 
-              (isPhysioPortal && matchedMock.role !== "INTERNAL_PHYSIOTHERAPIST")) {
-            Alert.alert(
-              "Invalid Portal Access",
-              `This account cannot access the selected portal. Please choose the correct portal.`
-            );
-            setLoading(false);
-            return;
-          }
-        }
-
-        const mockUser = createMockUser(matchedMock);
-        console.log("👤 Mock user created:", mockUser);
-
-        await signIn(mockUser, "mockAccessToken", "mockRefreshToken");
-
-        if (matchedMock.role === "INTERNAL_PARENT") {
-          router.replace("/(root)/(tabs)/home");
-        } else {
-          router.replace("/(root)/(tabs)/PhysiotherapistHome");
-        }
-
-        setLoading(false);
-        return;
-      }
-
-      // Real API call
-      const allowedRoles: string[] = [];
-      
-      if (userRole) {
-        if (userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST") {
-          allowedRoles.push("INTERNAL_PHYSIOTHERAPIST", "EXTERNAL_PHYSIOTHERAPIST");
-        } else if (userRole === "Parent" || userRole === "PARENT") {
-          allowedRoles.push("INTERNAL_PARENT", "EXTERNAL_PARENT");
-        }
-      }
-
-      const requestBody: any = {
-        identifier: formattedIdentifier,
-        password: credentials.password,
-      };
-
-      if (allowedRoles.length > 0) {
-        requestBody.allowedRoles = allowedRoles;
-      }
+      console.log("📤 Sending parent login request:", { identifier: formattedIdentifier });
 
       const response = await fetch(`${API}/api/v1/auth/login`, {
         method: "POST",
@@ -360,24 +264,29 @@ const SignIn = () => {
           "Content-Type": "application/json",
           "x-client-type": "mobile",
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          identifier: formattedIdentifier,
+          password: credentials.password,
+          allowedRoles: ["PARENT", "INTERNAL_PARENT", "EXTERNAL_PARENT"],
+        }),
       });
 
       console.log("📡 Login Response Status:", response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
-        
-        if (errorData.message?.includes("role") || errorData.message?.includes("Role") || errorData.message?.includes("not allowed")) {
+        const message = errorData.message || "Invalid credentials. Please try again.";
+        if (message.toLowerCase().includes("role") || message.toLowerCase().includes("not allowed")) {
           Alert.alert(
-            "Role Mismatch",
-            `This account cannot access the ${userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST" ? "Physiotherapist" : "Parent"} portal. Please use the correct portal for your account type.`,
-            [{ text: "Go Back", onPress: () => router.back(), style: "cancel" }]
+            "Access Denied",
+            "This account does not have parent access. Please contact your hospital administrator.",
+            [{ text: "OK" }]
           );
+        } else if (message.toLowerCase().includes("password") || message.toLowerCase().includes("credential")) {
+          setError("password", { type: "manual", message: "Incorrect password" });
         } else {
-          throw new Error(errorData.message || "Login failed");
+          setError("identifier", { type: "manual", message: message });
         }
-        
         setLoading(false);
         return;
       }
@@ -385,41 +294,19 @@ const SignIn = () => {
       const result = await response.json();
       console.log("📱 Login API Response:", result);
 
-      const { accessToken, refreshToken, user } = result;
+      const { accessToken, user } = result;
 
-      if (!accessToken || !refreshToken || !user) {
+      if (!accessToken || !user) {
         throw new Error("Missing tokens or user data in response");
       }
 
-      if (userRole) {
-        const isPhysiotherapistPortal = userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST";
-        const isParentPortal = userRole === "Parent" || userRole === "PARENT";
-        
-        const userIsPhysiotherapist = user.role === "INTERNAL_PHYSIOTHERAPIST" || user.role === "EXTERNAL_PHYSIOTHERAPIST";
-        const userIsParent = user.role === "INTERNAL_PARENT" || user.role === "EXTERNAL_PARENT";
-        
-        if ((isPhysiotherapistPortal && !userIsPhysiotherapist) || (isParentPortal && !userIsParent)) {
-          Alert.alert(
-            "Invalid Portal Access",
-            `You are trying to access the ${isPhysiotherapistPortal ? "Physiotherapist" : "Parent"} portal with a ${user.role} account. Please use the correct portal.`,
-            [{ text: "Go Back", onPress: () => router.back(), style: "cancel" }]
-          );
-          setLoading(false);
-          return;
-        }
-      }
-
-      await signIn(user, accessToken, refreshToken);
-
-      console.log("✅ Sign in successful!");
-      if(userRole === "Parent" || userRole === "PARENT") {
-        router.replace("/(root)/(tabs)/home");
-      } else if(userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST") {
-        router.replace("/(root)/(tabs)/PhysiotherapistHome");
-      }
+      // Backend uses access token only (no refresh token endpoint); reuse it as the stored refresh token
+      await signIn(user, accessToken, accessToken);
+      console.log("✅ Parent sign in successful!");
+      router.replace("/(root)/(tabs)/home");
     } catch (error: any) {
       console.error("❌ Sign in error:", error);
-      Alert.alert("Sign In Error", error.message || "Failed to sign in");
+      Alert.alert("Sign In Error", error.message || "Failed to sign in. Please check your connection.");
     } finally {
       setLoading(false);
     }
@@ -432,99 +319,41 @@ const SignIn = () => {
     return "#d1d5db";
   };
 
-  const renderDistributedIcons = () => {
-    const selectedIcons: ImageSourcePropType[] = [
-      icons.Icon1,
-      icons.Icon2,
-      icons.Icon3,
-      icons.Icon4,
-      icons.Icon5,
-      icons.Icon6,
-      icons.Icon1,
-      icons.Icon3,
-      icons.Icon2,
-      icons.Icon4,
-      icons.Icon3,
-      icons.Icon5,
-      icons.Icon1,
-      icons.Icon6,
-      icons.Icon2,
-    ];
-
-    const predefinedPositions = [
-      { top: 25, left: 10 },
-      { top: 25, left: 50 },
-      { top: 25, left: 90 },
-      { top: 60, left: 20 },
-      { top: 60, left: 80 },
-      { top: 95, left: 5 },
-      { top: 95, left: 35 },
-      { top: 95, left: 65 },
-      { top: 95, left: 95 },
-      { top: 130, left: 15 },
-      { top: 130, left: 50 },
-      { top: 130, left: 85 },
-      { top: 165, left: 25 },
-      { top: 165, left: 75 },
-      { top: 200, left: 5 },
-      { top: 200, left: 40 },
-      { top: 200, left: 60 },
-      { top: 200, left: 95 },
-    ];
-
-    return selectedIcons.map((icon, index) => {
-      let position = index < predefinedPositions.length 
-        ? predefinedPositions[index]
-        : { top: 30 + Math.random() * 140, left: 15 + Math.random() * 70 };
-
-      const randomOpacity = 0.8 + Math.random() * 0.2;
-      const randomSize = 20 + Math.random() * 12;
-      const randomRotation = Math.random() * 20 - 10;
-
+  // Hospital-themed floating icons (matching onboarding screens)
+  const renderFloatingIcons = () =>
+    ICON_POSITIONS.map((item, index) => {
       const translateY = animatedValues[index].interpolate({
         inputRange: [0, 1],
         outputRange: [0, -15],
       });
-
       const scale = animatedValues[index].interpolate({
         inputRange: [0, 1],
         outputRange: [1, 1.1],
       });
-
       const rotate = animatedValues[index].interpolate({
         inputRange: [0, 1],
-        outputRange: [`${randomRotation}deg`, `${randomRotation + 8}deg`],
+        outputRange: [`${item.rotation}deg`, `${item.rotation + 8}deg`],
       });
-
       const opacity = animatedValues[index].interpolate({
         inputRange: [0, 0.5, 1],
-        outputRange: [randomOpacity, randomOpacity * 1.4, randomOpacity],
+        outputRange: [item.baseOpacity, Math.min(item.baseOpacity * 1.5, 1), item.baseOpacity],
       });
-
       return (
-        <Animated.Image
+        <Animated.View
           key={index}
-          source={icon}
           style={{
             position: "absolute",
-            top: position.top,
-            left: `${position.left}%`,
-            width: randomSize,
-            height: randomSize,
-            opacity: opacity,
-            tintColor: "#FFFFFF",
+            top: item.top,
+            left: `${item.leftPct}%` as any,
             zIndex: 2,
             transform: [{ translateY }, { scale }, { rotate }],
-            shadowColor: "#FFFFFF",
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.8,
-            shadowRadius: 4,
+            opacity,
           }}
-          resizeMode="contain"
-        />
+        >
+          <Ionicons name={item.name as any} size={item.size} color="rgba(255,255,255,0.88)" />
+        </Animated.View>
       );
     });
-  };
 
   return (
     <View style={styles.container}>
@@ -534,8 +363,9 @@ const SignIn = () => {
         end={{ x: 1, y: 1 }}
         style={styles.topSection}
       >
-        <View style={styles.iconsLayer}>{renderDistributedIcons()}</View>
+        <View style={styles.iconsLayer}>{renderFloatingIcons()}</View>
         <Text style={styles.header}>Armigo</Text>
+        <Text style={styles.tagline}>Parent Portal</Text>
 
         <View style={styles.lightBlueWaveContainer}>
           <Svg height="92" width="90%" viewBox="0 0 1440 320">
@@ -561,18 +391,8 @@ const SignIn = () => {
       >
         <View style={styles.headingContainer}>
           <Text style={styles.welcomeText}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to your account</Text>
+          <Text style={styles.subtitle}>Sign in with your admin-provided credentials</Text>
         </View>
-
-        {userRole && (
-          <View style={styles.roleIndicator}>
-            <Text style={styles.roleIndicatorText}>
-              {userRole === "Physiotherapist" || userRole === "PHYSIOTHERAPIST" 
-                ? "Signing in as Physiotherapist" 
-                : "Signing in as Parent"}
-            </Text>
-          </View>
-        )}
 
         <View style={styles.formContainer}>
           <Controller
@@ -676,9 +496,6 @@ const SignIn = () => {
               />
               <Text style={styles.rememberMeText}>Remember Me</Text>
             </View>
-            <TouchableOpacity onPress={handleForgotPassword}>
-              <Text style={styles.forgotPassword}>Forgot Password?</Text>
-            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
@@ -693,16 +510,9 @@ const SignIn = () => {
             )}
           </TouchableOpacity>
 
-          <Text style={styles.mockInfoText}>
-            For testing: Parent — parent@example.com / parent123  •  Physiotherapist — physio@example.com / physio123
+          <Text style={styles.adminNoteText}>
+            Your account credentials are provided by your hospital administrator.
           </Text>
-
-          <View style={styles.signUpContainer}>
-            <Text style={styles.signUpText}>Don't You Have An Account? </Text>
-            <TouchableOpacity onPress={handleSignUp}>
-              <Text style={styles.signUpLink}>Sign Up</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </ScrollView>
     </View>
@@ -717,7 +527,7 @@ const styles = StyleSheet.create({
   topSection: {
     position: "relative",
     width: "100%",
-    height: 230,
+    height: TOP_H,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
@@ -729,7 +539,7 @@ const styles = StyleSheet.create({
     zIndex: 7,
   },
   header: {
-    fontSize: 26,
+    fontSize: HEADER_FONT,
     fontWeight: "bold",
     color: "#fff",
     zIndex: 5,
@@ -737,6 +547,16 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 4,
     fontFamily: "Poppins-Bold",
+    marginBottom: 2,
+  },
+  tagline: {
+    fontSize: isSmallScreen ? 10 : 12,
+    color: "rgba(255,255,255,0.8)",
+    zIndex: 5,
+    fontFamily: "Poppins-Regular",
+    letterSpacing: 2,
+    marginBottom: TAGLINE_MB,
+    textTransform: "uppercase",
   },
   whiteWaveWrapper: {
     position: "absolute",
@@ -757,8 +577,8 @@ const styles = StyleSheet.create({
   },
   headingContainer: {
     alignItems: "center",
-    marginTop: 40,
-    marginBottom: 20,
+    marginTop: isSmallScreen ? 16 : 40,
+    marginBottom: isSmallScreen ? 12 : 20,
   },
   roleIndicator: {
     backgroundColor: "#f0f4ff",
@@ -776,22 +596,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   welcomeText: {
-    fontSize: 24,
+    fontSize: isSmallScreen ? 20 : 24,
     fontWeight: "bold",
     color: "#000",
     fontFamily: "Poppins-Bold",
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: isSmallScreen ? 13 : 16,
     color: "#666",
     marginTop: 4,
     fontFamily: "Poppins-Regular",
   },
   formContainer: {
-    paddingHorizontal: 32,
+    paddingHorizontal: Math.round(screenWidth * 0.08),
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: isSmallScreen ? 14 : 20,
   },
   label: {
     color: "#000",
@@ -836,7 +656,7 @@ const styles = StyleSheet.create({
   optionsContainer: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     marginBottom: 24,
     marginTop: 8,
   },
@@ -857,11 +677,11 @@ const styles = StyleSheet.create({
   },
   signInButton: {
     backgroundColor: "#3b82f6",
-    paddingVertical: 16,
+    paddingVertical: isSmallScreen ? 12 : 16,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: isSmallScreen ? 10 : 16,
   },
   disabledButton: {
     opacity: 0.6,
@@ -871,27 +691,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: "Poppins-SemiBold",
   },
-  mockInfoText: {
-    textAlign: 'center',
-    color: '#666',
+  adminNoteText: {
+    textAlign: "center",
+    color: "#9ca3af",
     fontSize: 12,
     marginBottom: 12,
     paddingHorizontal: 16,
-  },
-  signUpContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 8,
-  },
-  signUpText: {
-    color: "#666",
     fontFamily: "Poppins-Regular",
-    fontSize: 14,
-  },
-  signUpLink: {
-    color: "#3b82f6",
-    fontFamily: "Poppins-Medium",
-    fontSize: 14,
+    fontStyle: "italic",
   },
 });
 

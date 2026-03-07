@@ -53,12 +53,12 @@ export default function AdminSidebar({
     ],
     users: [
       {
-        href: "/admin/students",
+        href: "/admin/children",
         icon: Users,
         label: "Children Management",
       },
       {
-        href: "/admin/teachers",
+        href: "/admin/physiotherapists",
         icon: Users,
         label: "Physiotherapy Management",
       },
@@ -92,12 +92,12 @@ export default function AdminSidebar({
     classes: [
       { href: "/admin/timetable", icon: Clock, label: "Session Schedule" },
       {
-        href: "/admin/teacher-assignments",
+        href: "/admin/physio-assignments",
         icon: ClipboardList,
         label: "Physiotherapy Assignments",
       },
       {
-        href: "/admin/teachers/availability",
+        href: "/admin/physio/availability",
         icon: CalendarClock,
         label: "Physiotherapy Availability",
       },

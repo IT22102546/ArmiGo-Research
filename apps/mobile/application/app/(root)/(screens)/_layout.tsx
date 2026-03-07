@@ -80,7 +80,7 @@ const ScreenLayout = () => {
             headerStyle: { backgroundColor: "#fff" },
             headerTintColor: "black",
             headerTitleStyle: { fontWeight: "bold" },
-            title: "Teachers",
+            title: "Physiotherapists",
           }}
         />
 
@@ -92,6 +92,17 @@ const ScreenLayout = () => {
             headerTintColor: "black",
             headerTitleStyle: { fontWeight: "bold" },
             title: "Subjects",
+          }}
+        />
+
+        <Stack.Screen
+          name="online_sessions"
+          options={{
+            headerShown: true,
+            headerStyle: { backgroundColor: "#0057FF" },
+            headerTintColor: "#fff",
+            headerTitleStyle: { fontWeight: "bold" },
+            title: "Online Sessions",
           }}
         />
 
@@ -201,6 +212,13 @@ const ScreenLayout = () => {
             headerTintColor: "#623B1C",
             headerTitleStyle: { fontWeight: "bold" },
             title: "Payment",
+          }}
+        />
+
+        <Stack.Screen
+          name="exercise_progress"
+          options={{
+            headerShown: false,
           }}
         />
       </Stack>

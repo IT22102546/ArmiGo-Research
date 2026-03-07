@@ -9,7 +9,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
+    <ProtectedRoute allowedRoles={["SUPER_ADMIN", "HOSPITAL_ADMIN"]}>
       {children}
     </ProtectedRoute>
   );

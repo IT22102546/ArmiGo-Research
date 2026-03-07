@@ -39,7 +39,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power, Users, Activity } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power, Users, Activity, Hand, CircleDot } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
@@ -112,11 +113,19 @@ type Patient = {
     phone: string;
     password: string;
   };
+  exerciseFingers?: boolean;
+  exerciseWrist?: boolean;
+  exerciseElbow?: boolean;
+  exerciseShoulder?: boolean;
   progressTracker?: {
     startProgress: number;
     currentProgress: number;
     playTimeMinutes: number;
     playedDays: number;
+    fingerProgress?: number;
+    wristProgress?: number;
+    elbowProgress?: number;
+    shoulderProgress?: number;
   };
   isActive: boolean;
 };
@@ -136,6 +145,10 @@ type PatientForm = {
   parentPassword: string;
   hospitalId: string;
   physiotherapistId: string;
+  exerciseFingers: boolean;
+  exerciseWrist: boolean;
+  exerciseElbow: boolean;
+  exerciseShoulder: boolean;
 };
 
 const initialForm: PatientForm = {
@@ -153,6 +166,10 @@ const initialForm: PatientForm = {
   parentPassword: "",
   hospitalId: "",
   physiotherapistId: "",
+  exerciseFingers: false,
+  exerciseWrist: false,
+  exerciseElbow: false,
+  exerciseShoulder: false,
 };
 
 export default function StudentManagement() {
@@ -513,6 +530,10 @@ export default function StudentManagement() {
       parentPassword: "",
       hospitalId: patient.hospitalId || "",
       physiotherapistId: matchedPhysio?.id || "",
+      exerciseFingers: patient.exerciseFingers ?? false,
+      exerciseWrist: patient.exerciseWrist ?? false,
+      exerciseElbow: patient.exerciseElbow ?? false,
+      exerciseShoulder: patient.exerciseShoulder ?? false,
     });
     setShowParentPassword(false);
     setDialogOpen(true);
@@ -585,6 +606,10 @@ export default function StudentManagement() {
         : {}),
       hospitalId: resolvedHospitalId,
       assignedDoctor: selectedPhysio.name,
+      exerciseFingers: formData.exerciseFingers,
+      exerciseWrist: formData.exerciseWrist,
+      exerciseElbow: formData.exerciseElbow,
+      exerciseShoulder: formData.exerciseShoulder,
     };
 
     if (editingPatient) {
@@ -751,6 +776,7 @@ export default function StudentManagement() {
                   {!isHospitalScopedUser ? <TableHead>District</TableHead> : null}
                   {!isHospitalScopedUser ? <TableHead>Zone</TableHead> : null}
                   <TableHead>Physiotherapist</TableHead>
+                  <TableHead>Exercises</TableHead>
                   <TableHead>Start Progress</TableHead>
                   <TableHead>Current Progress</TableHead>
                   <TableHead>Play Time</TableHead>
@@ -795,6 +821,33 @@ export default function StudentManagement() {
                       {!isHospitalScopedUser ? <TableCell>{patient.district?.name || "-"}</TableCell> : null}
                       {!isHospitalScopedUser ? <TableCell>{patient.zone?.name || "-"}</TableCell> : null}
                       <TableCell>{patient.assignedDoctor || "-"}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {patient.exerciseFingers && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-300 text-blue-600">
+                              Fingers
+                            </Badge>
+                          )}
+                          {patient.exerciseWrist && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-300 text-emerald-600">
+                              Wrist
+                            </Badge>
+                          )}
+                          {patient.exerciseElbow && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 text-amber-600">
+                              Elbow
+                            </Badge>
+                          )}
+                          {patient.exerciseShoulder && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-300 text-purple-600">
+                              Shoulder
+                            </Badge>
+                          )}
+                          {!patient.exerciseFingers && !patient.exerciseWrist && !patient.exerciseElbow && !patient.exerciseShoulder && (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="min-w-[140px]">
                         <div className="space-y-1">
                           <Progress
@@ -1060,6 +1113,61 @@ export default function StudentManagement() {
             </div>
 
             <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-medium">Exercise Types</p>
+              <p className="text-xs text-muted-foreground">Select the exercises this child will perform</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                  <Checkbox
+                    checked={formData.exerciseFingers}
+                    onCheckedChange={(checked: boolean) =>
+                      setFormData((prev) => ({ ...prev, exerciseFingers: !!checked }))
+                    }
+                  />
+                  <div className="flex items-center gap-2">
+                    <Hand className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-medium">Fingers</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                  <Checkbox
+                    checked={formData.exerciseWrist}
+                    onCheckedChange={(checked: boolean) =>
+                      setFormData((prev) => ({ ...prev, exerciseWrist: !!checked }))
+                    }
+                  />
+                  <div className="flex items-center gap-2">
+                    <CircleDot className="h-4 w-4 text-emerald-500" />
+                    <span className="text-sm font-medium">Wrist</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                  <Checkbox
+                    checked={formData.exerciseElbow}
+                    onCheckedChange={(checked: boolean) =>
+                      setFormData((prev) => ({ ...prev, exerciseElbow: !!checked }))
+                    }
+                  />
+                  <div className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-amber-500" />
+                    <span className="text-sm font-medium">Elbow</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                  <Checkbox
+                    checked={formData.exerciseShoulder}
+                    onCheckedChange={(checked: boolean) =>
+                      setFormData((prev) => ({ ...prev, exerciseShoulder: !!checked }))
+                    }
+                  />
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-purple-500" />
+                    <span className="text-sm font-medium">Shoulder</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
               <p className="text-sm font-medium">Parent Details</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1293,7 +1401,36 @@ export default function StudentManagement() {
               </div>
 
               <div className="rounded-lg border p-4 space-y-4">
-                <h4 className="text-sm font-medium">Progress Tracker</h4>
+                <h4 className="text-sm font-medium">Exercise Types</h4>
+                <div className="flex flex-wrap gap-2">
+                  {viewingPatient.exerciseFingers && (
+                    <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                      <Hand className="h-3 w-3 mr-1" /> Fingers
+                    </Badge>
+                  )}
+                  {viewingPatient.exerciseWrist && (
+                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                      <CircleDot className="h-3 w-3 mr-1" /> Wrist
+                    </Badge>
+                  )}
+                  {viewingPatient.exerciseElbow && (
+                    <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                      <Activity className="h-3 w-3 mr-1" /> Elbow
+                    </Badge>
+                  )}
+                  {viewingPatient.exerciseShoulder && (
+                    <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                      <Users className="h-3 w-3 mr-1" /> Shoulder
+                    </Badge>
+                  )}
+                  {!viewingPatient.exerciseFingers && !viewingPatient.exerciseWrist && !viewingPatient.exerciseElbow && !viewingPatient.exerciseShoulder && (
+                    <span className="text-xs text-muted-foreground">No exercise types selected</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4 space-y-4">
+                <h4 className="text-sm font-medium">Overall Progress</h4>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
@@ -1336,6 +1473,74 @@ export default function StudentManagement() {
                   </div>
                 </div>
               </div>
+
+              {(viewingPatient.exerciseFingers || viewingPatient.exerciseWrist || viewingPatient.exerciseElbow || viewingPatient.exerciseShoulder) && (
+                <div className="rounded-lg border p-4 space-y-4">
+                  <h4 className="text-sm font-medium">Per-Exercise Progress</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {viewingPatient.exerciseFingers && (
+                      <div className="rounded-lg border border-blue-200 dark:border-blue-800 p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Hand className="h-4 w-4 text-blue-500" />
+                          <span>Fingers</span>
+                          <span className="ml-auto text-blue-600 dark:text-blue-400">
+                            {viewingPatient.progressTracker?.fingerProgress ?? 0}%
+                          </span>
+                        </div>
+                        <Progress
+                          value={toProgressValue(viewingPatient.progressTracker?.fingerProgress)}
+                          className="h-2 [&>div]:bg-blue-500"
+                        />
+                      </div>
+                    )}
+                    {viewingPatient.exerciseWrist && (
+                      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <CircleDot className="h-4 w-4 text-emerald-500" />
+                          <span>Wrist</span>
+                          <span className="ml-auto text-emerald-600 dark:text-emerald-400">
+                            {viewingPatient.progressTracker?.wristProgress ?? 0}%
+                          </span>
+                        </div>
+                        <Progress
+                          value={toProgressValue(viewingPatient.progressTracker?.wristProgress)}
+                          className="h-2 [&>div]:bg-emerald-500"
+                        />
+                      </div>
+                    )}
+                    {viewingPatient.exerciseElbow && (
+                      <div className="rounded-lg border border-amber-200 dark:border-amber-800 p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Activity className="h-4 w-4 text-amber-500" />
+                          <span>Elbow</span>
+                          <span className="ml-auto text-amber-600 dark:text-amber-400">
+                            {viewingPatient.progressTracker?.elbowProgress ?? 0}%
+                          </span>
+                        </div>
+                        <Progress
+                          value={toProgressValue(viewingPatient.progressTracker?.elbowProgress)}
+                          className="h-2 [&>div]:bg-amber-500"
+                        />
+                      </div>
+                    )}
+                    {viewingPatient.exerciseShoulder && (
+                      <div className="rounded-lg border border-purple-200 dark:border-purple-800 p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Users className="h-4 w-4 text-purple-500" />
+                          <span>Shoulder</span>
+                          <span className="ml-auto text-purple-600 dark:text-purple-400">
+                            {viewingPatient.progressTracker?.shoulderProgress ?? 0}%
+                          </span>
+                        </div>
+                        <Progress
+                          value={toProgressValue(viewingPatient.progressTracker?.shoulderProgress)}
+                          className="h-2 [&>div]:bg-purple-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
 
