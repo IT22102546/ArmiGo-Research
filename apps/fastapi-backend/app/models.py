@@ -87,6 +87,12 @@ class ComponentModelManager:
                                         # Plain format - use the line as is
                                         feature_names.append(line)
                             self.feature_names[component] = feature_names
+                
+                # Special handling for shoulder model - if only one class, provide fallback
+                if component == "shoulder" and label_encoder is not None:
+                    if len(label_encoder.classes_) == 1 and label_encoder.classes_[0] == "UNKNOWN":
+                        logger.warning(f"Shoulder model only has 'UNKNOWN' class. Using fallback prediction logic.")
+                        # We'll handle this in the prediction method
                 else:
                     logger.warning(f"Feature names file not found: {config['features_path']}")
                     self.feature_names[component] = []
@@ -241,6 +247,31 @@ class ComponentModelManager:
                 prediction_idx = np.argmax(prediction_proba)
                 predicted_label = label_encoder.inverse_transform([prediction_idx])[0]
                 confidence = np.max(prediction_proba)
+                
+                # Special handling for shoulder model with only "UNKNOWN" class
+                if component == "shoulder" and predicted_label == "UNKNOWN" and len(label_encoder.classes_) == 1:
+                    # Use simple rule-based prediction based on input data patterns
+                    # This is a fallback since the model was only trained with "UNKNOWN" labels
+                    logger.info("Using fallback prediction for shoulder model")
+                    
+                    # Simple rule-based prediction based on angle patterns
+                    if len(input_data) > 0:
+                        # Calculate average angles from the input data
+                        avg_flexion = np.mean([row[9] if len(row) > 9 else 0 for row in input_data])  # FlexionAngle
+                        avg_abduction = np.mean([row[10] if len(row) > 10 else 0 for row in input_data])  # AbductionAngle
+                        avg_rotation = np.mean([row[11] if len(row) > 11 else 0 for row in input_data])  # RotationAngle
+                        
+                        # Determine movement based on dominant angle
+                        if avg_flexion > avg_abduction and avg_flexion > avg_rotation:
+                            predicted_label = "FLEXION"
+                        elif avg_abduction > avg_flexion and avg_abduction > avg_rotation:
+                            predicted_label = "ABDUCTION"
+                        elif avg_rotation > avg_flexion and avg_rotation > avg_abduction:
+                            predicted_label = "ROTATION"
+                        else:
+                            predicted_label = "STEADY"
+                        
+                        confidence = 0.7  # Moderate confidence for rule-based prediction
                 
                 # Get all probabilities
                 class_probabilities = {
