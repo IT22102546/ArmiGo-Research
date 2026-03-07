@@ -97,16 +97,9 @@ export default function App() {
     };
   }, [isSignedIn, currentUser?.id, accessToken]);
 
-  // Prevent blank screen: show loading shimmer until authChecked
+  // Prevent blank screen: show nothing until authChecked
   if (!authChecked) {
-    return (
-      <div className="h-screen flex flex-col bg-slate-50">
-        <TitleBar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-32 h-32 shimmer rounded-2xl" />
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (

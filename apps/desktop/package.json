@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "vite build && electron-builder --win",
-    "electron:build:all": "vite build && electron-builder --win --mac --linux"
+    "electron:build:all": "vite build && electron-builder --win --mac --linux",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "lucide-react": "^0.460.0",
@@ -38,31 +39,19 @@
   },
   "build": {
     "appId": "com.armigo.desktop",
-    "productName": "ArmiGo",
-    "directories": {
-      "output": "release"
-    },
+    "productName": "ArmiGo Desktop",
     "files": [
-      "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "node_modules/**/*",
+      "public/**/*",
+      "src/**/*",
+      "package.json"
     ],
+    "directories": {
+      "buildResources": "build"
+    },
     "win": {
-      "target": ["nsis"],
-      "icon": "public/icon.png"
-    },
-    "mac": {
-      "target": ["dmg"],
-      "icon": "public/icon.png"
-    },
-    "linux": {
-      "target": ["AppImage"],
-      "icon": "public/icon.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "target": "nsis"
     }
   }
 }
