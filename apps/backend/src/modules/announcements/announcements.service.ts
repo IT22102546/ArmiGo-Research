@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import {
   AnnouncementListQueryDto,
   CreateAnnouncementDto,
@@ -8,7 +9,12 @@ import {
 
 @Injectable()
 export class AnnouncementsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AnnouncementsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async getAnnouncements(query: AnnouncementListQueryDto) {
     const page = Number(query?.page || 1);
@@ -16,6 +22,7 @@ export class AnnouncementsService {
     const skip = (page - 1) * limit;
 
     const where: any = {};
+    const andConditions: any[] = [];
 
     if (query?.type && query.type !== 'ALL') {
       where.type = query.type;
@@ -29,10 +36,32 @@ export class AnnouncementsService {
 
     if (query?.search?.trim()) {
       const search = query.search.trim();
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { content: { contains: search, mode: 'insensitive' } },
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { content: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // Filter by targetRoles if role is specified (e.g. CUSTOMER from mobile app)
+    if (query?.role?.trim()) {
+      const role = query.role.trim().toUpperCase();
+      andConditions.push({
+        OR: [
+          { targetRoles: { has: role } },
+          { targetRoles: { has: 'ALL' } },
+          { targetRoles: { isEmpty: true } },
+        ],
+      });
+      // Exclude expired announcements for role-based queries
+      andConditions.push({
+        OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     const [rows, total] = await Promise.all([
@@ -79,7 +108,54 @@ export class AnnouncementsService {
       },
     });
 
+    // Send push notifications for customer-targeted announcements
+    this.notifyAnnouncementRecipients(row).catch((err) => {
+      this.logger.warn(`Failed to send announcement push notifications: ${err?.message}`);
+    });
+
     return this.toAnnouncementResponse(row);
+  }
+
+  /**
+   * Send push notifications to users whose roles match the announcement's targetRoles.
+   * If targetRoles is empty, sends to PARENT users (mobile app customers).
+   */
+  private async notifyAnnouncementRecipients(announcement: any) {
+    const roles = (announcement.targetRoles || []).map((r: string) =>
+      r.toUpperCase(),
+    );
+    const targetCustomer =
+      roles.length === 0 ||
+      roles.some((r: string) => ['CUSTOMER', 'PARENT', 'ALL'].includes(r));
+
+    if (!targetCustomer) return;
+
+    // Find all active parent users
+    const parents = await this.prisma.user.findMany({
+      where: {
+        role: 'PARENT',
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+
+    if (!parents.length) return;
+
+    // Create a notification record for each parent and send push
+    await Promise.allSettled(
+      parents.map((parent) =>
+        this.notificationsService.createNotification({
+          userId: parent.id,
+          title: `📢 ${announcement.title}`,
+          message: announcement.content,
+          type: 'ANNOUNCEMENT',
+          metadata: {
+            announcementId: announcement.id,
+            priority: announcement.priority,
+          },
+        }),
+      ),
+    );
   }
 
   async updateAnnouncement(id: string, body: UpdateAnnouncementDto) {

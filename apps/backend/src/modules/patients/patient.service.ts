@@ -1759,6 +1759,20 @@ export class PatientService {
           metadata: { admissionTrackingId: record.id, admissionType: data.admissionType, childId: data.childId },
         });
       }
+
+      // Also notify hospital admin
+      const hospitalId = (record.hospital as any)?.id;
+      if (hospitalId) {
+        const childName = `${record.child?.firstName || ''} ${record.child?.lastName || ''}`.trim();
+        const isOnline = String(data.admissionType || '').toUpperCase() === 'ONLINE';
+        const sessionType = isOnline ? 'Online' : 'Physical';
+        await this.notificationsService.notifyHospitalAdmin(hospitalId, {
+          title: `New ${sessionType} Session Scheduled`,
+          message: `A ${sessionType.toLowerCase()} session has been scheduled for ${childName}.`,
+          type: isOnline ? 'SESSION_ONLINE' : 'SESSION_PHYSICAL',
+          metadata: { admissionTrackingId: record.id, admissionType: data.admissionType, childId: data.childId },
+        });
+      }
     } catch (err: any) {
       this.logger.warn(`Failed to send session notification: ${err?.message}`);
     }
@@ -2622,6 +2636,18 @@ export class PatientService {
           userId: parentUserId,
           title: 'New Assignment Added',
           message: `A new assignment "${data.title}" has been added for ${childName}. Due: ${dueDateStr}.`,
+          type: 'ASSIGNMENT_NEW',
+          metadata: { assignmentId: assignment.id, childId: data.childId },
+        });
+      }
+
+      // Also notify hospital admin
+      const hospitalId = (assignment.hospital as any)?.id;
+      if (hospitalId) {
+        const childName = `${assignment.child?.firstName || ''} ${assignment.child?.lastName || ''}`.trim();
+        await this.notificationsService.notifyHospitalAdmin(hospitalId, {
+          title: 'New Assignment Added',
+          message: `A new assignment "${data.title}" has been added for ${childName}.`,
           type: 'ASSIGNMENT_NEW',
           metadata: { assignmentId: assignment.id, childId: data.childId },
         });

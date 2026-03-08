@@ -72,22 +72,45 @@ export function NotificationsProvider({
   const socketRef = useRef<Socket | null>(null);
   const isConnectingRef = useRef(false);
   const connectionAttemptRef = useRef(0);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Only subscribe to user ID to prevent re-renders when other user fields change
   const userId = useAuthStore((state) => state.user?.id);
 
-  // Connect to notifications WebSocket - SINGLETON pattern
-  useEffect(() => {
-    // Prevent multiple connections
-    if (isConnectingRef.current) {
-      return;
+  // ── REST API fetch helpers ──────────────────────────────────────────
+  const fetchViaApi = useCallback(async () => {
+    if (!userId) return;
+    try {
+      setIsLoading(true);
+      const [notifRes, countRes] = await Promise.all([
+        ApiClient.get<{ notifications: Notification[] }>("/notifications"),
+        ApiClient.get<{ count: number }>("/notifications/unread-count"),
+      ]);
+      setNotifications(
+        Array.isArray(notifRes?.notifications) ? notifRes.notifications : []
+      );
+      setUnreadCount(
+        typeof countRes?.count === "number" ? countRes.count : 0
+      );
+    } catch {
+      // Silently fail – will retry on next poll
+    } finally {
+      setIsLoading(false);
     }
+  }, [userId]);
+
+  // ── WebSocket + REST polling setup ──────────────────────────────────
+  useEffect(() => {
+    if (isConnectingRef.current) return;
 
     if (!userId) {
-      // Disconnect if not authenticated
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
+      }
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
       setIsConnected(false);
       setNotifications([]);
@@ -97,84 +120,82 @@ export function NotificationsProvider({
       return;
     }
 
-    // Already connected with a valid socket for this user
-    if (socketRef.current?.connected) {
-      return;
-    }
+    if (socketRef.current?.connected) return;
 
-    // Skip WebSocket connection for now (not configured on backend)
-    // TODO: Enable when Socket.io is configured on backend
+    // WebSocket not configured – fall back to REST polling
     setIsConnected(false);
     isConnectingRef.current = false;
 
-    // Cleanup on unmount
+    // Initial fetch
+    fetchViaApi();
+
+    // Poll every 60 seconds
+    pollingRef.current = setInterval(fetchViaApi, 60_000);
+
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
       isConnectingRef.current = false;
     };
-  }, [userId]); // Only depend on userId to prevent unnecessary reconnections
+  }, [userId, fetchViaApi]);
 
   // Mark notification as read
-  const markAsRead = useCallback((notificationId: string) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit("markAsRead", notificationId);
-
+  const markAsRead = useCallback(
+    async (notificationId: string) => {
+      // Optimistic update
       setNotifications((prev) =>
-        prev.map((notif) =>
-          notif.id === notificationId
-            ? {
-                ...notif,
-                status: "READ" as const,
-                readAt: new Date().toISOString(),
-                deliveredAt: notif.deliveredAt || new Date().toISOString(),
-              }
-            : notif
+        prev.map((n) =>
+          n.id === notificationId
+            ? { ...n, status: "READ" as const, readAt: new Date().toISOString() }
+            : n
         )
       );
-    }
-  }, []);
+      setUnreadCount((c) => Math.max(0, c - 1));
 
-  // Mark notification as delivered
-  const markAsDelivered = useCallback((notificationId: string) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit("notification:delivered", { notificationId });
+      try {
+        await ApiClient.patch(`/notifications/${notificationId}/read`);
+      } catch {
+        // Revert on failure – refetch
+        fetchViaApi();
+      }
+    },
+    [fetchViaApi]
+  );
 
-      setNotifications((prev) =>
-        prev.map((notif) =>
-          notif.id === notificationId
-            ? { ...notif, deliveredAt: new Date().toISOString() }
-            : notif
-        )
-      );
-    }
-  }, []);
+  // Mark notification as delivered (no-op for REST, kept for interface compat)
+  const markAsDelivered = useCallback((_notificationId: string) => {}, []);
 
   // Mark all notifications as read
-  const markAllAsRead = useCallback(() => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit("markAllAsRead");
+  const markAllAsRead = useCallback(async () => {
+    setNotifications((prev) =>
+      prev.map((n) => ({
+        ...n,
+        status: "READ" as const,
+        readAt: n.readAt || new Date().toISOString(),
+      }))
+    );
+    setUnreadCount(0);
 
-      setNotifications((prev) =>
-        prev.map((notif) => ({
-          ...notif,
-          status: "READ" as const,
-          readAt: notif.readAt || new Date().toISOString(),
-        }))
-      );
-      setUnreadCount(0);
+    try {
+      await ApiClient.patch("/notifications/mark-all-read");
+    } catch {
+      fetchViaApi();
     }
-  }, []);
+  }, [fetchViaApi]);
 
-  // Fetch notifications
-  const fetchNotifications = useCallback((limit = 50, offset = 0) => {
-    if (socketRef.current?.connected) {
-      setIsLoading(true);
-      socketRef.current.emit("fetchNotifications", { limit, offset });
-    }
-  }, []);
+  // Fetch notifications (trigger a manual refresh)
+  const fetchNotifications = useCallback(
+    (_limit = 50, _offset = 0) => {
+      fetchViaApi();
+    },
+    [fetchViaApi]
+  );
 
   const value: NotificationsContextValue = {
     notifications,

@@ -16,6 +16,91 @@ export class NotificationsService {
     return (this.prisma as any).notification;
   }
 
+  private get pushTokenModel() {
+    return (this.prisma as any).pushToken;
+  }
+
+  /**
+   * Register or update a push notification token for a user.
+   */
+  async registerPushToken(userId: string, token: string, platform = "expo") {
+    this.logger.log(`Registering push token for user ${userId}`);
+
+    // Deactivate other tokens for this user (one active token per user)
+    await this.pushTokenModel.updateMany({
+      where: { userId, isActive: true },
+      data: { isActive: false },
+    });
+
+    // Upsert the token
+    await this.pushTokenModel.upsert({
+      where: {
+        userId_token: { userId, token },
+      },
+      create: {
+        userId,
+        token,
+        platform,
+        isActive: true,
+      },
+      update: {
+        isActive: true,
+        platform,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Send push notification to a user via Expo Push Notification service.
+   */
+  async sendPushNotification(
+    userId: string,
+    title: string,
+    body: string,
+    data?: Record<string, any>
+  ) {
+    try {
+      const tokens = await this.pushTokenModel.findMany({
+        where: { userId, isActive: true },
+        select: { token: true },
+      });
+
+      if (!tokens.length) {
+        this.logger.debug(`No push tokens found for user ${userId}`);
+        return;
+      }
+
+      const messages = tokens.map((t: { token: string }) => ({
+        to: t.token,
+        sound: "default",
+        title,
+        body,
+        data: data || {},
+      }));
+
+      // Send via Expo Push Notification API
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Accept-Encoding": "gzip, deflate",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(messages),
+      });
+
+      const result = await response.json();
+      this.logger.log(
+        `Push notification sent to user ${userId}: ${JSON.stringify(result?.data?.[0]?.status || "sent")}`
+      );
+    } catch (err: any) {
+      this.logger.warn(
+        `Failed to send push notification to user ${userId}: ${err?.message}`
+      );
+    }
+  }
+
   async createNotification(data: {
     userId: string;
     title: string;
@@ -26,7 +111,7 @@ export class NotificationsService {
   }) {
     this.logger.log(`Creating notification for user ${data.userId}: ${data.title}`);
 
-    return this.notificationModel.create({
+    const notification = await this.notificationModel.create({
       data: {
         userId: data.userId,
         title: data.title,
@@ -39,6 +124,45 @@ export class NotificationsService {
         sentAt: new Date(),
       },
     });
+
+    // Send push notification (non-blocking)
+    this.sendPushNotification(data.userId, data.title, data.message, {
+      notificationId: notification.id,
+      type: data.type,
+      ...data.metadata,
+    }).catch(() => {});
+
+    return notification;
+  }
+
+  /**
+   * Send a notification to the hospital admin linked to a given hospital.
+   * Silently skips if there is no admin profile for the hospital.
+   */
+  async notifyHospitalAdmin(
+    hospitalId: string | null | undefined,
+    data: { title: string; message: string; type: string; metadata?: Record<string, any> },
+  ) {
+    if (!hospitalId) return;
+
+    try {
+      const profile = await this.prisma.hospitalProfile.findFirst({
+        where: { hospitalId },
+        select: { userId: true },
+      });
+
+      if (!profile?.userId) return;
+
+      await this.createNotification({
+        userId: profile.userId,
+        title: data.title,
+        message: data.message,
+        type: data.type,
+        metadata: data.metadata,
+      });
+    } catch (err: any) {
+      this.logger.warn(`Failed to notify hospital admin for hospital ${hospitalId}: ${err?.message}`);
+    }
   }
 
   async getMyNotifications(userId: string, params?: { isRead?: boolean; type?: string }) {
@@ -588,6 +712,15 @@ export class NotificationsService {
         sentAt: now,
       })),
     });
+
+    // Send push notifications to all recipients (non-blocking)
+    Promise.allSettled(
+      recipientUserIds.map((userId) =>
+        this.sendPushNotification(userId, payload.title, payload.message, {
+          type: payload.type || "GENERAL",
+        })
+      )
+    ).catch(() => {});
 
     return {
       sent: recipientUserIds.length,

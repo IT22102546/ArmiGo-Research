@@ -14,21 +14,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { apiFetch } from "@/utils/api";
+import { BlurView } from "expo-blur";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ─── Premium Color Palette ───────────────────────────────────────
 const COLORS = {
-  primary: "#6366F1", // Indigo
+  primary: "#4F46E5", // Rich Indigo
   primaryLight: "#818CF8",
   primarySoft: "#EEF2FF",
-  secondary: "#8B5CF6", // Purple
-  success: "#10B981", // Emerald
-  warning: "#F59E0B", // Amber
-  danger: "#EF4444", // Red
-  info: "#3B82F6", // Blue
-  purple: "#8B5CF6",
-  pink: "#EC4899",
+  secondary: "#7C3AED", // Vibrant Purple
+  success: "#059669", // Deep Emerald
+  warning: "#D97706", // Rich Amber
+  danger: "#DC2626", // Deep Red
+  info: "#2563EB", // Royal Blue
+  purple: "#7C3AED",
+  pink: "#DB2777",
   
   slate: {
     50: "#F8FAFC",
@@ -207,14 +208,14 @@ export default function PhysiotherapistsTab() {
 
   const renderHeader = () => (
     <LinearGradient
-      colors={["#eff6ff", "#eef2ff"]}
+      colors={["#ffffff", "#f5f3ff"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.headerCard}
     >
       <View style={styles.headerTopRow}>
         <View style={styles.headerIconWrap}>
-          <Ionicons name="medkit-outline" size={18} color={COLORS.primary} />
+          <Ionicons name="fitness-outline" size={20} color={COLORS.primary} />
         </View>
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>Physiotherapists</Text>
@@ -253,7 +254,9 @@ export default function PhysiotherapistsTab() {
         {renderHeader()}
         <View style={styles.centerContainer}>
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <View style={styles.loadingIconContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
             <Text style={styles.loadingText}>Loading therapist details...</Text>
             <Text style={styles.loadingSubtext}>Please wait</Text>
           </View>
@@ -282,7 +285,12 @@ export default function PhysiotherapistsTab() {
         ListEmptyComponent={
           <Animated.View entering={FadeInUp.springify()} style={styles.emptyContainer}>
             <View style={styles.emptyIconContainer}>
-              <Ionicons name="medical-outline" size={48} color={COLORS.slate[300]} />
+              <LinearGradient
+                colors={[COLORS.primarySoft, COLORS.slate[100]]}
+                style={StyleSheet.absoluteFill}
+                borderRadius={56}
+              />
+              <Ionicons name="people-outline" size={48} color={COLORS.primary} />
             </View>
             <Text style={styles.emptyTitle}>No Therapists Assigned</Text>
             <Text style={styles.emptyMessage}>
@@ -306,24 +314,30 @@ export default function PhysiotherapistsTab() {
               style={styles.cardContainer}
             >
               <LinearGradient
-                colors={[COLORS.white, "#f8faff"]}
+                colors={[COLORS.white, COLORS.slate[50]]}
                 style={styles.card}
               >
                 {/* Card Header */}
                 <View style={styles.cardHeader}>
                   <View style={styles.childInfo}>
-                    <View style={styles.childAvatar}>
+                    <LinearGradient
+                      colors={[COLORS.primarySoft, COLORS.primary + "10"]}
+                      style={styles.childAvatar}
+                    >
                       <Text style={styles.childAvatarText}>
                         {getInitials(item.child.firstName + " " + item.child.lastName)}
                       </Text>
-                    </View>
+                    </LinearGradient>
                     <View>
                       <Text style={styles.childName}>
                         {item.child.firstName} {item.child.lastName}
                       </Text>
-                      <Text style={styles.childMeta}>
-                        Child • ID: {item.child.id.substring(0, 8)}
-                      </Text>
+                      <View style={styles.childMetaContainer}>
+                        <Ionicons name="person-outline" size={12} color={COLORS.slate[400]} />
+                        <Text style={styles.childMeta}>
+                          Child • {item.child.id.substring(0, 8)}
+                        </Text>
+                      </View>
                     </View>
                   </View>
 
@@ -334,7 +348,7 @@ export default function PhysiotherapistsTab() {
                     >
                       <Ionicons name={status.icon as any} size={14} color={status.color} />
                       <Text style={[styles.statusText, { color: status.color }]}>
-                        Physio: {status.label}
+                        {status.label}
                       </Text>
                     </LinearGradient>
                   ) : (
@@ -347,32 +361,45 @@ export default function PhysiotherapistsTab() {
 
                 {!hasPhysio ? (
                   <View style={styles.noPhysioContainer}>
-                    <Ionicons name="person-outline" size={24} color={COLORS.slate[400]} />
+                    <LinearGradient
+                      colors={[COLORS.slate[100], COLORS.slate[50]]}
+                      style={styles.noPhysioIconContainer}
+                    >
+                      <Ionicons name="person-add-outline" size={32} color={COLORS.slate[400]} />
+                    </LinearGradient>
                     <Text style={styles.noPhysioText}>No physiotherapist assigned</Text>
                   </View>
                 ) : (
                   <>
                     {/* Therapist Info */}
                     <View style={styles.therapistSection}>
-                      <View style={styles.therapistHeader}>
-                        <View style={styles.therapistAvatar}>
+                      <LinearGradient
+                        colors={[COLORS.secondary + "08", COLORS.transparent]}
+                        style={styles.therapistHeader}
+                      >
+                        <LinearGradient
+                          colors={[COLORS.secondary + "15", COLORS.secondary + "05"]}
+                          style={styles.therapistAvatar}
+                        >
                           <Text style={styles.therapistAvatarText}>
                             {getInitials(item.physio?.name)}
                           </Text>
-                        </View>
+                        </LinearGradient>
                         <View style={styles.therapistInfo}>
                           <Text style={styles.therapistName}>{item.physio?.name || "Physiotherapist"}</Text>
                           <Text style={styles.therapistSpecialization}>
                             {item.physio?.specialization || item.physio?.role || "Physiotherapist"}
                           </Text>
                         </View>
-                      </View>
+                      </LinearGradient>
 
                       {/* Availability Info */}
                       <View style={styles.infoGrid}>
                         {item.physio?.availabilityUpdatedAt && (
                           <View style={styles.infoRow}>
-                            <Ionicons name="time-outline" size={16} color={COLORS.slate[500]} />
+                            <View style={[styles.infoIconContainer, { backgroundColor: COLORS.info + "12" }]}>
+                              <Ionicons name="time-outline" size={14} color={COLORS.info} />
+                            </View>
                             <Text style={styles.infoLabel}>Last Updated:</Text>
                             <Text style={styles.infoValue}>
                               {formatRelativeTime(item.physio?.availabilityUpdatedAt)}
@@ -382,7 +409,9 @@ export default function PhysiotherapistsTab() {
 
                         {item.physio?.availabilityNote && (
                           <View style={styles.infoRow}>
-                            <Ionicons name="information-circle-outline" size={16} color={COLORS.slate[500]} />
+                            <View style={[styles.infoIconContainer, { backgroundColor: COLORS.warning + "12" }]}>
+                              <Ionicons name="information-circle-outline" size={14} color={COLORS.warning} />
+                            </View>
                             <Text style={styles.infoLabel}>Note:</Text>
                             <Text style={styles.infoValue} numberOfLines={2}>
                               {item.physio?.availabilityNote}
@@ -392,7 +421,9 @@ export default function PhysiotherapistsTab() {
 
                         {item.nextUnavailable?.date && (
                           <View style={styles.infoRow}>
-                            <Ionicons name="calendar-outline" size={16} color={COLORS.slate[500]} />
+                            <View style={[styles.infoIconContainer, { backgroundColor: COLORS.purple + "12" }]}>
+                              <Ionicons name="calendar-outline" size={14} color={COLORS.purple} />
+                            </View>
                             <Text style={styles.infoLabel}>Next Off:</Text>
                             <Text style={styles.infoValue}>
                               {formatDate(item.nextUnavailable.date)}
@@ -408,8 +439,8 @@ export default function PhysiotherapistsTab() {
                         
                         {item.physio?.phone && (
                           <View style={styles.contactRow}>
-                            <View style={[styles.contactIcon, { backgroundColor: COLORS.info + "12" }]}>
-                              <Ionicons name="call-outline" size={16} color={COLORS.info} />
+                            <View style={[styles.contactIcon, { backgroundColor: COLORS.success + "12" }]}>
+                              <Ionicons name="call-outline" size={16} color={COLORS.success} />
                             </View>
                             <Text style={styles.contactValue}>{item.physio?.phone}</Text>
                           </View>
@@ -417,8 +448,8 @@ export default function PhysiotherapistsTab() {
                         
                         {item.physio?.email && (
                           <View style={styles.contactRow}>
-                            <View style={[styles.contactIcon, { backgroundColor: COLORS.purple + "12" }]}>
-                              <Ionicons name="mail-outline" size={16} color={COLORS.purple} />
+                            <View style={[styles.contactIcon, { backgroundColor: COLORS.info + "12" }]}>
+                              <Ionicons name="mail-outline" size={16} color={COLORS.info} />
                             </View>
                             <Text style={styles.contactValue}>{item.physio?.email}</Text>
                           </View>
@@ -455,31 +486,46 @@ const styles = StyleSheet.create({
   },
   headerCard: {
     marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 8,
-    borderRadius: 18,
+    marginTop: 12,
+    marginBottom: 12,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: COLORS.primaryLight + "35",
-    padding: 14,
-    gap: 10,
+    borderColor: COLORS.primary + "20",
+    padding: 18,
+    gap: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  headerTopRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerTopRow: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    gap: 14 
+  },
   headerIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: COLORS.primarySoft,
+    borderColor: COLORS.primary + "20",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   headerTextWrap: { flex: 1 },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: "Poppins-Bold",
     color: COLORS.slate[900],
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 14,
@@ -488,24 +534,29 @@ const styles = StyleSheet.create({
   },
   headerStatsRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 10,
   },
   headerStatChip: {
     flex: 1,
-    borderRadius: 10,
-    paddingVertical: 8,
+    borderRadius: 14,
+    paddingVertical: 10,
     alignItems: "center",
     backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: COLORS.primarySoft,
+    borderColor: COLORS.primary + "15",
+    shadowColor: COLORS.slate[900],
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
   },
   headerStatValue: {
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: "Poppins-Bold",
     color: COLORS.primary,
   },
   headerStatLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: "Poppins-Medium",
     color: COLORS.slate[500],
     marginTop: 2,
@@ -518,24 +569,31 @@ const styles = StyleSheet.create({
   },
   loadingCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: 32,
+    borderRadius: 32,
+    padding: 36,
     alignItems: "center",
-    gap: 12,
+    gap: 16,
     shadowColor: COLORS.slate[900],
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "10",
+  },
+  loadingIconContainer: {
+    padding: 16,
+    borderRadius: 40,
+    backgroundColor: COLORS.primary + "08",
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 17,
     fontFamily: "Poppins-Medium",
     color: COLORS.slate[700],
     marginTop: 8,
   },
   loadingSubtext: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Poppins-Regular",
     color: COLORS.slate[400],
   },
@@ -544,101 +602,124 @@ const styles = StyleSheet.create({
     paddingBottom: 140,
   },
   cardContainer: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   card: {
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 24,
+    padding: 18,
     borderWidth: 1,
-    borderColor: COLORS.primarySoft,
+    borderColor: COLORS.primary + "10",
     shadowColor: COLORS.slate[900],
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 18,
   },
   childInfo: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
   },
   childAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.primarySoft,
+    width: 50,
+    height: 50,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   childAvatarText: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Poppins-Bold",
     color: COLORS.primary,
   },
   childName: {
-    fontSize: 16,
+    fontSize: 17,
     fontFamily: "Poppins-SemiBold",
     color: COLORS.slate[900],
-    marginBottom: 2,
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  childMetaContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   childMeta: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: "Poppins-Regular",
     color: COLORS.slate[500],
   },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 30,
     borderWidth: 1,
-    gap: 4,
+    gap: 6,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Poppins-Medium",
   },
   noPhysioContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 24,
-    gap: 8,
+    paddingVertical: 32,
+    gap: 12,
     backgroundColor: COLORS.slate[50],
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.slate[200],
+    borderStyle: "dashed",
+  },
+  noPhysioIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
   },
   noPhysioText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Poppins-Regular",
     color: COLORS.slate[500],
   },
   therapistSection: {
-    gap: 16,
+    gap: 18,
   },
   therapistHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.slate[100],
+    gap: 14,
+    padding: 14,
+    borderRadius: 20,
   },
   therapistAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: COLORS.secondary + "15",
+    width: 56,
+    height: 56,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: COLORS.secondary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   therapistAvatarText: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: "Poppins-Bold",
     color: COLORS.secondary,
   },
@@ -646,108 +727,135 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   therapistName: {
-    fontSize: 16,
+    fontSize: 17,
     fontFamily: "Poppins-SemiBold",
     color: COLORS.slate[900],
-    marginBottom: 2,
+    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   therapistSpecialization: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Poppins-Regular",
     color: COLORS.slate[500],
   },
   infoGrid: {
     backgroundColor: COLORS.slate[50],
-    borderRadius: 16,
-    padding: 12,
-    gap: 8,
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: COLORS.slate[200],
   },
   infoRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
+    gap: 10,
+  },
+  infoIconContainer: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   infoLabel: {
     fontSize: 13,
     fontFamily: "Poppins-Medium",
     color: COLORS.slate[600],
-    minWidth: 70,
+    minWidth: 75,
   },
   infoValue: {
     flex: 1,
     fontSize: 13,
     fontFamily: "Poppins-Regular",
     color: COLORS.slate[700],
+    lineHeight: 18,
   },
   contactSection: {
-    gap: 8,
+    gap: 12,
+    marginTop: 4,
   },
   contactTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Poppins-Medium",
     color: COLORS.slate[600],
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginBottom: 4,
   },
   contactRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
   },
   contactIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: COLORS.slate[900],
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   contactValue: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Poppins-Regular",
     color: COLORS.slate[800],
+    letterSpacing: -0.2,
   },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
+    paddingVertical: 70,
     paddingHorizontal: 24,
   },
   emptyIconContainer: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: COLORS.slate[100],
+    width: 112,
+    height: 112,
+    borderRadius: 56,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 24,
+    overflow: "hidden",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: "Poppins-SemiBold",
     color: COLORS.slate[800],
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   emptyMessage: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Poppins-Regular",
     color: COLORS.slate[500],
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 22,
+    maxWidth: 280,
   },
   errorBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.danger + "10",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginTop: 12,
-    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 30,
+    marginTop: 20,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.danger + "20",
   },
   errorBadgeText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Poppins-Medium",
     color: COLORS.danger,
   },

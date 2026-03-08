@@ -14,10 +14,12 @@ export class SessionReminderService {
   ) {}
 
   /**
-   * Runs every 30 minutes to check for sessions starting within the next hour.
-   * Sends a reminder notification to the parent if one hasn't been sent yet.
+   * Runs every 10 minutes to check for sessions starting soon.
+   * Sends two levels of reminders:
+   * - "standard" reminder: 30-90 minutes before session
+   * - "urgent" reminder: 5-15 minutes before session
    */
-  @Cron(CronExpression.EVERY_30_MINUTES)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async handleSessionReminders() {
     this.logger.log('Checking for upcoming sessions to send reminders...');
 
@@ -42,6 +44,7 @@ export class SessionReminderService {
               firstName: true,
               lastName: true,
               parentId: true,
+              hospitalId: true,
             },
           },
           physiotherapist: { select: { id: true, name: true } },
@@ -66,10 +69,13 @@ export class SessionReminderService {
 
           const minutesUntilSession = sessionMinutes - currentMinutes;
 
-          // Send reminder if session is 30-90 minutes away
+          // Send reminder if session is 30-90 minutes away OR 5-15 minutes away
           if (minutesUntilSession > 0 && minutesUntilSession <= 90) {
-            // Check if reminder already sent for this session
-            const existingReminder = await this.findExistingReminder(session.id);
+            const isUrgent = minutesUntilSession <= 15;
+            const reminderKey = isUrgent ? 'urgent' : 'standard';
+
+            // Check if this specific reminder type was already sent
+            const existingReminder = await this.findExistingReminder(session.id, reminderKey);
             if (existingReminder) continue;
 
             const childName = `${session.child?.firstName || ''} ${session.child?.lastName || ''}`.trim();
@@ -79,7 +85,7 @@ export class SessionReminderService {
 
             await this.notificationsService.createNotification({
               userId: parentId,
-              title: `Session Reminder`,
+              title: isUrgent ? `⏰ Session Starting Soon!` : `Session Reminder`,
               message: `${childName}'s ${sessionType} session starts in ${timeLabel} (at ${session.startTime}).`,
               type: 'SESSION_REMINDER',
               metadata: {
@@ -87,8 +93,26 @@ export class SessionReminderService {
                 admissionType: session.admissionType,
                 childId: session.childId,
                 startTime: session.startTime,
+                reminderKey,
               },
             });
+
+            // Also notify hospital admin
+            const hospitalId = (session.child as any)?.hospitalId;
+            if (hospitalId) {
+              await this.notificationsService.notifyHospitalAdmin(hospitalId, {
+                title: isUrgent ? `⏰ Session Starting Soon!` : `Session Reminder`,
+                message: `${childName}'s ${sessionType} session starts in ${timeLabel} (at ${session.startTime}).`,
+                type: 'SESSION_REMINDER',
+                metadata: {
+                  admissionTrackingId: session.id,
+                  admissionType: session.admissionType,
+                  childId: session.childId,
+                  startTime: session.startTime,
+                  reminderKey,
+                },
+              });
+            }
 
             this.logger.log(
               `Sent reminder for session ${session.id} to user ${parentId} (${minutesUntilSession} min away)`,
@@ -106,18 +130,41 @@ export class SessionReminderService {
   /**
    * Check if a SESSION_REMINDER notification was already sent for a given session today.
    */
-  private async findExistingReminder(admissionTrackingId: string) {
+  private async findExistingReminder(admissionTrackingId: string, reminderKey?: string) {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
     const notificationModel = (this.prisma as any).notification;
 
+    const where: any = {
+      type: 'SESSION_REMINDER',
+      createdAt: { gte: todayStart },
+      metadata: { path: ['admissionTrackingId'], equals: admissionTrackingId },
+    };
+
+    if (reminderKey) {
+      where.metadata = {
+        ...where.metadata,
+        path: ['admissionTrackingId'],
+        equals: admissionTrackingId,
+      };
+      // Use a separate query to check reminderKey
+      const existing = await notificationModel.findFirst({
+        where: {
+          type: 'SESSION_REMINDER',
+          createdAt: { gte: todayStart },
+          AND: [
+            { metadata: { path: ['admissionTrackingId'], equals: admissionTrackingId } },
+            { metadata: { path: ['reminderKey'], equals: reminderKey } },
+          ],
+        },
+        select: { id: true },
+      });
+      return existing;
+    }
+
     const existing = await notificationModel.findFirst({
-      where: {
-        type: 'SESSION_REMINDER',
-        createdAt: { gte: todayStart },
-        metadata: { path: ['admissionTrackingId'], equals: admissionTrackingId },
-      },
+      where,
       select: { id: true },
     });
 
