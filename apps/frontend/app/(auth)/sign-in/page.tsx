@@ -29,33 +29,31 @@ export default function SignIn() {
 
   const isAuthenticated = user !== null;
 
-  // Display session error if present (but only once, when component mounts)
+  // Display session error if present
   useEffect(() => {
     if (sessionError) {
       setError(sessionError);
-      // Clear session error after displaying
       useAuthStore.setState({ sessionError: null });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
       const userRole = user.role;
-      logger.log(
-        "✅ User authenticated, redirecting to appropriate dashboard..."
-      );
+      logger.log("✅ User authenticated, redirecting...");
 
       if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
-        router.replace("/admin");
+        console.log("✅ SUPER_ADMIN/ADMIN - redirecting to /admin");
+        window.location.href = "/admin";
       } else if (userRole === "HOSPITAL_ADMIN") {
-        router.replace("/admin");
+        console.log("✅ HOSPITAL_ADMIN - redirecting to /admin/sign-in");
+        window.location.href = "/admin/sign-in";
       } else {
         setError("This account type is not allowed in the web dashboard.");
       }
     }
-  }, [isAuthenticated, user, router]);
+  }, [isAuthenticated, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,52 +62,60 @@ export default function SignIn() {
     logger.log("📝 Form submitted, calling login...");
 
     try {
-      // Remove allowedRoles or update it for ArmiGo
       login(
         {
           identifier,
           password,
-          // allowedRoles: ["INTERNAL_TEACHER", "EXTERNAL_TEACHER"], // REMOVE THIS
         },
         {
-          onSuccess: () => {
-            console.log("✅ Login successful");
-            // Redirect will happen automatically via useEffect
+          onSuccess: (data) => {
+            console.log("✅ Login successful - RAW DATA:", data);
+            
+            if (data?.user) {
+              console.log("1️⃣ Setting user in store...");
+              useAuthStore.getState().setUser(data.user);
+              console.log("2️⃣ User set in store");
+              
+              const userRole = data.user.role;
+              console.log("3️⃣ User role:", userRole);
+              
+              if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
+                console.log("4️⃣ SUPER_ADMIN/ADMIN - redirecting to /admin");
+                // Delay to ensure store persists
+                setTimeout(() => {
+                  window.location.href = "/admin";
+                }, 300);
+              } else if (userRole === "HOSPITAL_ADMIN") {
+                console.log("4️⃣ HOSPITAL_ADMIN - redirecting to /admin/sign-in");
+                setTimeout(() => {
+                  window.location.href = "/admin/sign-in";
+                }, 300);
+              } else {
+                setError("This account type is not allowed in the web dashboard.");
+              }
+            }
           },
           onError: (err: any) => {
             logger.error("❌ Login failed:", getErrorMessage(err));
             const message = String(err?.message || "").toLowerCase();
-            if (message.includes("account is inactive") || message.includes("inactive")) {
+            if (message.includes("account is inactive")) {
               setError("Account is inactive. Please contact administrator.");
-            } else
-            if (err.response?.status === 401) {
+            } else if (err.response?.status === 401 || err.response?.status === 403) {
               setError("Invalid credentials");
             } else if (err.response?.status === 429) {
-              setError(
-                "Too many login attempts. Please wait a few minutes and try again."
-              );
-            } else if (err.response?.status === 403) {
-              setError("Invalid credentials");
+              setError("Too many login attempts. Please try again later.");
             } else if (err.response?.status >= 500) {
-              setError(
-                "Server error. Please try again later or contact support."
-              );
-            } else if (err.message?.toLowerCase().includes("credentials")) {
-              setError("Invalid credentials");
-            } else if (err.message?.toLowerCase().includes("network")) {
-              setError("Network error. Please check your internet connection.");
-            } else if (err.message) {
-              setError(err.message);
+              setError("Server error. Please try again later.");
+            } else if (message.includes("network")) {
+              setError("Network error. Please check your connection.");
             } else {
-              setError(
-                "Failed to sign in. Please try again or contact support."
-              );
+              setError(err.message || "Failed to sign in. Please try again.");
             }
           },
         }
       );
     } catch (err) {
-      logger.error("❌ Unexpected login error:", getErrorMessage(err));
+      logger.error("❌ Unexpected error:", getErrorMessage(err));
       setError("An unexpected error occurred. Please try again.");
     }
   };
@@ -136,10 +142,7 @@ export default function SignIn() {
             )}
 
             <div className="space-y-2">
-              <label
-                htmlFor="identifier"
-                className="text-sm font-medium text-foreground"
-              >
+              <label htmlFor="identifier" className="text-sm font-medium">
                 {t("auth.email")} / {t("auth.phone")}
               </label>
               <div className="relative">
@@ -158,10 +161,7 @@ export default function SignIn() {
             </div>
 
             <div className="space-y-2">
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-foreground"
-              >
+              <label htmlFor="password" className="text-sm font-medium">
                 {t("auth.password")}
               </label>
               <div className="relative">
@@ -181,7 +181,7 @@ export default function SignIn() {
 
             <Button
               type="submit"
-              className="w-full h-12 text-base font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+              className="w-full h-12 text-base font-medium"
               disabled={isPending}
             >
               {isPending ? t("common.loading") : t("auth.signIn")}
@@ -211,12 +211,10 @@ export default function SignIn() {
         </div>
       </div>
 
-      {/* eslint-disable-next-line */}
       <div
         className={`hidden md:flex md:w-7/12 items-center justify-center relative overflow-hidden ${styles.signInContainer}`}
       >
         <div className="absolute inset-0 opacity-10">
-          {/* eslint-disable-next-line */}
           <div className={styles.formWrapper} />
         </div>
 

@@ -30,7 +30,7 @@ export class AuthController {
   async login(
     @Request() req: any,
     @Body() loginDto: LoginDto,
-    @Response() res: any
+    @Response({ passthrough: true }) res: any
   ) {
     const user = req.user;
 
@@ -43,17 +43,33 @@ export class AuthController {
 
     const result = await this.authService.login(user);
     
-    // Set httpOnly cookies for web clients
+    // Set httpOnly cookies for web clients - FIXED FOR PRODUCTION
+    const isProduction = process.env.NODE_ENV === "production";
+    
     res.cookie("access_token", result.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProduction, // true in production (HTTPS)
+      sameSite: isProduction ? "none" : "lax", // 'none' for cross-site requests in production
+      domain: isProduction ? ".armigorehab.com" : undefined, // Allow across subdomains in production
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       path: "/",
     });
     
+    // Also set refresh token if you have one
+    // res.cookie("refresh_token", result.refreshToken, {
+    //   httpOnly: true,
+    //   secure: isProduction,
+    //   sameSite: isProduction ? "none" : "lax",
+    //   domain: isProduction ? ".armigorehab.com" : undefined,
+    //   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    //   path: "/",
+    // });
+    
     // Return tokens + user in body for mobile clients (mobile can't use httpOnly cookies)
-    return res.json({ accessToken: result.accessToken, user: result.user });
+    return res.json({ 
+      accessToken: result.accessToken, 
+      user: result.user 
+    });
   }
 
   @Public()
@@ -78,9 +94,17 @@ export class AuthController {
 
   @Post("logout")
   @HttpCode(HttpStatus.OK)
-  async logout(@Response() res: any) {
+  async logout(@Response({ passthrough: true }) res: any) {
     // Clear cookies
-    res.clearCookie("access_token", { path: "/" });
+    const isProduction = process.env.NODE_ENV === "production";
+    
+    res.clearCookie("access_token", { 
+      path: "/",
+      domain: isProduction ? ".armigorehab.com" : undefined,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+    });
+    
     return res.json({ message: "Logged out successfully" });
   }
 }
