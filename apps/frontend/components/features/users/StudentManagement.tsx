@@ -660,6 +660,7 @@ export default function StudentManagement() {
           }),
       hospitalId: resolvedHospitalId,
       assignedDoctor: selectedPhysio.name,
+      physiotherapistId: formData.physiotherapistId,
       exerciseFingers: formData.exerciseFingers,
       exerciseWrist: formData.exerciseWrist,
       exerciseElbow: formData.exerciseElbow,

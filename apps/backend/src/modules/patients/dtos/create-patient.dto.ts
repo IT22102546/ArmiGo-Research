@@ -96,6 +96,11 @@ export class CreatePatientDto {
   @IsOptional()
   assignedDoctor?: string;
 
+  @ApiProperty({ example: 'uuid-physiotherapist-id', required: false, description: 'HospitalStaff physiotherapist ID for assignment' })
+  @IsString()
+  @IsOptional()
+  physiotherapistId?: string;
+
   @ApiProperty({ example: 'Medical relevant notes', required: false })
   @IsString()
   @IsOptional()
