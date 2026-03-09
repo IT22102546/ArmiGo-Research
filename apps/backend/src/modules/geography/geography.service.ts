@@ -300,6 +300,39 @@ export class GeographyService {
     }
   }
 
+  async deleteDistrict(id: string) {
+    try {
+      const district = await this.prisma.district.findUnique({
+        where: { id },
+        include: {
+          zones: true,
+        },
+      });
+
+      if (!district) {
+        throw new NotFoundException(`District with ID ${id} not found`);
+      }
+
+      if (district.zones.length > 0) {
+        throw new BadRequestException(
+          'Cannot delete district with existing zones'
+        );
+      }
+
+      await this.prisma.district.delete({
+        where: { id },
+      });
+
+      return {
+        success: true,
+        message: `District "${district.name}" deleted successfully`,
+      };
+    } catch (error) {
+      this.logger.error('Error deleting district:', error);
+      throw error;
+    }
+  }
+
   // ============ ZONES ============
 
   async createZone(data: CreateZoneDto) {
