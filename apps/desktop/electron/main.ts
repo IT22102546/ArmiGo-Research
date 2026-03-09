@@ -30,11 +30,19 @@ function createWindow() {
     mainWindow?.show();
   });
 
-  // Load the app
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  // Better environment detection
+  const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
+  
+  if (isDev) {
+    // Development - load from Vite dev server
+    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    // Production - load from file system
+    // The path might be different based on your build output
+    const indexPath = path.join(__dirname, '../dist/index.html');
+    console.log('Loading index from:', indexPath); // Helpful for debugging
+    mainWindow.loadFile(indexPath);
   }
 
   mainWindow.on('closed', () => {
