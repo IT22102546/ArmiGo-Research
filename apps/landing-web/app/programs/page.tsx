@@ -41,6 +41,7 @@ import {
   Building2
 } from "lucide-react";
 
+// Animation constants - fixed with proper typing
 const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0 },
@@ -62,7 +63,7 @@ const bounceAnimation = {
     scale: 1, 
     opacity: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 260,
       damping: 20
     }
@@ -89,6 +90,48 @@ const staggerContainer = {
   },
 };
 
+// Types
+interface Hospital {
+  id: number;
+  name: string;
+  shortName: string;
+  location: string;
+  description: string;
+  fullAddress: string;
+  phone: string;
+  email: string;
+  website: string;
+  image: string;
+  color: string;
+  bgColor: string;
+  iconColor: string;
+  programs: string[];
+  established: string;
+  beds: string;
+  specialists: string;
+  emoji: string;
+  coordinates: { lat: number; lng: number };
+}
+
+interface SubHospital {
+  name: string;
+  location: string;
+  parentHospital: string;
+  phone: string;
+  emoji: string;
+}
+
+interface Program {
+  title: string;
+  age: string;
+  description: string;
+  duration: string;
+  sessions: string;
+  icon: any;
+  color: string;
+  emoji: string;
+}
+
 // Predefined floating elements
 const floatingElements = [
   { icon: Heart, color: "text-pink-300", size: 24, left: 5, top: 10, delay: 0 },
@@ -102,7 +145,7 @@ const floatingElements = [
 ];
 
 // Hospital Data
-const hospitals = [
+const hospitals: Hospital[] = [
   {
     id: 1,
     name: "Peranendiya Bandaranayake Child Hospital",
@@ -184,7 +227,7 @@ const hospitals = [
 ];
 
 // Sub Hospitals/Clinics
-const subHospitals = [
+const subHospitals: SubHospital[] = [
   {
     name: "Kalubowila Children's Clinic",
     location: "Kalubowila, Dehiwala",
@@ -229,7 +272,7 @@ const subHospitals = [
   }
 ];
 
-const programs = [
+const programs: Program[] = [
   {
     title: "Early Intervention Program",
     age: "6-8 years",
@@ -274,7 +317,7 @@ const programs = [
 
 export default function ProgramsPage() {
   const [mounted, setMounted] = useState(false);
-  const [selectedHospital, setSelectedHospital] = useState(null);
+  const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -662,20 +705,25 @@ export default function ProgramsPage() {
                       { number: "3", label: "Major Hospitals", icon: Hospital, color: "blue" },
                       { number: "6+", label: "Local Clinics", icon: Building2, color: "purple" },
                       { number: "100+", label: "Specialists", icon: Users, color: "pink" },
-                    ].map((stat, i) => (
-                      <motion.div 
-                        key={i}
-                        className="text-center"
-                        variants={fadeInUp}
-                        whileHover={{ scale: 1.1 }}
-                      >
-                        <div className={`w-12 h-12 mx-auto bg-${stat.color}-100 rounded-xl flex items-center justify-center mb-2`}>
-                          <stat.icon className={`w-6 h-6 text-${stat.color}-600`} />
-                        </div>
-                        <p className={`text-2xl font-black text-${stat.color}-600`}>{stat.number}</p>
-                        <p className="text-xs text-gray-600">{stat.label}</p>
-                      </motion.div>
-                    ))}
+                    ].map((stat, i) => {
+                      const bgColor = `bg-${stat.color}-100`;
+                      const textColor = `text-${stat.color}-600`;
+                      
+                      return (
+                        <motion.div 
+                          key={i}
+                          className="text-center"
+                          variants={fadeInUp}
+                          whileHover={{ scale: 1.1 }}
+                        >
+                          <div className={`w-12 h-12 mx-auto ${bgColor} rounded-xl flex items-center justify-center mb-2`}>
+                            <stat.icon className={`w-6 h-6 ${textColor}`} />
+                          </div>
+                          <p className={`text-2xl font-black ${textColor}`}>{stat.number}</p>
+                          <p className="text-xs text-gray-600">{stat.label}</p>
+                        </motion.div>
+                      );
+                    })}
                   </motion.div>
 
                   {/* Coverage Badge */}
@@ -757,111 +805,115 @@ export default function ProgramsPage() {
           </motion.div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {hospitals.map((hospital, index) => (
-              <motion.div
-                key={hospital.id}
-                className="relative group h-full flex"
-                variants={bounceAnimation}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                whileHover={{ y: -10 }}
-                onClick={() => setSelectedHospital(hospital)}
-              >
-                <div className={`bg-gradient-to-br ${hospital.color} p-1 rounded-[40px] cursor-pointer w-full`}>
-                  <div className="bg-white rounded-[40px] overflow-hidden h-full flex flex-col">
-                    {/* Image Section - Fixed height */}
-                    <div className="relative h-48 flex-shrink-0 overflow-hidden">
-                      <div className={`absolute inset-0 bg-gradient-to-br ${hospital.color} opacity-20`}></div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-7xl opacity-30">{hospital.emoji}</span>
-                      </div>
-                      {/* Hospital Badge */}
-                      <motion.div 
-                        className="absolute top-4 left-4 bg-white/95 px-4 py-2 rounded-full shadow-lg flex items-center gap-2"
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        <Hospital className={`w-4 h-4 ${hospital.iconColor}`} />
-                        <span className="text-xs font-bold">Main Center</span>
-                      </motion.div>
-                      {/* Year Badge */}
-                      <motion.div 
-                        className="absolute top-4 right-4 bg-white/95 px-4 py-2 rounded-full shadow-lg"
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        <span className="text-xs font-bold">Est. {hospital.established}</span>
-                      </motion.div>
-                    </div>
-
-                    {/* Content Section - Flex column with fixed layout */}
-                    <div className="p-6 flex flex-col flex-grow">
-                      {/* Title with fixed height for 2 lines */}
-                      <div className="h-14 mb-2">
-                        <h3 className="text-xl font-bold group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-blue-600 group-hover:to-purple-600 transition-all line-clamp-2">
-                          {hospital.name}
-                        </h3>
-                      </div>
-                      
-                      {/* Description with fixed height for 2 lines */}
-                      <div className="h-12 mb-4">
-                        <p className="text-sm text-gray-600 line-clamp-2">{hospital.description}</p>
-                      </div>
-
-                      {/* Quick Info - Fixed height */}
-                      <div className="space-y-2 mb-4 h-24">
-                        <div className="flex items-center gap-2 text-sm">
-                          <MapPin className={`w-4 h-4 ${hospital.iconColor} flex-shrink-0`} />
-                          <span className="text-gray-600 truncate">{hospital.location}</span>
+            {hospitals.map((hospital, index) => {
+              const iconColor = hospital.iconColor;
+              
+              return (
+                <motion.div
+                  key={hospital.id}
+                  className="relative group h-full flex"
+                  variants={bounceAnimation}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  whileHover={{ y: -10 }}
+                  onClick={() => setSelectedHospital(hospital)}
+                >
+                  <div className={`bg-gradient-to-br ${hospital.color} p-1 rounded-[40px] cursor-pointer w-full`}>
+                    <div className="bg-white rounded-[40px] overflow-hidden h-full flex flex-col">
+                      {/* Image Section - Fixed height */}
+                      <div className="relative h-48 flex-shrink-0 overflow-hidden">
+                        <div className={`absolute inset-0 bg-gradient-to-br ${hospital.color} opacity-20`}></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-7xl opacity-30">{hospital.emoji}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Phone className={`w-4 h-4 ${hospital.iconColor} flex-shrink-0`} />
-                          <span className="text-gray-600 truncate">{hospital.phone}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Users className={`w-4 h-4 ${hospital.iconColor} flex-shrink-0`} />
-                          <span className="text-gray-600">{hospital.specialists} Specialists</span>
-                        </div>
-                      </div>
-
-                      {/* Programs Tags - Fixed height with flex wrap */}
-                      <div className="flex flex-wrap gap-2 mb-4 min-h-[40px]">
-                        {hospital.programs.slice(0, 2).map((program, i) => (
-                          <span key={i} className="text-xs bg-gray-100 px-3 py-1 rounded-full">
-                            {program}
-                          </span>
-                        ))}
-                        {hospital.programs.length > 2 && (
-                          <span className="text-xs bg-gray-100 px-3 py-1 rounded-full">
-                            +{hospital.programs.length - 2} more
-                          </span>
-                        )}
-                      </div>
-
-                      {/* View Details Button - Always at bottom */}
-                      <div className="mt-auto">
-                        <motion.button 
-                          className={`w-full bg-gradient-to-r ${hospital.color} text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 group/btn`}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
+                        {/* Hospital Badge */}
+                        <motion.div 
+                          className="absolute top-4 left-4 bg-white/95 px-4 py-2 rounded-full shadow-lg flex items-center gap-2"
+                          whileHover={{ scale: 1.05 }}
                         >
-                          <span>View Details</span>
-                          <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                        </motion.button>
+                          <Hospital className={`w-4 h-4 ${iconColor}`} />
+                          <span className="text-xs font-bold">Main Center</span>
+                        </motion.div>
+                        {/* Year Badge */}
+                        <motion.div 
+                          className="absolute top-4 right-4 bg-white/95 px-4 py-2 rounded-full shadow-lg"
+                          whileHover={{ scale: 1.05 }}
+                        >
+                          <span className="text-xs font-bold">Est. {hospital.established}</span>
+                        </motion.div>
+                      </div>
+
+                      {/* Content Section - Flex column with fixed layout */}
+                      <div className="p-6 flex flex-col flex-grow">
+                        {/* Title with fixed height for 2 lines */}
+                        <div className="h-14 mb-2">
+                          <h3 className="text-xl font-bold group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-blue-600 group-hover:to-purple-600 transition-all line-clamp-2">
+                            {hospital.name}
+                          </h3>
+                        </div>
+                        
+                        {/* Description with fixed height for 2 lines */}
+                        <div className="h-12 mb-4">
+                          <p className="text-sm text-gray-600 line-clamp-2">{hospital.description}</p>
+                        </div>
+
+                        {/* Quick Info - Fixed height */}
+                        <div className="space-y-2 mb-4 h-24">
+                          <div className="flex items-center gap-2 text-sm">
+                            <MapPin className={`w-4 h-4 ${iconColor} flex-shrink-0`} />
+                            <span className="text-gray-600 truncate">{hospital.location}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Phone className={`w-4 h-4 ${iconColor} flex-shrink-0`} />
+                            <span className="text-gray-600 truncate">{hospital.phone}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Users className={`w-4 h-4 ${iconColor} flex-shrink-0`} />
+                            <span className="text-gray-600">{hospital.specialists} Specialists</span>
+                          </div>
+                        </div>
+
+                        {/* Programs Tags - Fixed height with flex wrap */}
+                        <div className="flex flex-wrap gap-2 mb-4 min-h-[40px]">
+                          {hospital.programs.slice(0, 2).map((program, i) => (
+                            <span key={i} className="text-xs bg-gray-100 px-3 py-1 rounded-full">
+                              {program}
+                            </span>
+                          ))}
+                          {hospital.programs.length > 2 && (
+                            <span className="text-xs bg-gray-100 px-3 py-1 rounded-full">
+                              +{hospital.programs.length - 2} more
+                            </span>
+                          )}
+                        </div>
+
+                        {/* View Details Button - Always at bottom */}
+                        <div className="mt-auto">
+                          <motion.button 
+                            className={`w-full bg-gradient-to-r ${hospital.color} text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 group/btn`}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <span>View Details</span>
+                            <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                          </motion.button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Floating Elements */}
-                <motion.div 
-                  className="absolute -top-2 -right-2 w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center text-lg shadow-lg"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 10, repeat: Infinity }}
-                >
-                  ⭐
+                  {/* Floating Elements */}
+                  <motion.div 
+                    className="absolute -top-2 -right-2 w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center text-lg shadow-lg"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 10, repeat: Infinity }}
+                  >
+                    ⭐
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -952,47 +1004,52 @@ export default function ProgramsPage() {
           </motion.div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {programs.map((program, index) => (
-              <motion.div
-                key={index}
-                className="relative group h-full flex"
-                variants={bounceAnimation}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                whileHover={{ y: -10 }}
-              >
-                <div className={`bg-gradient-to-br ${program.color} p-1 rounded-3xl w-full`}>
-                  <div className="bg-white p-6 rounded-3xl h-full flex flex-col">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`w-14 h-14 bg-gradient-to-br ${program.color} rounded-xl flex items-center justify-center text-white text-2xl`}>
-                        {program.emoji}
+            {programs.map((program, index) => {
+              const colorName = program.color.split('-')[1]; // Get the color name (blue, purple, etc.)
+              const textColor = `text-${colorName}-500`;
+              
+              return (
+                <motion.div
+                  key={index}
+                  className="relative group h-full flex"
+                  variants={bounceAnimation}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  whileHover={{ y: -10 }}
+                >
+                  <div className={`bg-gradient-to-br ${program.color} p-1 rounded-3xl w-full`}>
+                    <div className="bg-white p-6 rounded-3xl h-full flex flex-col">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className={`w-14 h-14 bg-gradient-to-br ${program.color} rounded-xl flex items-center justify-center text-white text-2xl`}>
+                          {program.emoji}
+                        </div>
+                        <program.icon className={`w-6 h-6 ${textColor}`} />
                       </div>
-                      <program.icon className={`w-6 h-6 text-${program.color.split('-')[2]}-500`} />
-                    </div>
-                    
-                    <h3 className="text-lg font-bold mb-1">{program.title}</h3>
-                    <p className="text-xs text-purple-600 font-medium mb-3">{program.age}</p>
-                    <p className="text-sm text-gray-600 mb-4 flex-grow">{program.description}</p>
-                    
-                    <div className="space-y-2 mb-4">
-                      <div className="flex items-center gap-2 text-xs">
-                        <Clock className="w-3 h-3 text-gray-400" />
-                        <span>{program.duration}</span>
+                      
+                      <h3 className="text-lg font-bold mb-1">{program.title}</h3>
+                      <p className="text-xs text-purple-600 font-medium mb-3">{program.age}</p>
+                      <p className="text-sm text-gray-600 mb-4 flex-grow">{program.description}</p>
+                      
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center gap-2 text-xs">
+                          <Clock className="w-3 h-3 text-gray-400" />
+                          <span>{program.duration}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <Calendar className="w-3 h-3 text-gray-400" />
+                          <span>{program.sessions}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <Calendar className="w-3 h-3 text-gray-400" />
-                        <span>{program.sessions}</span>
-                      </div>
-                    </div>
 
-                    <button className="w-full bg-gray-100 text-gray-700 py-2 rounded-xl text-sm font-bold hover:bg-gray-200 transition-colors mt-auto">
-                      Learn More
-                    </button>
+                      <button className="w-full bg-gray-100 text-gray-700 py-2 rounded-xl text-sm font-bold hover:bg-gray-200 transition-colors mt-auto">
+                        Learn More
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -1019,28 +1076,32 @@ export default function ProgramsPage() {
           <div className="bg-white rounded-[50px] p-8 shadow-2xl">
             <div className="grid md:grid-cols-3 gap-6">
               {[
-                { step: "1", title: "Choose a Hospital", desc: "Select the hospital closest to you from our partner network", icon: Hospital, color: "text-blue-500" },
-                { step: "2", title: "Visit for Assessment", desc: "Schedule a visit for a free hero assessment with our specialists", icon: CheckCircle, color: "text-green-500" },
-                { step: "3", title: "Start Your Adventure", desc: "Begin the program that's right for your little hero", icon: Rocket, color: "text-purple-500" },
-              ].map((item, i) => (
-                <motion.div 
-                  key={i}
-                  className="text-center"
-                  variants={fadeInUp}
-                  whileHover={{ scale: 1.05 }}
-                >
-                  <div className={`w-16 h-16 mx-auto bg-gradient-to-br from-${item.color.split('-')[0]}-100 to-${item.color.split('-')[0]}-200 rounded-2xl flex items-center justify-center mb-4`}>
-                    <item.icon className={`w-8 h-8 ${item.color}`} />
-                  </div>
-                  <div className="relative">
-                    <span className={`absolute -top-4 -right-4 w-8 h-8 bg-gradient-to-r ${item.color} text-white rounded-full flex items-center justify-center font-bold`}>
-                      {item.step}
-                    </span>
-                  </div>
-                  <h3 className="font-bold mb-2">{item.title}</h3>
-                  <p className="text-sm text-gray-600">{item.desc}</p>
-                </motion.div>
-              ))}
+                { step: "1", title: "Choose a Hospital", desc: "Select the hospital closest to you from our partner network", icon: Hospital, color: "text-blue-500", bgColor: "from-blue-100 to-blue-200" },
+                { step: "2", title: "Visit for Assessment", desc: "Schedule a visit for a free hero assessment with our specialists", icon: CheckCircle, color: "text-green-500", bgColor: "from-green-100 to-green-200" },
+                { step: "3", title: "Start Your Adventure", desc: "Begin the program that's right for your little hero", icon: Rocket, color: "text-purple-500", bgColor: "from-purple-100 to-purple-200" },
+              ].map((item, i) => {
+                const bgGradient = `bg-gradient-to-br ${item.bgColor}`;
+                
+                return (
+                  <motion.div 
+                    key={i}
+                    className="text-center"
+                    variants={fadeInUp}
+                    whileHover={{ scale: 1.05 }}
+                  >
+                    <div className={`w-16 h-16 mx-auto ${bgGradient} rounded-2xl flex items-center justify-center mb-4`}>
+                      <item.icon className={`w-8 h-8 ${item.color}`} />
+                    </div>
+                    <div className="relative">
+                      <span className={`absolute -top-4 -right-4 w-8 h-8 bg-gradient-to-r ${item.color} text-white rounded-full flex items-center justify-center font-bold`}>
+                        {item.step}
+                      </span>
+                    </div>
+                    <h3 className="font-bold mb-2">{item.title}</h3>
+                    <p className="text-sm text-gray-600">{item.desc}</p>
+                  </motion.div>
+                );
+              })}
             </div>
 
             <motion.div 
