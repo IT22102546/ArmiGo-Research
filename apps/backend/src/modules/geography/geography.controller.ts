@@ -105,6 +105,14 @@ export class GeographyController {
     return await this.geographyService.updateDistrict(id, updateDistrictDto);
   }
 
+  @Delete('districts/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete district' })
+  async deleteDistrict(@Param('id') id: string) {
+    this.logger.log(`Deleting district: ${id}`);
+    return await this.geographyService.deleteDistrict(id);
+  }
+
   // ============ ZONES ============
 
   @Post('zones')
