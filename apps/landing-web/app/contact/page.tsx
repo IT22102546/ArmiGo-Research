@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { Variants } from "framer-motion";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef, useState } from "react";
 import { 
@@ -49,13 +50,13 @@ const fadeInRight = {
   visible: { opacity: 1, x: 0 },
 };
 
-const bounceAnimation = {
+const bounceAnimation: Variants = {
   hidden: { scale: 0.8, opacity: 0 },
   visible: { 
     scale: 1, 
     opacity: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 260,
       damping: 20
     }
@@ -97,8 +98,8 @@ const staggerContainer = {
 export default function ContactPage() {
   const whatsappNumber = "94711484037";
   const [formHover, setFormHover] = useState(false);
-  const [activeField, setActiveField] = useState(null);
-  const [hoveredCard, setHoveredCard] = useState(null);
+  const [activeField, setActiveField] = useState<string | null>(null);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const containerRef = useRef(null);
   
   const { scrollYProgress } = useScroll({

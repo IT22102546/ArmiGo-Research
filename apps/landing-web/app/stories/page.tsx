@@ -24,6 +24,7 @@ import {
   Bell
 } from "lucide-react";
 
+// Animation constants - fixed with proper typing
 const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0 },
@@ -35,7 +36,7 @@ const bounceAnimation = {
     scale: 1, 
     opacity: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 260,
       damping: 20
     }

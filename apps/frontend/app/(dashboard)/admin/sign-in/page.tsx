@@ -26,31 +26,23 @@ export default function AdminSignIn() {
 
   const isAuthenticated = user !== null;
 
-  // Display session error if present (but only once, when component mounts)
   useEffect(() => {
     if (sessionError) {
       setError(sessionError);
-      // Clear session error after displaying
       useAuthStore.setState({ sessionError: null });
     }
-  }, []); // Empty deps - run only once on mount
+  }, []);
 
-  // Redirect if already authenticated (both for fresh logins and existing sessions)
   useEffect(() => {
     if (isAuthenticated && user) {
       const userRole = user.role;
       logger.log("✅ User authenticated, redirecting based on role...");
 
-      // Perform redirect based on role
       if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
         router.replace("/admin");
-      } else if (
-        userRole === "INTERNAL_TEACHER" ||
-        userRole === "EXTERNAL_TEACHER"
-      ) {
-        router.replace("/teacher");
+      } else if (userRole === "HOSPITAL_ADMIN") {
+        router.replace("/admin");
       } else {
-        // Non-admin users should not access admin portal - redirect to home
         router.replace("/");
       }
     }
@@ -63,57 +55,51 @@ export default function AdminSignIn() {
     logger.log("📝 Form submitted, calling login...");
 
     try {
-      // Send allowedRoles to backend for admin portal validation
       login(
         {
           identifier,
           password,
-          allowedRoles: ["SUPER_ADMIN", "ADMIN"],
+          allowedRoles: ["SUPER_ADMIN", "ADMIN", "HOSPITAL_ADMIN"],
         },
         {
-          onSuccess: () => {
-            console.log("✅ Login successful");
-            // Redirect will happen automatically via useEffect
+          onSuccess: (data) => {
+            console.log("✅ Admin login successful");
+            if (data?.user) {
+              useAuthStore.getState().setUser(data.user);
+              const userRole = data.user.role;
+              
+              if (userRole === "SUPER_ADMIN" || userRole === "ADMIN" || userRole === "HOSPITAL_ADMIN") {
+                setTimeout(() => {
+                  window.location.href = "/admin";
+                }, 300);
+              }
+            }
           },
           onError: (err: any) => {
             logger.error("❌ Login failed:", getErrorMessage(err));
             const message = String(err?.message || "").toLowerCase();
-            if (message.includes("account is inactive") || message.includes("inactive")) {
+            if (message.includes("inactive")) {
               setError("Account is inactive. Please contact administrator.");
-            } else
-            // Handle different error types with specific admin-focused messages
-            if (err.response?.status === 401) {
+            } else if (err.response?.status === 401 || err.response?.status === 403) {
               setError("Invalid credentials");
             } else if (err.response?.status === 429) {
-              setError(
-                "Too many login attempts. Please wait a few minutes and try again."
-              );
-            } else if (err.response?.status === 403) {
-              setError("Invalid credentials");
+              setError("Too many login attempts. Please try again later.");
             } else if (err.response?.status >= 500) {
-              setError(
-                "Server error. Please try again later or contact support."
-              );
-            } else if (err.message?.toLowerCase().includes("credentials")) {
-              setError("Invalid credentials");
-            } else if (err.message?.toLowerCase().includes("network")) {
-              setError("Network error. Please check your internet connection.");
-            } else if (err.message) {
-              setError(err.message);
+              setError("Server error. Please try again later.");
+            } else if (message.includes("network")) {
+              setError("Network error. Please check your connection.");
             } else {
-              setError(
-                "Failed to sign in. Please try again or contact support."
-              );
+              setError(err.message || "Failed to sign in. Please try again.");
             }
           },
         }
       );
     } catch (err) {
       logger.error("❌ Unexpected error:", getErrorMessage(err));
+      setError("An unexpected error occurred. Please try again.");
     }
   };
 
-  // Show loading state while authenticating
   if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -145,10 +131,7 @@ export default function AdminSignIn() {
             )}
 
             <div className="space-y-2">
-              <label
-                htmlFor="identifier"
-                className="text-sm font-medium text-foreground"
-              >
+              <label htmlFor="identifier" className="text-sm font-medium">
                 Phone Number or Email
               </label>
               <div className="relative">
@@ -167,10 +150,7 @@ export default function AdminSignIn() {
             </div>
 
             <div className="space-y-2">
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-foreground"
-              >
+              <label htmlFor="password" className="text-sm font-medium">
                 Password
               </label>
               <div className="relative">
@@ -198,20 +178,20 @@ export default function AdminSignIn() {
 
             <Button
               type="submit"
-              className="w-full h-12 text-base font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+              className="w-full h-12 text-base font-medium"
               disabled={isPending}
             >
               {isPending ? "Signing in..." : "Sign in"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              Hospital users should use Hospital Login.
+              Regular users should use the main login page.
             </p>
             <Link
-              href="/hospital/sign-in"
+              href="/sign-in"
               className="flex items-center justify-center w-full h-10 text-sm font-medium text-muted-foreground hover:text-primary border border-border rounded-lg hover:border-primary transition-colors"
             >
-              Hospital Login
+              Main Login
             </Link>
           </form>
         </div>
@@ -220,8 +200,7 @@ export default function AdminSignIn() {
       <div
         className="hidden md:flex md:w-7/12 items-center justify-center relative overflow-hidden"
         style={{
-          background:
-            "linear-gradient(135deg, hsl(260 90% 50%), hsl(260 85% 55%))",
+          background: "linear-gradient(135deg, hsl(260 90% 50%), hsl(260 85% 55%))",
         }}
       >
         <div className="absolute inset-0 opacity-10">
@@ -247,8 +226,7 @@ export default function AdminSignIn() {
           <div className="mt-8 flex justify-center">
             <div className="w-full max-w-2xl h-auto rounded-lg shadow-2xl bg-white/10 p-8">
               <p className="text-white text-lg">
-                Secure access to administrative functions and platform
-                management
+                Secure access to administrative functions and platform management
               </p>
             </div>
           </div>
