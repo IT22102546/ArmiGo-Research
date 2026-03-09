@@ -122,7 +122,14 @@ export default function Profile() {
                     <span className="text-lg font-bold text-white">{(child.firstName || 'C')[0].toUpperCase()}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-base font-bold text-slate-900">{child.firstName} {child.lastName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-base font-bold text-slate-900">{child.firstName} {child.lastName}</p>
+                      {child.displayId && (
+                        <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20 font-mono tracking-wide">
+                          {child.displayId}
+                        </span>
+                      )}
+                    </div>
                     {child.hospital?.name && <p className="text-xs text-slate-500 mt-0.5">{child.hospital.name}</p>}
                   </div>
                 </div>

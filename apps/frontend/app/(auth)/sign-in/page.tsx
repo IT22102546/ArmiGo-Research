@@ -8,7 +8,7 @@ import { getErrorMessage } from "@/lib/error-handling";
 const logger = createLogger("SignInPage");
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Phone, Lock, Mail } from "lucide-react";
+import { Phone, Lock, Mail, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLoginMutation } from "@/lib/hooks/queries/useAuth";
 import Link from "next/link";
@@ -18,6 +18,7 @@ import styles from "./sign-in.module.css";
 export default function SignIn() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const t = useTranslations();
 
@@ -198,14 +199,22 @@ export default function SignIn() {
                 <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder={t("auth.password")}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 h-12 rounded-lg border-input"
+                  className="pl-10 pr-10 h-12 rounded-lg border-input"
                   required
                   disabled={isPending}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 
