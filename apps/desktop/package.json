@@ -4,15 +4,15 @@
   "description": "ArmiGo Desktop Application",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
-    "build:vite": "tsc && vite build",
-    "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder --win",
-    "electron:build:all": "vite build && electron-builder --win --mac --linux",
-    "dist": "electron-builder"
-  },
+  "dev": "vite",
+  "electron:dev": "vite",
+  "build": "tsc && vite build && electron-builder",
+  "build:vite": "tsc && vite build",
+  "preview": "vite preview",
+  "electron:build": "vite build && electron-builder --win",
+  "electron:build:all": "vite build && electron-builder --win --mac --linux",
+  "dist": "electron-builder"
+},
   "dependencies": {
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
