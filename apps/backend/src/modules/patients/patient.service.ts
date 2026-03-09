@@ -117,7 +117,7 @@ export class PatientService {
   /**
    * Create a new patient
    */
-  async createPatient(data: CreatePatientDto): Promise<PatientResponseDto> {
+  async createPatient(data: CreatePatientDto, createdById?: string): Promise<PatientResponseDto> {
     try {
       // Validate hospital exists
       if (!data.hospitalId) {
@@ -221,6 +221,21 @@ export class PatientService {
             zone: true,
           },
         });
+
+        // Create PhysiotherapyAssignment if physiotherapistId is provided
+        if (data.physiotherapistId && createdById) {
+          await this.prisma.physiotherapyAssignment.create({
+            data: {
+              childId: patient.id,
+              physiotherapistId: data.physiotherapistId,
+              hospitalId: data.hospitalId,
+              title: 'Initial Assignment',
+              status: 'ACTIVE',
+              createdById,
+            },
+          });
+        }
+
         return this.mapChildToPatientResponse(patient);
       }
 
@@ -379,6 +394,20 @@ export class PatientService {
           },
         },
       });
+
+      // Create PhysiotherapyAssignment if physiotherapistId is provided
+      if (data.physiotherapistId && createdById) {
+        await this.prisma.physiotherapyAssignment.create({
+          data: {
+            childId: patient.id,
+            physiotherapistId: data.physiotherapistId,
+            hospitalId: data.hospitalId,
+            title: 'Initial Assignment',
+            status: 'ACTIVE',
+            createdById,
+          },
+        });
+      }
 
       const response = this.mapChildToPatientResponse(patient);
 
