@@ -4,10 +4,10 @@ import { BrowserRouter, HashRouter } from 'react-router-dom';
 import App from './App';
 import './index.css';
 
-// Check if running in Electron production
-const isElectron = !!(window as any).electron;
-const isDev = import.meta.env.DEV;
-const useHashRouter = isElectron && !isDev;
+// Detect Electron production: check exposed API or file:// protocol
+const isElectronProd = !!(window as any).electronAPI && !import.meta.env.DEV;
+const isFileProtocol = window.location.protocol === 'file:';
+const useHashRouter = isElectronProd || isFileProtocol;
 
 const Router = useHashRouter ? HashRouter : BrowserRouter;
 

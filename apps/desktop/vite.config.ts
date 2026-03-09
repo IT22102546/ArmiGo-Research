@@ -6,6 +6,7 @@ import path from 'path';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const isProd = mode === 'production';
   
   return {
     plugins: [
@@ -60,13 +61,26 @@ server: {
   },
 },
     define: {
-      'import.meta.env.VITE_API_URL': JSON.stringify('/api'), // Use proxy in dev
+      // In dev: use proxy path "/api". In production: use real API URL directly
+      'import.meta.env.VITE_API_URL': JSON.stringify(
+        isProd ? 'https://api.armigorehab.com' : '/api'
+      ),
       'import.meta.env.VITE_STORAGE_URL': JSON.stringify('https://api.armigorehab.com/uploads'),
     },
     base: './',
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      minify: 'esbuild',
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          entryFileNames: '[name].js',
+          chunkFileNames: '[name].js',
+          assetFileNames: '[name].[ext]',
+        },
+      },
+      cssCodeSplit: false, // Keep all CSS in one file
     },
   };
 });

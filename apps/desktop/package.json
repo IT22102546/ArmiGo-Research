@@ -41,17 +41,29 @@
     "appId": "com.armigo.desktop",
     "productName": "ArmiGo Desktop",
     "files": [
+      "dist/**/*",
       "dist-electron/**/*",
       "node_modules/**/*",
       "public/**/*",
-      "src/**/*",
       "package.json"
     ],
     "directories": {
       "buildResources": "build"
     },
+    "icon": "build/icon.ico",
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

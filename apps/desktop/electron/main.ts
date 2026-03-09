@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
+import fs from 'fs';
 
 // Fix GPU cache errors on Windows
 app.commandLine.appendSwitch('disable-gpu-cache');
@@ -30,6 +31,16 @@ function createWindow() {
     mainWindow?.show();
   });
 
+  // Allow opening DevTools with F12 in production for debugging
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+      mainWindow?.webContents.toggleDevTools();
+    }
+    if (input.key === 'F12') {
+      mainWindow?.webContents.toggleDevTools();
+    }
+  });
+
   // Better environment detection
   const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
   
@@ -38,12 +49,54 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    // Production - load from file system
-    // The path might be different based on your build output
-    const indexPath = path.join(__dirname, '../dist/index.html');
-    console.log('Loading index from:', indexPath); // Helpful for debugging
-    mainWindow.loadFile(indexPath);
+    // Production - load from file system with proper error handling
+    // When electron-builder packages, __dirname points to dist-electron
+    let indexPath = path.join(__dirname, '../dist/index.html');
+    
+    // Fallback for different build configurations
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(__dirname, '../../dist/index.html');
+    }
+    
+    // Last resort: try root dist
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(app.getAppPath(), 'dist/index.html');
+    }
+    
+    console.log('Loading index from:', indexPath);
+    console.log('File exists:', fs.existsSync(indexPath));
+    
+    mainWindow.loadFile(indexPath).catch((err) => {
+      console.error('Failed to load index.html from:', indexPath, err);
+      mainWindow?.loadURL(`data:text/html,
+        <html>
+          <body style="font-family: Arial; padding: 20px; background: #f8fafc;">
+            <h1>Application Failed to Load</h1>
+            <p>Path: ${indexPath}</p>
+            <p>Exists: ${fs.existsSync(indexPath)}</p>
+            <p>Error: ${err.message}</p>
+            <p style="font-size: 12px; color: #666;">Please ensure the application was built correctly.</p>
+          </body>
+        </html>
+      `);
+    });
   }
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('Failed to load page:', errorCode, errorDescription);
+  });
+
+  // Log console messages from the renderer process
+  mainWindow.webContents.on('console-message', (level, message, line, sourceId) => {
+    console.log(`[${level}] ${message} (${sourceId}:${line})`);
+  });
+
+  // Log CSS loading issues
+  mainWindow.webContents.session.webRequest.onErrorOccurred({ urls: ['<all_urls>'] }, (details) => {
+    if (details.url.includes('.css') || details.url.includes('style')) {
+      console.error('Failed to load resource:', details.url, details.error);
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;

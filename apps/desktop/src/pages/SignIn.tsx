@@ -92,7 +92,7 @@ export default function SignIn() {
         {/* Content */}
         <div className="relative z-10 p-12 flex-1 flex flex-col justify-center">
           <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center mb-10 backdrop-blur-sm border border-white/10">
-            <img src="/logo.png" alt="ArmiGo Logo" className="w-12 h-12 object-contain" />
+            <img src="./logo.png" alt="ArmiGo Logo" className="w-12 h-12 object-contain" />
           </div>
           <h1 className="text-5xl font-bold text-white mb-4 tracking-tight leading-tight">
             ArmiGo
@@ -128,7 +128,7 @@ export default function SignIn() {
           {/* Mobile-only logo */}
           <div className="lg:hidden text-center mb-10">
             <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-200">
-              <img src="/logo.png" alt="ArmiGo Logo" className="w-10 h-10 object-contain" />
+              <img src="./logo.png" alt="ArmiGo Logo" className="w-10 h-10 object-contain" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">ArmiGo</h1>
           </div>

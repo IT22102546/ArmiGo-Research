@@ -55,7 +55,7 @@ export default function Sidebar() {
       <div className={`px-4 py-4 border-b border-slate-100 ${collapsed ? 'items-center' : ''}`}>
         <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
           <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200">
-            <img src="/logo.png" alt="ArmiGo Logo" className="w-8 h-8 object-contain" />
+            <img src="./logo.png" alt="ArmiGo Logo" className="w-8 h-8 object-contain" />
           </div>
           {!collapsed && (
             <div className="min-w-0">
