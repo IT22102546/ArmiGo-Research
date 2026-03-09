@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsEmail, IsEnum, IsOptional, IsPhoneNumber, IsString, MinLength } from "class-validator";
+import { IsEmail, IsEnum, IsOptional, IsString, Matches, MinLength } from "class-validator";
 import { UserRole, UserStatus } from "@prisma/client";
 
 export class CreateUserDto {
@@ -17,7 +17,7 @@ export class CreateUserDto {
   email?: string;
 
   @ApiProperty({ example: "0771234567" })
-  @IsPhoneNumber()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   phone: string;
 
   @ApiProperty({ example: "password123" })
@@ -79,7 +79,7 @@ export class UpdateUserDto {
   email?: string;
 
   @ApiProperty({ required: false })
-  @IsPhoneNumber()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   @IsOptional()
   phone?: string;
 

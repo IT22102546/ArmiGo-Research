@@ -28,6 +28,44 @@ export class UsersService {
   ) {}
 
   /**
+   * Generate a unique display ID for a user (e.g., AGU-0001)
+   */
+  private async generateUserDisplayId(): Promise<string> {
+    const lastUser = await this.prisma.user.findFirst({
+      where: { displayId: { not: undefined } },
+      orderBy: { createdAt: 'desc' },
+      select: { displayId: true },
+    });
+
+    let nextNumber = 1;
+    if (lastUser?.displayId) {
+      const match = lastUser.displayId.match(/AGU-(\d+)/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    const displayId = `AGU-${String(nextNumber).padStart(4, '0')}`;
+
+    const exists = await this.prisma.user.findUnique({
+      where: { displayId },
+    });
+    if (exists) {
+      const allIds = await this.prisma.user.findMany({
+        where: { displayId: { startsWith: 'AGU-' } },
+        select: { displayId: true },
+      });
+      const maxNum = allIds.reduce((max, u) => {
+        const m = u.displayId?.match(/AGU-(\d+)/);
+        return m ? Math.max(max, parseInt(m[1], 10)) : max;
+      }, 0);
+      return `AGU-${String(maxNum + 1).padStart(4, '0')}`;
+    }
+
+    return displayId;
+  }
+
+  /**
    * Helper to extract error message
    */
   private getErrorMessage(error: unknown): string {
@@ -92,7 +130,11 @@ export class UsersService {
     const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
 
     // Prepare user data
+    // Generate human-readable display ID
+    const userDisplayId = await this.generateUserDisplayId();
+
     const userData: any = {
+      displayId: userDisplayId,
       phone: createUserDto.phone,
       email: createUserDto.email || null,
       password: hashedPassword,
@@ -594,11 +636,11 @@ export class UsersService {
 
       // Validate phone format (Sri Lankan)
       if (row.phone) {
-        const phoneRegex = /^(0|\+94)[0-9]{9}$/;
+        const phoneRegex = /^07[0-24-8]\d{7}$/;
         if (!phoneRegex.test(row.phone.replace(/\s/g, ""))) {
-          warnings.push({
+          errors.push({
             field: "phone",
-            message: "Phone number format may be invalid",
+            message: "Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078",
           });
         } else {
           // Check if phone already exists
@@ -671,8 +713,10 @@ export class UsersService {
         const hashedPassword = await bcrypt.hash(password, 12);
 
         // Create user
+        const bulkDisplayId = await this.generateUserDisplayId();
         const user = await this.prisma.user.create({
           data: {
+            displayId: bulkDisplayId,
             firstName: userData.firstName,
             lastName: userData.lastName,
             email: userData.email?.trim().toLowerCase() || null,
@@ -1398,8 +1442,10 @@ async findByPhoneOrEmail(identifier: string): Promise<User | null> {
       phoneToUse = `HOSP-RECOVER-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     }
 
+    const recoverDisplayId = await this.generateUserDisplayId();
     const createdUser = await this.prisma.user.create({
       data: {
+        displayId: recoverDisplayId,
         email: normalizedEmail,
         phone: phoneToUse,
         password: normalizedPasswordHash,

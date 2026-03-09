@@ -1,4 +1,4 @@
-package com.learnup.app
+package com.armigo.app
 
 import android.app.Application
 import android.content.res.Configuration

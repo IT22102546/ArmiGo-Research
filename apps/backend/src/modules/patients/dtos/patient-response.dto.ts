@@ -4,6 +4,9 @@ export class PatientResponseDto {
   @ApiProperty()
   id: string;
 
+  @ApiProperty({ description: 'Human-readable shareable ID' })
+  displayId?: string;
+
   @ApiProperty()
   firstName: string;
 

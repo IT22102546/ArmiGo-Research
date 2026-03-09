@@ -10,6 +10,21 @@ export class HospitalService {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Generate a unique display ID for a user (e.g., AGU-0001)
+   */
+  private async generateUserDisplayId(prismaClient: any = this.prisma): Promise<string> {
+    const allIds = await prismaClient.user.findMany({
+      where: { displayId: { startsWith: 'AGU-' } },
+      select: { displayId: true },
+    });
+    const maxNum = allIds.reduce((max: number, u: any) => {
+      const m = u.displayId?.match(/AGU-(\d+)/);
+      return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    return `AGU-${String(maxNum + 1).padStart(4, '0')}`;
+  }
+
   private async generateUniqueHospitalAdminPhone(tx: any) {
     while (true) {
       const candidate = `HOSP-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -145,8 +160,10 @@ export class HospitalService {
           },
         });
 
+        const adminDisplayId = await this.generateUserDisplayId(tx);
         const hospitalAdminUser = await tx.user.create({
           data: {
+            displayId: adminDisplayId,
             email: normalizedAdminEmail,
             phone: data.phone,
             password: hashedAdminPassword,
