@@ -204,7 +204,12 @@ export default function Home() {
         <div className="relative z-10 flex items-start justify-between">
           <div className="flex-1">
             <p className="text-white/60 text-sm font-medium mb-1">{greeting}</p>
-            <h1 className="text-3xl font-bold text-white tracking-tight mb-5">{displayName}</h1>
+            <h1 className="text-3xl font-bold text-white tracking-tight mb-1">{displayName}</h1>
+            {childDetail?.displayId && (
+              <span className="inline-flex items-center rounded-md bg-white/15 backdrop-blur-sm px-2.5 py-1 text-xs font-semibold text-white/90 font-mono tracking-wide mb-4">
+                {childDetail.displayId}
+              </span>
+            )}
 
             {/* Stats */}
             <div className="flex gap-4">

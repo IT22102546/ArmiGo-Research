@@ -21,6 +21,7 @@ async function main() {
       lastName: 'Admin',
       role: 'SUPER_ADMIN',
       status: 'ACTIVE',
+      displayId: 'AGU-0001',
     }
   })
   
