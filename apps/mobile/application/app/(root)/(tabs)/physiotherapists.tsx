@@ -191,18 +191,19 @@ export default function PhysiotherapistsTab() {
     () =>
       children.map((child) => {
         const physio = child.physioAssignments?.[0]?.physiotherapist ?? null;
+        const physioName = physio?.name ?? child.assignedDoctor ?? null;
         const status = resolveStatus(physio?.availabilityStatus);
         const nextUnavailable = physio?.unavailableDates?.[0] ?? null;
-        return { child, physio, status, nextUnavailable };
+        return { child, physio, physioName, status, nextUnavailable };
       }),
     [children]
   );
 
   const dashboardStats = useMemo(() => {
     const total = cards.length;
-    const assigned = cards.filter((item) => !!item.physio).length;
-    const available = cards.filter((item) => item.status === "AVAILABLE").length;
-    const inWork = cards.filter((item) => item.status === "IN_WORK").length;
+    const assigned = cards.filter((item) => !!item.physioName).length;
+    const available = cards.filter((item) => item.physio && item.status === "AVAILABLE").length;
+    const inWork = cards.filter((item) => item.physio && item.status === "IN_WORK").length;
     return { total, assigned, available, inWork };
   }, [cards]);
 
@@ -306,7 +307,7 @@ export default function PhysiotherapistsTab() {
         }
         renderItem={({ item, index }) => {
           const status = statusConfig[item.status];
-          const hasPhysio = !!item.physio;
+          const hasPhysio = !!item.physioName;
           
           return (
             <Animated.View 
@@ -341,7 +342,7 @@ export default function PhysiotherapistsTab() {
                     </View>
                   </View>
 
-                  {hasPhysio ? (
+                  {hasPhysio && item.physio ? (
                     <LinearGradient
                       colors={status.gradient}
                       style={[styles.statusBadge, { borderColor: status.color + "30" }]}
@@ -351,6 +352,11 @@ export default function PhysiotherapistsTab() {
                         {status.label}
                       </Text>
                     </LinearGradient>
+                  ) : hasPhysio ? (
+                    <View style={[styles.statusBadge, { backgroundColor: COLORS.primarySoft, borderColor: COLORS.primary + "30" }]}>
+                      <Ionicons name="person-circle-outline" size={14} color={COLORS.primary} />
+                      <Text style={[styles.statusText, { color: COLORS.primary }]}>Assigned</Text>
+                    </View>
                   ) : (
                     <View style={[styles.statusBadge, styles.unassignedBadge]}>
                       <Ionicons name="person-outline" size={14} color={COLORS.slate[500]} />
@@ -382,11 +388,11 @@ export default function PhysiotherapistsTab() {
                           style={styles.therapistAvatar}
                         >
                           <Text style={styles.therapistAvatarText}>
-                            {getInitials(item.physio?.name)}
+                            {getInitials(item.physioName)}
                           </Text>
                         </LinearGradient>
                         <View style={styles.therapistInfo}>
-                          <Text style={styles.therapistName}>{item.physio?.name || "Physiotherapist"}</Text>
+                          <Text style={styles.therapistName}>{item.physioName || "Physiotherapist"}</Text>
                           <Text style={styles.therapistSpecialization}>
                             {item.physio?.specialization || item.physio?.role || "Physiotherapist"}
                           </Text>
@@ -395,6 +401,26 @@ export default function PhysiotherapistsTab() {
 
                       {/* Availability Info */}
                       <View style={styles.infoGrid}>
+                        {item.physio ? (
+                          <View style={styles.infoRow}>
+                            <View style={[styles.infoIconContainer, { backgroundColor: status.color + "12" }]}>
+                              <Ionicons name={status.icon as any} size={14} color={status.color} />
+                            </View>
+                            <Text style={styles.infoLabel}>Availability:</Text>
+                            <Text style={[styles.infoValue, { color: status.color, fontWeight: '600' }]}>
+                              {status.label}
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.infoRow}>
+                            <View style={[styles.infoIconContainer, { backgroundColor: COLORS.slate[200] }]}>
+                              <Ionicons name="help-circle-outline" size={14} color={COLORS.slate[500]} />
+                            </View>
+                            <Text style={styles.infoLabel}>Availability:</Text>
+                            <Text style={[styles.infoValue, { color: COLORS.slate[500] }]}>Run backfill to see details</Text>
+                          </View>
+                        )}
+
                         {item.physio?.availabilityUpdatedAt && (
                           <View style={styles.infoRow}>
                             <View style={[styles.infoIconContainer, { backgroundColor: COLORS.info + "12" }]}>

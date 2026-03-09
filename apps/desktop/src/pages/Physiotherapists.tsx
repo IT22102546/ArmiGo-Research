@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, Phone, Mail, CheckCircle, Clock, XCircle, Calendar, Stethoscope, Star } from 'lucide-react';
+import { Users, Phone, Mail, CheckCircle, Clock, XCircle, Calendar, Stethoscope, Activity, AlertCircle } from 'lucide-react';
 import { apiFetch } from '../utils/api';
 
 const extractData = (p: any) => p?.success && p?.data ? p.data : p;
@@ -42,12 +42,22 @@ export default function Physiotherapists() {
     );
   }
 
-  const physios = children.flatMap((child: any) =>
-    (child.physioAssignments || []).map((pa: any) => ({
-      ...pa.physiotherapist,
-      childName: `${child.firstName || ''} ${child.lastName || ''}`.trim(),
-    }))
-  );
+  // Build physio cards from children — use physioAssignments when available, fall back to assignedDoctor name
+  const physios = children.flatMap((child: any) => {
+    const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
+    const assignments = child.physioAssignments || [];
+    if (assignments.length > 0 && assignments[0]?.physiotherapist) {
+      return assignments.map((pa: any) => ({
+        ...pa.physiotherapist,
+        childName,
+        hasFullData: true,
+      }));
+    }
+    if (child.assignedDoctor) {
+      return [{ name: child.assignedDoctor, childName, hasFullData: false }];
+    }
+    return [];
+  });
 
   return (
     <div className="flex-1 overflow-y-auto p-8 page-enter">
@@ -74,8 +84,10 @@ export default function Physiotherapists() {
             const avail = p.availabilityStatus ? AVAIL[p.availabilityStatus] : null;
             const AvailIcon = avail?.icon || CheckCircle;
             const isAvailable = p.availabilityStatus === 'AVAILABLE';
+            const isNotAvailable = p.availabilityStatus === 'NOT_AVAILABLE';
             return (
-              <div key={i} className={`bg-white rounded-2xl p-6 card-shadow border hover-lift ${isAvailable ? 'border-emerald-100' : 'border-slate-100'}`}>
+              <div key={i} className={`bg-white rounded-2xl p-6 card-shadow border hover-lift ${isNotAvailable ? 'border-red-100' : isAvailable ? 'border-emerald-100' : 'border-slate-100'}`}>
+                {/* Header with avatar, name, status */}
                 <div className="flex items-center gap-4 mb-5">
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-200">
                     <span className="text-xl font-bold text-white">{(p.name || 'P')[0]?.toUpperCase()}</span>
@@ -88,14 +100,55 @@ export default function Physiotherapists() {
                       <p className="text-xs text-slate-400">Patient: {p.childName}</p>
                     </div>
                   </div>
-                  {avail && (
+                  {avail ? (
                     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full shrink-0 ${avail.bg}`}>
                       <div className={`w-1.5 h-1.5 rounded-full ${avail.dot} ${isAvailable ? 'animate-pulse' : ''}`} />
                       <span className={`text-xs font-semibold ${avail.color}`}>{avail.label}</span>
                     </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full shrink-0 bg-indigo-50">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      <span className="text-xs font-semibold text-indigo-600">Assigned</span>
+                    </div>
                   )}
                 </div>
 
+                {/* Availability Details Section */}
+                {p.hasFullData && (
+                  <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Activity size={13} className="text-indigo-500" />
+                      <span className="text-xs font-semibold text-slate-600">Availability</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {avail ? (
+                        <>
+                          <div className={`w-2 h-2 rounded-full ${avail.dot} ${isAvailable ? 'animate-pulse' : ''}`} />
+                          <span className={`text-xs font-semibold ${avail.color}`}>{avail.label}</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-2 h-2 rounded-full bg-slate-300" />
+                          <span className="text-xs text-slate-400">Not set</span>
+                        </>
+                      )}
+                    </div>
+                    {p.availabilityNote && (
+                      <div className="flex items-start gap-2 text-sm">
+                        <div className="w-6 h-6 rounded-md bg-amber-50 flex items-center justify-center shrink-0 mt-0.5"><AlertCircle size={12} className="text-amber-500" /></div>
+                        <span className="text-xs text-slate-500">{p.availabilityNote}</span>
+                      </div>
+                    )}
+                    {p.availabilityUpdatedAt && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center shrink-0"><Clock size={12} className="text-blue-500" /></div>
+                        <span className="text-xs text-slate-400">Updated: {new Date(p.availabilityUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Contact Info */}
                 <div className="space-y-2.5 pl-1">
                   {p.phone && (
                     <div className="flex items-center gap-2.5 text-sm text-slate-600">
@@ -111,6 +164,7 @@ export default function Physiotherapists() {
                   )}
                 </div>
 
+                {/* Unavailable Dates */}
                 {p.unavailableDates?.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-slate-100">
                     <p className="text-xs font-semibold text-slate-500 mb-2.5">Unavailable Dates</p>
@@ -120,6 +174,7 @@ export default function Physiotherapists() {
                           <Calendar size={11} className="text-red-400" />
                           <span className="text-[11px] text-red-600 font-medium">
                             {new Date(ud.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {ud.reason ? ` — ${ud.reason}` : ''}
                           </span>
                         </div>
                       ))}
