@@ -72,10 +72,40 @@ export default function SignIn() {
           // allowedRoles: ["INTERNAL_TEACHER", "EXTERNAL_TEACHER"], // REMOVE THIS
         },
         {
-          onSuccess: () => {
-            console.log("✅ Login successful");
-            // Redirect will happen automatically via useEffect
-          },
+          onSuccess: (data) => {
+  console.log("✅ Login successful - RAW DATA:", data);
+  console.log("✅ AccessToken:", data?.accessToken);
+  console.log("✅ User object:", data?.user);
+  console.log("✅ User role:", data?.user?.role);
+  
+  if (data?.user) {
+    console.log("1️⃣ Setting user in store...");
+    // Manually set the user in store
+    useAuthStore.getState().setUser(data.user);
+    console.log("2️⃣ User set in store, checking store...");
+    
+    // Verify store was updated
+    const storeUser = useAuthStore.getState().user;
+    console.log("3️⃣ Store user after set:", storeUser);
+    
+    const userRole = data.user.role;
+    console.log("4️⃣ User role:", userRole);
+    
+    if (userRole === "SUPER_ADMIN" || userRole === "ADMIN" || userRole === "HOSPITAL_ADMIN") {
+      console.log("5️⃣ Role matches admin, redirecting NOW!");
+      // Try multiple redirect methods
+      setTimeout(() => {
+        console.log("6️⃣ Executing redirect...");
+        window.location.href = "/admin";
+      }, 100);
+    } else {
+      console.log("❌ Role not allowed:", userRole);
+      setError("This account type is not allowed in the web dashboard.");
+    }
+  } else {
+    console.log("❌ No user data in response");
+  }
+},
           onError: (err: any) => {
             logger.error("❌ Login failed:", getErrorMessage(err));
             const message = String(err?.message || "").toLowerCase();
