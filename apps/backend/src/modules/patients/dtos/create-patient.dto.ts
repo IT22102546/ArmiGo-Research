@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsDateString, IsNotEmpty, MinLength } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsDateString, IsNotEmpty, MinLength, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePatientDto {
@@ -17,34 +17,44 @@ export class CreatePatientDto {
   @IsOptional()
   email?: string;
 
-  @ApiProperty({ example: '+94701234567', required: false })
+  @ApiProperty({ example: '0701234567', required: false })
   @IsString()
   @IsOptional()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   phone?: string;
+
+  @ApiProperty({ example: 'uuid-parent-id', required: false, description: 'Existing parent user ID. When provided, parentName/parentEmail/parentPhone are not required.' })
+  @IsString()
+  @IsOptional()
+  parentId?: string;
 
   @ApiProperty({
     example: 'Kandy Silva',
     description: 'Parent full name',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  parentName: string;
+  @IsOptional()
+  parentName?: string;
 
   @ApiProperty({
     example: 'kandy.silva@example.com',
     description: 'Parent email',
+    required: false,
   })
   @IsEmail()
-  @IsNotEmpty()
-  parentEmail: string;
+  @IsOptional()
+  parentEmail?: string;
 
   @ApiProperty({
-    example: '+94701234568',
+    example: '0701234568',
     description: 'Parent mobile number',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  parentPhone: string;
+  @IsOptional()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
+  parentPhone?: string;
 
   @ApiProperty({
     example: 'Parent@1234',
@@ -96,9 +106,10 @@ export class CreatePatientDto {
   @IsOptional()
   emergencyContact?: string;
 
-  @ApiProperty({ example: '+94701234568' })
+  @ApiProperty({ example: '0701234568' })
   @IsString()
   @IsOptional()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   emergencyPhone?: string;
 
   // Hospital & Location Selection

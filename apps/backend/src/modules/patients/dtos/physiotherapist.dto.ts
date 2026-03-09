@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class CreatePhysiotherapistDto {
   @ApiProperty({ example: 'Anusha Wickramasinghe' })
@@ -12,9 +12,10 @@ export class CreatePhysiotherapistDto {
   @IsEmail()
   email?: string;
 
-  @ApiProperty({ example: '+94771234567' })
+  @ApiProperty({ example: '0771234567' })
   @IsString()
   @IsNotEmpty()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   phone: string;
 
   @ApiProperty({ example: 'cm123hospitalid' })
@@ -39,9 +40,9 @@ export class UpdatePhysiotherapistDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ example: '+94771234567' })
+  @ApiPropertyOptional({ example: '0771234567' })
   @IsOptional()
-  @IsString()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   phone?: string;
 
   @ApiPropertyOptional({ example: 'cm123hospitalid' })

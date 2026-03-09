@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const PHONE_REGEX = /^\+\d{1,3}\d{7,14}$/;
+export const PHONE_REGEX = /^07[0-24-8]\d{7}$/;
 export const PASSWORD_MIN_LENGTH = 8;
 
 export const passwordSchema = z
@@ -29,9 +29,9 @@ export const phoneSchema = z
   .min(1, "Phone number is required")
   .regex(
     PHONE_REGEX,
-    "Invalid phone number format. Use international format: +[country code][number]"
+    "Invalid phone number. Must be 10 digits starting with 070/071/072/074/075/076/077/078"
   )
-  .max(20, "Phone number is too long");
+  .max(10, "Phone number must be 10 digits");
 
 export const nameSchema = z
   .string()
