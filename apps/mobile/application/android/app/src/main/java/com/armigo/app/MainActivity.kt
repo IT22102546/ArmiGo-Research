@@ -1,4 +1,4 @@
-package com.learnup.app
+package com.armigo.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
