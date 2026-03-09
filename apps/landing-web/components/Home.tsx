@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { Variants } from "framer-motion";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { 
@@ -55,15 +56,15 @@ const fadeInRight = {
   visible: { opacity: 1, x: 0 },
 };
 
-const bounceAnimation = {
+const bounceAnimation: Variants = {
   hidden: { scale: 0.8, opacity: 0 },
   visible: { 
     scale: 1, 
     opacity: 1,
-    transition: {
-      type: "spring",
-      stiffness: 260,
-      damping: 20
+    transition: { 
+      type: "spring", 
+      stiffness: 260, 
+      damping: 20 
     }
   }
 };
@@ -175,7 +176,7 @@ const staticTestimonials = [
 ];
 
 const HomeSection = () => {
-  const [testimonials, setTestimonials] = useState([]);
+ const [testimonials, setTestimonials] = useState<typeof staticTestimonials>([]);
   const [activeVideo, setActiveVideo] = useState(false);
   const [hoveredDevice, setHoveredDevice] = useState(null);
   const [mounted, setMounted] = useState(false);
