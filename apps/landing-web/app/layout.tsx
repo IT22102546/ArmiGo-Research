@@ -93,7 +93,7 @@ export default function RootLayout({
         <link rel="preload" as="image" href="/assets/logo.png" />
         
         {/* Add theme color for mobile browsers - now handled by viewport export */}
-        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         
         {/* Favicon - Multiple formats for better compatibility */}
@@ -138,26 +138,6 @@ export default function RootLayout({
       </head>
       <body className="antialiased font-sans" suppressHydrationWarning>
         {children}
-        
-        {/* Service worker registration - Optional: Remove if not needed */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(
-                    function(registration) {
-                      console.log('ServiceWorker registration successful');
-                    },
-                    function(err) {
-                      console.log('ServiceWorker registration failed: ', err);
-                    }
-                  );
-                });
-              }
-            `,
-          }}
-        />
       </body>
     </html>
   );

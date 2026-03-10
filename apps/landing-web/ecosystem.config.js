@@ -3,7 +3,7 @@ module.exports = {
     name: 'armigo-app',
     script: 'npm',
     args: 'start',
-    cwd: '/root/ArmiGo-Research',
+    cwd: '/root/ArmiGo-Research/apps/landing-web',
     env: {
       NODE_ENV: 'production',
       PORT: 8302
