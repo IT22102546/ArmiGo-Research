@@ -64,7 +64,7 @@ export default function App() {
 
   // Socket connection for real-time notifications
   useEffect(() => {
-    if (!isSignedIn || !currentUser?.id || !accessToken) return;
+    if (!isSignedIn || !currentUser?.id || !accessToken || !authChecked) return;
     socket.connect();
     socket.emit('authenticate', { userId: currentUser.id, token: accessToken });
     socket.on('notification', (data: any) => {

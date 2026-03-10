@@ -1,6 +1,8 @@
 import useAuthStore from '../stores/authStore';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// In dev the Vite proxy intercepts /api/** → https://api.armigorehab.com/**
+// In prod VITE_API_URL is the full base URL, endpoints already start with /api/v1/...
+const API_BASE = (import.meta.env.VITE_API_URL as string) ?? '';
 
 export const apiFetch = async (endpoint: string, options: RequestInit = {}): Promise<Response> => {
   const authState = useAuthStore.getState();
@@ -19,7 +21,9 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}): Pro
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = `${API_BASE_URL}${endpoint}`;
+  // API_BASE is '' in dev (proxy handles it) or full URL in prod
+  // Endpoints always start with /api/v1/... so no double-prefix
+  const url = API_BASE ? `${API_BASE}${endpoint}` : endpoint;
   const response = await fetch(url, { ...options, headers });
   return response;
 };

@@ -45,25 +45,26 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
-    // Add proxy configuration
-server: {
-  proxy: {
-    '/api': {
-      target: 'http://192.168.1.103:5000',
-      changeOrigin: true,
-      rewrite: (path) => path.replace(/^\/api/, ''), // Remove /api, not add another one
-      configure: (proxy, _options) => {
-        proxy.on('error', (err, _req, _res) => {
-          console.log('proxy error', err);
-        });
+    server: {
+      proxy: {
+        // Proxy /api/v1/... → https://api.armigorehab.com/api/v1/...
+        // No rewrite — backend global prefix is "api/v1", path is kept intact.
+        '/api': {
+          target: 'http://192.168.43.18:5000',
+          changeOrigin: true,
+          configure: (proxy, _options) => {
+            proxy.on('error', (err, _req, _res) => {
+              console.log('proxy error', err);
+            });
+          },
+        },
       },
     },
-  },
-},
     define: {
-      // In dev: use proxy path "/api". In production: use real API URL directly
+      // In dev: empty string — endpoints (/api/v1/...) go through the Vite proxy directly
+      // In prod: full base URL — endpoints are appended to it
       'import.meta.env.VITE_API_URL': JSON.stringify(
-        isProd ? 'https://api.armigorehab.com' : '/api'
+        isProd ? 'https://api.armigorehab.com' : ''
       ),
       'import.meta.env.VITE_STORAGE_URL': JSON.stringify('https://api.armigorehab.com/uploads'),
     },
