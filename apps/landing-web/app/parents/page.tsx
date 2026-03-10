@@ -42,7 +42,10 @@ import {
   Move,
   Maximize,
   Minimize,
-  Repeat
+  Repeat,
+  Wifi,
+  BatteryFull,
+  Zap
 } from "lucide-react";
 
 // Animation constants - fixed types
@@ -145,8 +148,8 @@ const devices: Device[] = [
       { name: "Adduction", description: "Bringing fingers together", icon: Minimize, color: "blue" },
       { name: "Circumduction", description: "Circular finger movements", icon: RotateCw, color: "blue" }
     ],
-    connection: "USB Connection to Computer",
-    setup: "Plug into any USB port, launch the game, and start playing!",
+    connection: "WiFi Wireless Connection",
+    setup: "Power on the device, connect to WiFi, launch the game, and start playing!",
     color: "from-blue-400 to-blue-600",
     bgColor: "bg-blue-50",
     iconColor: "text-blue-600",
@@ -164,8 +167,8 @@ const devices: Device[] = [
       { name: "Radial Deviation", description: "Bending toward thumb side", icon: ArrowRight, color: "purple" },
       { name: "Ulnar Deviation", description: "Bending toward little finger side", icon: ArrowRight, color: "purple" }
     ],
-    connection: "USB Connection to Laptop/Computer",
-    setup: "Connect via USB, launch your favorite game, and watch the magic happen!",
+    connection: "WiFi Wireless Connection",
+    setup: "Turn on the device, connect to WiFi, launch your favorite game, and watch the magic happen!",
     color: "from-purple-400 to-purple-600",
     bgColor: "bg-purple-50",
     iconColor: "text-purple-600",
@@ -183,8 +186,8 @@ const devices: Device[] = [
       { name: "Pronation", description: "Rotating palm down", icon: RotateCw, color: "green" },
       { name: "Supination", description: "Rotating palm up", icon: RotateCw, color: "green" }
     ],
-    connection: "USB Connection to Computer",
-    setup: "Simple USB plug-and-play. Start the game and begin your adventure!",
+    connection: "WiFi Wireless Connection",
+    setup: "Switch on the device, connect to WiFi, start the game and begin your adventure!",
     color: "from-green-400 to-green-600",
     bgColor: "bg-green-50",
     iconColor: "text-green-600",
@@ -203,8 +206,8 @@ const devices: Device[] = [
       { name: "Adduction", description: "Bringing arm down to side", icon: Minimize, color: "orange" },
       { name: "Circumduction", description: "Circular arm movements", icon: RotateCw, color: "orange" }
     ],
-    connection: "USB Connection to Laptop/Desktop",
-    setup: "Connect to USB port, launch any ArmiGo game, and let the adventure begin!",
+    connection: "WiFi Wireless Connection",
+    setup: "Power on the device, connect to WiFi, launch any ArmiGo game, and let the adventure begin!",
     color: "from-orange-400 to-orange-600",
     bgColor: "bg-orange-50",
     iconColor: "text-orange-600",
@@ -216,46 +219,58 @@ const devices: Device[] = [
 const setupSteps: SetupStep[] = [
   {
     step: 1,
-    title: "Connect the Device",
-    description: "Simply plug the device into any available USB port on your computer",
-    icon: Usb,
+    title: "Power On the Device",
+    description: "Press the power button - the built-in 2000mAh rechargeable battery keeps it running for hours",
+    icon: Zap,
     color: "blue"
   },
   {
     step: 2,
-    title: "Launch the Game",
-    description: "Open any ArmiGo game from our collection",
-    icon: Gamepad,
+    title: "Connect to WiFi",
+    description: "The device connects wirelessly to your computer via WiFi - no cables needed!",
+    icon: Wifi,
     color: "purple"
   },
   {
     step: 3,
-    title: "Start Playing",
-    description: "The device automatically syncs - no complicated setup needed!",
-    icon: Play,
+    title: "Launch the Game",
+    description: "Open any ArmiGo game from our collection",
+    icon: Gamepad,
     color: "green"
+  },
+  {
+    step: 4,
+    title: "Start Playing",
+    description: "The device automatically syncs wirelessly - no complicated setup needed!",
+    icon: Play,
+    color: "orange"
   }
 ];
 
 const faqs: FAQ[] = [
   {
-    question: "Do I need to install drivers?",
-    answer: "No! All ArmiGo devices are plug-and-play. Just connect via USB and they work immediately with our games.",
-    icon: Cable
+    question: "Do I need any cables or wires?",
+    answer: "No! All ArmiGo devices connect wirelessly via WiFi. Just power on the device and it connects automatically to our games. Completely cable-free!",
+    icon: Wifi
+  },
+  {
+    question: "How long does the battery last?",
+    answer: "Each device has a built-in 2000mAh rechargeable LiPo battery that lasts for multiple therapy sessions. Simply recharge using the included charger when needed.",
+    icon: BatteryFull
   },
   {
     question: "Can multiple devices work together?",
-    answer: "Yes! You can connect multiple devices simultaneously for combined therapy sessions.",
+    answer: "Yes! You can connect multiple devices simultaneously via WiFi for combined therapy sessions.",
     icon: Repeat
   },
   {
     question: "How do I know if it's working?",
-    answer: "The device has a small LED indicator that lights up when connected. Our games also show real-time movement feedback.",
+    answer: "The device has a small LED indicator that lights up when powered on and connected. Our games also show real-time movement feedback.",
     icon: Info
   },
   {
     question: "Is it safe for children?",
-    answer: "Absolutely! All devices are FDA-registered, child-safe, and designed with input from pediatric therapists.",
+    answer: "Absolutely! All devices are child-safe, wireless, portable, and designed with input from pediatric therapists.",
     icon: Shield
   }
 ];
@@ -490,8 +505,8 @@ export default function ParentsPage() {
             viewport={{ once: true }}
           >
             <p className="text-gray-700 flex items-center justify-center gap-2">
-              <Usb className="w-5 h-5 text-blue-600" />
-              <span className="font-bold">Note:</span> All devices connect via USB port - no batteries or charging needed!
+              <Wifi className="w-5 h-5 text-blue-600" />
+              <span className="font-bold">Note:</span> All devices connect wirelessly via WiFi and are powered by a rechargeable 2000mAh LiPo battery - simply charge when the battery is low!
             </p>
           </motion.div>
         </div>
@@ -568,7 +583,7 @@ export default function ParentsPage() {
                             <p className="text-gray-700">{device.setup}</p>
                             <div className="flex items-center gap-2 mt-3 text-sm text-green-600">
                               <CheckCircle className="w-4 h-4" />
-                              <span>Plug & Play - No drivers needed</span>
+                              <span>Wireless & Portable - No cables needed</span>
                             </div>
                           </div>
                         </div>
@@ -784,29 +799,29 @@ export default function ParentsPage() {
             </div>
 
             <div className="relative z-10 text-center">
-              <Usb className="w-16 h-16 mx-auto mb-6 text-white/80" />
+              <Wifi className="w-16 h-16 mx-auto mb-6 text-white/80" />
               
               <h2 className="text-3xl md:text-4xl font-black mb-4">
-                Simple USB Connection
+                Wireless WiFi Connection
               </h2>
               
               <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-                All ArmiGo devices connect via standard USB ports. Just plug in and play - 
-                no complicated setup, no batteries to charge, no wireless interference.
+                All ArmiGo devices connect wirelessly via WiFi. Powered by a built-in 2000mAh 
+                rechargeable LiPo battery - no cables, no hassle, completely portable.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                 <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Plug & Play</span>
+                  <span>100% Wireless</span>
                 </div>
                 <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
                   <CheckCircle className="w-4 h-4" />
-                  <span>No Drivers Needed</span>
+                  <span>Rechargeable Battery</span>
                 </div>
                 <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Works with All Games</span>
+                  <span>Portable & Lightweight</span>
                 </div>
               </div>
             </div>

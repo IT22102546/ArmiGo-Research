@@ -50,7 +50,7 @@ export default defineConfig(({ mode }) => {
         // Proxy /api/v1/... → https://api.armigorehab.com/api/v1/...
         // No rewrite — backend global prefix is "api/v1", path is kept intact.
         '/api': {
-          target: 'http://192.168.43.18:5000',
+          target: 'https://api.armigorehab.com',
           changeOrigin: true,
           configure: (proxy, _options) => {
             proxy.on('error', (err, _req, _res) => {

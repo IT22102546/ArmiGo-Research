@@ -815,7 +815,7 @@ const s = StyleSheet.create({
   statLabel: { fontSize: 11, color: "#c7d2fe", fontFamily: "Poppins-Regular", marginTop: 4 },
 
   scroll: { flex: 1, backgroundColor: "#f8fafc" },
-  scrollPad: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 50 },
+  scrollPad: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 110 },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "#f8fafc" },
   loadTxt: { fontSize: 15, color: SLATE_500, fontFamily: "Poppins-Regular" },

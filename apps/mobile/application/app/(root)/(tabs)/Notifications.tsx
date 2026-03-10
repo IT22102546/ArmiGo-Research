@@ -985,7 +985,7 @@ const styles = StyleSheet.create({
   // Scroll Content
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 110,
   },
 
   // Action Bar
