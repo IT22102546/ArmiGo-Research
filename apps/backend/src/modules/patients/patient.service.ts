@@ -37,9 +37,87 @@ export class PatientService {
   ) {}
 
   /**
+   * Generate a unique display ID for a child (e.g., AG-0001)
+   */
+  private async generateChildDisplayId(): Promise<string> {
+    const lastChild = await this.prisma.child.findFirst({
+      where: { displayId: { not: undefined } },
+      orderBy: { enrolledAt: 'desc' },
+      select: { displayId: true },
+    });
+
+    let nextNumber = 1;
+    if (lastChild?.displayId) {
+      const match = lastChild.displayId.match(/AG-(\d+)/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    const displayId = `AG-${String(nextNumber).padStart(4, '0')}`;
+
+    // Verify uniqueness
+    const exists = await this.prisma.child.findUnique({
+      where: { displayId },
+    });
+    if (exists) {
+      // Fallback: find the max number
+      const allIds = await this.prisma.child.findMany({
+        where: { displayId: { startsWith: 'AG-' } },
+        select: { displayId: true },
+      });
+      const maxNum = allIds.reduce((max, c) => {
+        const m = c.displayId?.match(/AG-(\d+)/);
+        return m ? Math.max(max, parseInt(m[1], 10)) : max;
+      }, 0);
+      return `AG-${String(maxNum + 1).padStart(4, '0')}`;
+    }
+
+    return displayId;
+  }
+
+  /**
+   * Generate a unique display ID for a user (e.g., AGU-0001)
+   */
+  private async generateUserDisplayId(): Promise<string> {
+    const lastUser = await this.prisma.user.findFirst({
+      where: { displayId: { not: undefined } },
+      orderBy: { createdAt: 'desc' },
+      select: { displayId: true },
+    });
+
+    let nextNumber = 1;
+    if (lastUser?.displayId) {
+      const match = lastUser.displayId.match(/AGU-(\d+)/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    const displayId = `AGU-${String(nextNumber).padStart(4, '0')}`;
+
+    const exists = await this.prisma.user.findUnique({
+      where: { displayId },
+    });
+    if (exists) {
+      const allIds = await this.prisma.user.findMany({
+        where: { displayId: { startsWith: 'AGU-' } },
+        select: { displayId: true },
+      });
+      const maxNum = allIds.reduce((max, u) => {
+        const m = u.displayId?.match(/AGU-(\d+)/);
+        return m ? Math.max(max, parseInt(m[1], 10)) : max;
+      }, 0);
+      return `AGU-${String(maxNum + 1).padStart(4, '0')}`;
+    }
+
+    return displayId;
+  }
+
+  /**
    * Create a new patient
    */
-  async createPatient(data: CreatePatientDto): Promise<PatientResponseDto> {
+  async createPatient(data: CreatePatientDto, createdById?: string): Promise<PatientResponseDto> {
     try {
       // Validate hospital exists
       if (!data.hospitalId) {
@@ -68,9 +146,84 @@ export class PatientService {
         await this.validateChildLocation(data.districtId, data.zoneId);
       }
 
-      // Calculate age from dateOfBirth
+      // Validate birthdate is not in the future
       const birthDate = this.parseDateOnly(data.dateOfBirth);
+      if (birthDate > new Date()) {
+        throw new BadRequestException('Date of birth cannot be in the future');
+      }
       const age = this.calculateAge(birthDate);
+
+      // If parentId is provided, use existing parent directly
+      if (data.parentId) {
+        const existingParent = await this.prisma.user.findUnique({
+          where: { id: data.parentId },
+        });
+        if (!existingParent) {
+          throw new BadRequestException('Selected parent not found');
+        }
+        if (existingParent.role !== 'PARENT') {
+          throw new BadRequestException('Selected user is not a parent');
+        }
+
+        await this.prisma.parentProfile.upsert({
+          where: { userId: existingParent.id },
+          update: {},
+          create: { userId: existingParent.id },
+        });
+
+        // Check duplicate child name
+        const existingChild = await this.prisma.child.findFirst({
+          where: {
+            parentId: existingParent.id,
+            firstName: { equals: data.firstName, mode: 'insensitive' },
+            lastName: { equals: data.lastName, mode: 'insensitive' },
+          },
+        });
+        if (existingChild) {
+          throw new BadRequestException(
+            `This parent already has a child named "${data.firstName} ${data.lastName}". Please use a different name.`
+          );
+        }
+
+        const childDisplayId = await this.generateChildDisplayId();
+        const patient = await this.prisma.child.create({
+          data: {
+            displayId: childDisplayId,
+            parentId: existingParent.id,
+            hospitalId: data.hospitalId,
+            subHospitalId: data.subHospitalId,
+            districtId: data.districtId,
+            zoneId: data.zoneId,
+            address: data.address,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            dateOfBirth: birthDate,
+            age,
+            gender: data.gender,
+            diagnosis: data.diagnosis,
+            assignedDoctor: data.assignedDoctor,
+            medicalNotes: data.medicalHistory,
+            exerciseFingers: data.exerciseFingers ?? false,
+            exerciseWrist: data.exerciseWrist ?? false,
+            exerciseElbow: data.exerciseElbow ?? false,
+            exerciseShoulder: data.exerciseShoulder ?? false,
+            isActive: true,
+          },
+          include: {
+            hospital: {
+              include: {
+                district: { include: { province: true } },
+                zone: true,
+              },
+            },
+            parent: true,
+            district: { include: { province: true } },
+            zone: true,
+          },
+        });
+
+        return this.mapChildToPatientResponse(patient);
+      }
 
       const parentFullName = (data.parentName || '').trim();
       const [parentFirstName, ...parentLastNameParts] = parentFullName.split(' ');
@@ -81,8 +234,17 @@ export class PatientService {
         throw new BadRequestException('Parent mobile number is required');
       }
 
+      const slPhoneRegex = /^07[0-24-8]\d{7}$/;
+      if (!slPhoneRegex.test(data.parentPhone.trim())) {
+        throw new BadRequestException('Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078');
+      }
+
       if (!data.parentEmail?.trim()) {
         throw new BadRequestException('Parent email is required');
+      }
+
+      if (!data.parentName?.trim()) {
+        throw new BadRequestException('Parent name is required');
       }
 
       const isProvidedPassword = !!data.parentPassword?.trim();
@@ -102,29 +264,18 @@ export class PatientService {
 
       let parentId: string;
       if (user && user.role === 'PARENT') {
-        parentId = user.id;
-
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            firstName: normalizedParentFirstName,
-            lastName: normalizedParentLastName,
-            email: data.parentEmail,
-            phone: data.parentPhone,
-            ...(isProvidedPassword ? { password: hashedParentPassword } : {}),
-          },
-        });
-
-        if (isProvidedPassword) {
-          shouldReturnCredentials = true;
-        }
+        throw new BadRequestException(
+          'A parent with this email or mobile number already exists. Please use the "Existing Parent" option to add a child to this parent.'
+        );
       } else if (user && user.role !== 'PARENT') {
         throw new BadRequestException(
           'Provided parent email or phone already belongs to another user role'
         );
       } else {
+        const parentDisplayId = await this.generateUserDisplayId();
         const placeholderParent = await this.prisma.user.create({
           data: {
+            displayId: parentDisplayId,
             email: data.parentEmail,
             phone: data.parentPhone,
             firstName: normalizedParentFirstName,
@@ -146,8 +297,26 @@ export class PatientService {
         },
       });
 
+      // Check if this parent already has a child with the same name
+      const existingChild = await this.prisma.child.findFirst({
+        where: {
+          parentId,
+          firstName: { equals: data.firstName, mode: 'insensitive' },
+          lastName: { equals: data.lastName, mode: 'insensitive' },
+        },
+      });
+
+      if (existingChild) {
+        throw new BadRequestException(
+          `This parent already has a child named "${data.firstName} ${data.lastName}". Please use a different name.`
+        );
+      }
+
+      const childDisplayId = await this.generateChildDisplayId();
+
       const patient = await this.prisma.child.create({
         data: {
+          displayId: childDisplayId,
           parentId,
           hospitalId: data.hospitalId,
           subHospitalId: data.subHospitalId,
@@ -440,6 +609,26 @@ export class PatientService {
       updateData.dateOfBirth = birthDate;
       updateData.age = this.calculateAge(birthDate);
     }
+
+    // Convert scalar FK fields to Prisma relation connect syntax
+    if (updateData.districtId) {
+      updateData.district = { connect: { id: updateData.districtId } };
+      delete updateData.districtId;
+    }
+    if (updateData.zoneId) {
+      updateData.zone = { connect: { id: updateData.zoneId } };
+      delete updateData.zoneId;
+    }
+    if (updateData.hospitalId) {
+      updateData.hospital = { connect: { id: updateData.hospitalId } };
+      delete updateData.hospitalId;
+    }
+    if (updateData.subHospitalId) {
+      updateData.subHospital = { connect: { id: updateData.subHospitalId } };
+      delete updateData.subHospitalId;
+    }
+    // physiotherapistId is not a direct field on Child, remove it
+    delete updateData.physiotherapistId;
 
     const parentFullName = (data.parentName || '').trim();
     if (patient.parentId && (parentFullName || data.parentEmail || data.parentPhone)) {
@@ -2327,6 +2516,7 @@ export class PatientService {
 
     return {
       id: child.id,
+      displayId: child.displayId,
       firstName: child.firstName,
       lastName: child.lastName,
       address: child.address,
@@ -2498,35 +2688,56 @@ export class PatientService {
       }),
     ]);
 
-    // Get children assigned to the chosen physiotherapist (via admission tracking)
+    // Get children for the chosen physiotherapist
     let children: any[] = [];
     if (physiotherapistId) {
-      const admissions = await this.prisma.admissionTracking.findMany({
-        where: { physiotherapistId },
-        select: {
-          childId: true,
-          child: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              age: true,
-              diagnosis: true,
-              hospitalId: true,
-              hospital: { select: { id: true, name: true } },
-            },
-          },
-        },
+      const childSelect = {
+        id: true,
+        firstName: true,
+        lastName: true,
+        age: true,
+        diagnosis: true,
+        hospitalId: true,
+        hospital: { select: { id: true, name: true } },
+      } as const;
+
+      // Find the physiotherapist's hospital so we can include all children from that hospital
+      const physio = await this.prisma.hospitalStaff.findUnique({
+        where: { id: physiotherapistId },
+        select: { hospitalId: true },
       });
-      // Deduplicate children
+
+      const [admissions, physioAssignments, hospitalChildren] = await Promise.all([
+        this.prisma.admissionTracking.findMany({
+          where: { physiotherapistId },
+          select: { child: { select: childSelect } },
+        }),
+        this.prisma.physiotherapyAssignment.findMany({
+          where: { physiotherapistId },
+          select: { child: { select: childSelect } },
+        }),
+        // Also include all active children from the physiotherapist's hospital
+        physio?.hospitalId
+          ? this.prisma.child.findMany({
+              where: { hospitalId: physio.hospitalId, isActive: true },
+              select: childSelect,
+            })
+          : Promise.resolve([]),
+      ]);
+
+      // Deduplicate children from all three sources
       const seen = new Set<string>();
-      children = admissions
-        .map((a) => a.child)
+      children = [
+        ...admissions.map((a) => a.child),
+        ...physioAssignments.map((a) => a.child),
+        ...hospitalChildren,
+      ]
         .filter((c) => {
           if (seen.has(c.id)) return false;
           seen.add(c.id);
           return true;
-        });
+        })
+        .sort((a, b) => a.firstName.localeCompare(b.firstName) || a.lastName.localeCompare(b.lastName));
     } else if (hospitalId) {
       // No physiotherapist selected yet – return all active children for the hospital
       children = await this.prisma.child.findMany({

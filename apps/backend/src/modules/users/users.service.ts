@@ -28,6 +28,44 @@ export class UsersService {
   ) {}
 
   /**
+   * Generate a unique display ID for a user (e.g., AGU-0001)
+   */
+  private async generateUserDisplayId(): Promise<string> {
+    const lastUser = await this.prisma.user.findFirst({
+      where: { displayId: { not: undefined } },
+      orderBy: { createdAt: 'desc' },
+      select: { displayId: true },
+    });
+
+    let nextNumber = 1;
+    if (lastUser?.displayId) {
+      const match = lastUser.displayId.match(/AGU-(\d+)/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    const displayId = `AGU-${String(nextNumber).padStart(4, '0')}`;
+
+    const exists = await this.prisma.user.findUnique({
+      where: { displayId },
+    });
+    if (exists) {
+      const allIds = await this.prisma.user.findMany({
+        where: { displayId: { startsWith: 'AGU-' } },
+        select: { displayId: true },
+      });
+      const maxNum = allIds.reduce((max, u) => {
+        const m = u.displayId?.match(/AGU-(\d+)/);
+        return m ? Math.max(max, parseInt(m[1], 10)) : max;
+      }, 0);
+      return `AGU-${String(maxNum + 1).padStart(4, '0')}`;
+    }
+
+    return displayId;
+  }
+
+  /**
    * Helper to extract error message
    */
   private getErrorMessage(error: unknown): string {
@@ -92,7 +130,11 @@ export class UsersService {
     const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
 
     // Prepare user data
+    // Generate human-readable display ID
+    const userDisplayId = await this.generateUserDisplayId();
+
     const userData: any = {
+      displayId: userDisplayId,
       phone: createUserDto.phone,
       email: createUserDto.email || null,
       password: hashedPassword,
@@ -594,11 +636,11 @@ export class UsersService {
 
       // Validate phone format (Sri Lankan)
       if (row.phone) {
-        const phoneRegex = /^(0|\+94)[0-9]{9}$/;
+        const phoneRegex = /^07[0-24-8]\d{7}$/;
         if (!phoneRegex.test(row.phone.replace(/\s/g, ""))) {
-          warnings.push({
+          errors.push({
             field: "phone",
-            message: "Phone number format may be invalid",
+            message: "Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078",
           });
         } else {
           // Check if phone already exists
@@ -671,8 +713,10 @@ export class UsersService {
         const hashedPassword = await bcrypt.hash(password, 12);
 
         // Create user
+        const bulkDisplayId = await this.generateUserDisplayId();
         const user = await this.prisma.user.create({
           data: {
+            displayId: bulkDisplayId,
             firstName: userData.firstName,
             lastName: userData.lastName,
             email: userData.email?.trim().toLowerCase() || null,
@@ -921,6 +965,45 @@ export class UsersService {
     this.logger.log(
       `findChildrenForParent(${parentId}): searched ids=${[...allParentIds].join(',')} → ${children.length} children`,
     );
+
+    // For children with no physioAssignments but an assignedDoctor name,
+    // look up HospitalStaff by name and inject a synthetic assignment
+    const childrenNeedingLookup = children.filter(
+      (c: any) => (!c.physioAssignments || c.physioAssignments.length === 0) && c.assignedDoctor?.trim()
+    );
+    if (childrenNeedingLookup.length > 0) {
+      const doctorNames = [...new Set(childrenNeedingLookup.map((c: any) => c.assignedDoctor.trim()))];
+      const staffByName = await this.prisma.hospitalStaff.findMany({
+        where: {
+          name: { in: doctorNames },
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          specialization: true,
+          phone: true,
+          email: true,
+          isActive: true,
+          availabilityStatus: true,
+          availabilityNote: true,
+          availabilityUpdatedAt: true,
+          unavailableDates: {
+            where: { date: { gte: new Date() } },
+            orderBy: { date: 'asc' as const },
+            select: { id: true, date: true, reason: true },
+          },
+        },
+      });
+      const staffMap = new Map(staffByName.map((s) => [s.name, s]));
+      for (const child of childrenNeedingLookup) {
+        const staff = staffMap.get(child.assignedDoctor!.trim());
+        if (staff) {
+          (child as any).physioAssignments = [{ id: `fallback-${child.id}`, physiotherapist: staff }];
+        }
+      }
+    }
 
     return children.map((child: any) => {
       const admissionPlayTimeMinutes = (Array.isArray(child.admissionTrackings) ? child.admissionTrackings : [])
@@ -1398,8 +1481,10 @@ async findByPhoneOrEmail(identifier: string): Promise<User | null> {
       phoneToUse = `HOSP-RECOVER-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     }
 
+    const recoverDisplayId = await this.generateUserDisplayId();
     const createdUser = await this.prisma.user.create({
       data: {
+        displayId: recoverDisplayId,
         email: normalizedEmail,
         phone: phoneToUse,
         password: normalizedPasswordHash,

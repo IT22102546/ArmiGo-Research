@@ -94,6 +94,7 @@ enum HospitalStatus {
 
 model User {
   id                String          @id @default(cuid())
+  displayId         String          @unique
   email             String?         @unique
   phone             String          @unique
   password          String
@@ -382,6 +383,7 @@ model HospitalStaff {
 
 model Child {
   id              String          @id @default(cuid())
+  displayId       String          @unique
   parentId        String
   hospitalId      String?
   subHospitalId   String?

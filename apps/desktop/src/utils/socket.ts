@@ -1,8 +1,10 @@
 import { io } from 'socket.io-client';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// In dev VITE_API_URL is '' (proxy only handles HTTP, not WebSocket)
+// Always connect to the real API for WebSocket
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'https://api.armigorehab.com';
 
-export const socket = io(API_BASE_URL, {
+export const socket = io(SOCKET_URL, {
   autoConnect: false,
   transports: ['websocket', 'polling'],
 });

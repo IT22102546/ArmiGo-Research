@@ -67,6 +67,7 @@ interface Hospital {
 
 interface Child {
   id: string;
+  displayId?: string;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -240,6 +241,13 @@ const ChildCard: React.FC<{ child: Child; index: number }> = ({ child, index }) 
             {child.firstName} {child.lastName}
           </Text>
           <View style={cc.pills}>
+            {child.displayId && (
+              <View style={[cc.genderPill, { backgroundColor: "rgba(255,255,255,0.25)", borderColor: "rgba(255,255,255,0.5)" }]}>
+                <Text style={[cc.genderTxt, { color: "#fff", fontFamily: "monospace", fontSize: 10 }]}>
+                  {child.displayId}
+                </Text>
+              </View>
+            )}
             <View style={[cc.genderPill, { backgroundColor: gc + "30", borderColor: gc + "80" }]}>
               <Text style={[cc.genderTxt, { color: "#fff" }]}>
                 {capitalize(child.gender)}
@@ -807,7 +815,7 @@ const s = StyleSheet.create({
   statLabel: { fontSize: 11, color: "#c7d2fe", fontFamily: "Poppins-Regular", marginTop: 4 },
 
   scroll: { flex: 1, backgroundColor: "#f8fafc" },
-  scrollPad: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 50 },
+  scrollPad: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 110 },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "#f8fafc" },
   loadTxt: { fontSize: 15, color: SLATE_500, fontFamily: "Poppins-Regular" },

@@ -17,6 +17,7 @@ import { images } from "@/constants";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Hospital & physiotherapy themed icons for floating background animation
 const MEDICAL_ICONS = [
@@ -68,6 +69,7 @@ const ICON_POSITIONS = [
 
 const OnBoard2: React.FC = () => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // Animation values for decorative elements
   const triangleAnim = useRef<Animated.Value>(new Animated.Value(0)).current;
@@ -518,7 +520,7 @@ const OnBoard2: React.FC = () => {
           <View style={styles.lightBlueWaveContainer}>
             <Svg
               height="92"
-              width="90%"
+              width="100%"
               viewBox="0 0 1440 320"
               style={styles.lightBlueWaveSvg}
             >
@@ -627,7 +629,7 @@ const OnBoard2: React.FC = () => {
 
       {/* Skip Button OUTSIDE the PanResponder */}
       <TouchableOpacity
-        style={styles.skipButtonContainer}
+        style={[styles.skipButtonContainer, { bottom: 30 + Math.max(insets.bottom, 0) }]}
         onPress={handleSkipPress}
         activeOpacity={0.7}
       >
@@ -636,7 +638,7 @@ const OnBoard2: React.FC = () => {
 
       {/* Next Button OUTSIDE the PanResponder */}
       <TouchableOpacity
-        style={styles.nextButtonContainer}
+        style={[styles.nextButtonContainer, { bottom: Math.max(insets.bottom, 0) }]}
         onPress={handleNextPress}
         activeOpacity={0.7}
       >
@@ -700,15 +702,15 @@ const styles = StyleSheet.create({
   },
   whiteWaveWrapper: {
     position: "absolute",
-    bottom: -5,
+    bottom: -6,
     left: 0,
     zIndex: 3,
   },
   lightBlueWaveContainer: {
     position: "absolute",
-    bottom: -0.1,
-    left: "5%",
-    right: "-20%",
+    bottom: -6,
+    left: 0,
+    right: 0,
     alignItems: "center",
     zIndex: 2,
   },

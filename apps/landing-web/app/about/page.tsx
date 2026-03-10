@@ -28,6 +28,7 @@ import {
   PartyPopper,
   Gem,
   Medal,
+  Hospital,
   Sun,
   Cloud,
   Rainbow,
@@ -55,7 +56,7 @@ const bounceAnimation = {
     scale: 1, 
     opacity: 1,
     transition: {
-      type: "spring",
+       type: "spring" as const,
       stiffness: 260,
       damping: 20
     }
@@ -96,48 +97,75 @@ const floatingElements = [
 
 const teamMembers = [
   {
-    name: "Dr. Sarah Chen",
-    role: "Founder & Pediatric Rehab Specialist",
-    bio: "With over 15 years of experience in pediatric rehabilitation, Dr. Chen founded ArmiGo to make therapy fun and engaging for children.",
-    image: "/assets/team-1.png",
+    name: "Mr. Didula Chamara",
+    role: "Supervisor",
+    bio: "Guiding the ArmiGo research project with expertise in software engineering and healthcare technology innovation.",
+    image: "/assets/supervisor.jpeg",
     color: "from-blue-400 to-purple-400",
-    emoji: "👩‍⚕️"
+    emoji: "👨‍🏫"
   },
   {
-    name: "Dr. Michael Rodriguez",
-    role: "Chief Medical Officer",
-    bio: "Leading expert in hemiplegia treatment with a passion for innovative therapy solutions that put smiles on children's faces.",
-    image: "/assets/team-2.png",
+    name: "Mr. Eishan Weerasinghe",
+    role: "Co-Supervisor",
+    bio: "Providing expert guidance and mentorship in IoT healthcare solutions and rehabilitation technology research.",
+    image: "/assets/cosupervisor.jpeg",
     color: "from-green-400 to-teal-400",
+    emoji: "👨‍🏫"
+  },
+  {
+    name: "Dr. Buddika Senewirathna",
+    role: "External Supervisor - Head of Physiotherapy, Sirimavo Bandaranaike Children's Hospital",
+    bio: "Leading expert in pediatric physiotherapy providing clinical guidance and domain expertise for the ArmiGo rehabilitation system.",
+    image: "/assets/doctor.jpeg",
+    color: "from-pink-400 to-red-400",
     emoji: "👨‍⚕️"
   },
+];
+
+const developers = [
   {
-    name: "Emma Watson",
-    role: "Lead Game Designer",
-    bio: "Former game designer at major studios, Emma now creates magical worlds where therapy feels like the best part of the day.",
-    image: "/assets/team-3.png",
-    color: "from-pink-400 to-orange-400",
-    emoji: "🎮"
+    name: "Sanjana Nimesh",
+    role: "Developer - Finger Rehabilitation",
+    bio: "Designed and developed the finger rehabilitation IoT device and interactive VR game for finger therapy exercises.",
+    image: "/assets/member1.jpeg",
+    color: "from-indigo-400 to-purple-400",
+    emoji: "👨‍💻"
   },
   {
-    name: "Prof. James Kumar",
-    role: "Head of Research",
-    bio: "Pioneering researcher in IoT healthcare devices, ensuring every ArmiGo product is backed by science and tested with love.",
-    image: "/assets/team-4.png",
-    color: "from-indigo-400 to-purple-400",
-    emoji: "🔬"
+    name: "Asanka Wikramasurendra",
+    role: "Developer - Shoulder Rehabilitation",
+    bio: "Designed and developed the shoulder rehabilitation IoT device and interactive VR game for shoulder therapy exercises.",
+    image: "/assets/member2.jpeg",
+    color: "from-orange-400 to-yellow-400",
+    emoji: "👨‍💻"
+  },
+  {
+    name: "Dinithi Weerasinghe",
+    role: "Developer - Elbow Rehabilitation",
+    bio: "Designed and developed the elbow rehabilitation IoT device and interactive VR game for elbow therapy exercises.",
+    image: "/assets/member3 .jpeg",
+    color: "from-teal-400 to-cyan-400",
+    emoji: "👩‍💻"
+  },
+  {
+    name: "Anushka Siyambalapitiya",
+    role: "Developer - Wrist Rehabilitation",
+    bio: "Designed and developed the wrist rehabilitation IoT device and interactive VR game for wrist therapy exercises.",
+    image: "/assets/member4.jpeg",
+    color: "from-rose-400 to-pink-400",
+    emoji: "👨‍💻"
   },
 ];
 
 const milestones = [
-  { year: "2018", title: "The Dream Begins", desc: "Dr. Chen envisions a world where therapy is an adventure", icon: Star, color: "text-yellow-500" },
-  { year: "2019", title: "First Prototype", desc: "Our first smart glove brings smiles to 10 brave little heroes", icon: Hand, color: "text-blue-500" },
-  { year: "2020", title: "FDA Approved", desc: "ArmiGo devices receive FDA clearance for pediatric use", icon: Shield, color: "text-green-500" },
-  { year: "2021", title: "VR Adventures Launch", desc: "Our first VR game takes kids on magical therapy quests", icon: Gamepad2, color: "text-purple-500" },
-  { year: "2022", title: "1000 Heroes Helped", desc: "We celebrate helping over 1000 children on their journey", icon: Trophy, color: "text-yellow-500" },
-  { year: "2023", title: "Global Expansion", desc: "ArmiGo reaches hospitals in 15 countries worldwide", icon: Globe, color: "text-green-500" },
-  { year: "2024", title: "4-Device System", desc: "Complete upper limb rehabilitation system launched", icon: Activity, color: "text-orange-500" },
-  { year: "2025", title: "Research Excellence", desc: "Published 10+ clinical studies proving our impact", icon: Brain, color: "text-purple-500" },
+  { year: "Aug 2025", title: "Project Initiated", desc: "ArmiGo research project kicked off at SLIIT to revolutionize pediatric rehabilitation", icon: Star, color: "text-yellow-500" },
+  { year: "Sep 2025", title: "Clinical Partnership", desc: "Partnership established with Sirimavo Bandaranaike Children's Hospital for clinical guidance", icon: Hospital, color: "text-blue-500" },
+  { year: "Oct 2025", title: "Data Collection", desc: "Clinical data gathered from patients at the hospital to guide device and game design", icon: Activity, color: "text-green-500" },
+  { year: "Dec 2025", title: "First Version Implemented", desc: "Initial prototypes of IoT rehabilitation devices built and tested", icon: Hand, color: "text-blue-500" },
+  { year: "Jan 2026", title: "Development & Refinement", desc: "Full development cycle — firmware, mobile app, web dashboard and desktop app built out", icon: Globe, color: "text-purple-500" },
+  { year: "Feb 2026", title: "Game Development", desc: "Unreal Engine VR rehabilitation games designed and developed for each device", icon: Gamepad2, color: "text-orange-500" },
+  { year: "Feb 2026", title: "WiFi Integration", desc: "Devices connected wirelessly via WiFi for seamless real-time gameplay", icon: Activity, color: "text-green-500" },
+  { year: "Apr 2026", title: "Full System Release", desc: "Complete ArmiGo platform released — 4 devices, VR games, mobile app, desktop app and web dashboard", icon: Trophy, color: "text-yellow-500" },
 ];
 
 const stats = [
@@ -562,8 +590,14 @@ export default function AboutPage() {
                 >
                   <div className="flex items-start gap-4">
                     <div className="relative">
-                      <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center text-white text-2xl">
-                        👩‍⚕️
+                      <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0">
+                        <Image
+                          src="/assets/doctor.jpeg"
+                          width={64}
+                          height={64}
+                          alt="Dr. Buddika Senewirathna"
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <motion.div 
                         className="absolute -top-1 -right-1 w-5 h-5 bg-green-400 rounded-full border-2 border-white"
@@ -573,11 +607,11 @@ export default function AboutPage() {
                     </div>
                     <div>
                       <p className="text-gray-700 italic text-lg">
-                        "Every child deserves to feel like a superhero. At ArmiGo, we're not just building devices – we're building confidence, one smile at a time."
+                        "Every child deserves the chance to reach their full potential. At ArmiGo, we're combining technology with therapy to make rehabilitation engaging and effective for children."
                       </p>
                       <div className="mt-3">
-                        <p className="font-bold text-gray-800">Dr. Sarah Chen</p>
-                        <p className="text-sm text-gray-500">Founder & Chief Hero Officer</p>
+                        <p className="font-bold text-gray-800">Dr. Buddika Senewirathna</p>
+                        <p className="text-sm text-gray-500">Head of Physiotherapy, Sirimavo Bandaranaike Children's Hospital</p>
                       </div>
                     </div>
                   </div>
@@ -691,7 +725,8 @@ export default function AboutPage() {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Top Row - Supervisors */}
+          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-8">
             {teamMembers.map((member, i) => (
               <motion.div
                 key={i}
@@ -705,8 +740,14 @@ export default function AboutPage() {
                 <div className={`bg-gradient-to-br ${member.color} p-1 rounded-3xl`}>
                   <div className="bg-white p-6 rounded-3xl text-center">
                     <div className="relative mb-4">
-                      <div className="w-24 h-24 mx-auto bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center text-4xl">
-                        {member.emoji}
+                      <div className="w-24 h-24 mx-auto rounded-full overflow-hidden">
+                        <Image
+                          src={member.image}
+                          width={96}
+                          height={96}
+                          alt={member.name}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <motion.div 
                         className="absolute -top-2 -right-2 text-2xl"
@@ -719,19 +760,47 @@ export default function AboutPage() {
                     <h3 className="text-lg font-bold mb-1">{member.name}</h3>
                     <p className="text-xs text-purple-600 font-medium mb-3">{member.role}</p>
                     <p className="text-xs text-gray-600">{member.bio}</p>
-                    
-                    {/* Social Icons */}
-                    <div className="flex justify-center gap-2 mt-4">
-                      {['💼', '📧', '🐦'].map((icon, j) => (
-                        <motion.span
-                          key={j}
-                          className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm cursor-pointer hover:bg-purple-100 transition-colors"
-                          whileHover={{ scale: 1.2 }}
-                        >
-                          {icon}
-                        </motion.span>
-                      ))}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Bottom Row - Developers */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {developers.map((member, i) => (
+              <motion.div
+                key={i}
+                className="relative group"
+                variants={bounceAnimation}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                whileHover={{ y: -10 }}
+              >
+                <div className={`bg-gradient-to-br ${member.color} p-1 rounded-3xl`}>
+                  <div className="bg-white p-6 rounded-3xl text-center">
+                    <div className="relative mb-4">
+                      <div className="w-24 h-24 mx-auto rounded-full overflow-hidden">
+                        <Image
+                          src={member.image}
+                          width={96}
+                          height={96}
+                          alt={member.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <motion.div 
+                        className="absolute -top-2 -right-2 text-2xl"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 10, repeat: Infinity }}
+                      >
+                        ⭐
+                      </motion.div>
                     </div>
+                    <h3 className="text-lg font-bold mb-1">{member.name}</h3>
+                    <p className="text-xs text-purple-600 font-medium mb-3">{member.role}</p>
+                    <p className="text-xs text-gray-600">{member.bio}</p>
                   </div>
                 </div>
               </motion.div>

@@ -98,10 +98,12 @@ export class PatientController {
       ? { ...createPatientDto, hospitalId: scopedHospitalId }
       : createPatientDto;
 
+    const createdById = req?.user?.id || req?.user?.sub;
+
     this.logger.log(
       `Creating patient: ${payload.firstName} ${payload.lastName}`
     );
-    const patient = await this.patientService.createPatient(payload);
+    const patient = await this.patientService.createPatient(payload, createdById);
     return {
       success: true,
       data: patient,

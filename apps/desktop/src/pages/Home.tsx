@@ -169,6 +169,7 @@ export default function Home() {
     || `${currentUser?.firstName?.[0] || ''}${currentUser?.lastName?.[0] || ''}` || 'U';
 
   const physio = childDetail?.physioAssignments?.[0]?.physiotherapist || null;
+  const assignedDoctorFallback = !physio && childDetail?.assignedDoctor ? childDetail.assignedDoctor as string : null;
   const availConfig = physio?.availabilityStatus ? AVAILABILITY_CONFIG[physio.availabilityStatus] : null;
   const enabledExercises = EXERCISE_CONFIG.filter((e) => !!(childDetail as any)?.[e.key]);
 
@@ -204,7 +205,12 @@ export default function Home() {
         <div className="relative z-10 flex items-start justify-between">
           <div className="flex-1">
             <p className="text-white/60 text-sm font-medium mb-1">{greeting}</p>
-            <h1 className="text-3xl font-bold text-white tracking-tight mb-5">{displayName}</h1>
+            <h1 className="text-3xl font-bold text-white tracking-tight mb-1">{displayName}</h1>
+            {childDetail?.displayId && (
+              <span className="inline-flex items-center rounded-md bg-white/15 backdrop-blur-sm px-2.5 py-1 text-xs font-semibold text-white/90 font-mono tracking-wide mb-4">
+                {childDetail.displayId}
+              </span>
+            )}
 
             {/* Stats */}
             <div className="flex gap-4">
@@ -435,18 +441,24 @@ export default function Home() {
       {/* Bottom Row - Physio & Exercises */}
       <div className="px-8 mt-8 pb-8 grid grid-cols-2 gap-6">
         {/* Physiotherapist Card */}
-        {physio && (
+        {(physio || assignedDoctorFallback) && (
           <div>
             <h3 className="text-base font-bold text-slate-900 tracking-tight mb-1">Your Physiotherapist</h3>
             <p className="text-xs text-slate-500 mb-4">Primary care provider</p>
             <div className="bg-white rounded-2xl p-6 card-shadow border border-slate-100 hover-lift">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-200">
-                  <span className="text-xl font-bold text-white">{(physio.name || 'P')[0]?.toUpperCase()}</span>
+                  <span className="text-xl font-bold text-white">{(physio?.name || assignedDoctorFallback || 'P')[0]?.toUpperCase()}</span>
                 </div>
                 <div>
-                  <p className="text-base font-bold text-slate-900 tracking-tight">{physio.name || 'Physiotherapist'}</p>
-                  {physio.specialization && <p className="text-sm text-slate-500">{physio.specialization}</p>}
+                  <p className="text-base font-bold text-slate-900 tracking-tight">{physio?.name || assignedDoctorFallback || 'Physiotherapist'}</p>
+                  {physio?.specialization && <p className="text-sm text-slate-500">{physio.specialization}</p>}
+                  {!physio && assignedDoctorFallback && (
+                    <p className="text-xs text-amber-500 mt-0.5 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                      Assigned via name only
+                    </p>
+                  )}
                 </div>
               </div>
               {availConfig && (
@@ -455,7 +467,7 @@ export default function Home() {
                   <span className="text-xs font-semibold" style={{ color: availConfig.color }}>{availConfig.label}</span>
                 </div>
               )}
-              {physio.phone && (
+              {physio?.phone && (
                 <p className="text-sm text-slate-600 flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center"><Clock size={13} className="text-slate-400" /></div>
                   {physio.phone}

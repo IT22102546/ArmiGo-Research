@@ -7,7 +7,7 @@ import {
   Linking,
   StyleSheet,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { icons } from "@/constants";
@@ -24,6 +24,7 @@ const TabsLayout = () => {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const { currentUser } = useAuthStore();
   const { unreadCount } = useNotificationStore();
+  const insets = useSafeAreaInsets();
 
   const handlePhoneCall = () => {
     Linking.openURL(`tel:${phoneNumber}`);
@@ -289,7 +290,7 @@ const TabsLayout = () => {
       />
 
       {/* Custom Bottom Navigation */}
-      <View style={styles.customTabBar} className="rounded-t-3xl shadow-lg">
+      <View style={[styles.customTabBar, { paddingBottom: Math.max(insets.bottom, 8), height: 70 + Math.max(insets.bottom, 8) }]} className="rounded-t-3xl shadow-lg">
         {/* Navigation Items */}
         <View style={styles.navItemsContainer}>
           {currentUser?.role === "Internal" ||
@@ -410,12 +411,13 @@ const TabsLayout = () => {
                 />
               </View>
               <Text
+                numberOfLines={1}
                 style={[
                   styles.navText,
                   activeTab === "assignments" && styles.navTextActive,
                 ]}
               >
-                Assignments
+                Assign
               </Text>
             </TouchableOpacity>
           )}
@@ -541,7 +543,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "white",
-    height: 90,
     paddingHorizontal: 20,
     borderTopWidth: 1,
     borderTopColor: "white",

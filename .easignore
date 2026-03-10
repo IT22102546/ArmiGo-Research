@@ -1,0 +1,51 @@
+# .easignore
+
+# Ignore everything by default
+/*
+
+# First, explicitly include directories we need
+!/apps
+!/packages
+
+# Then include the root config files
+!/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
+!/tsconfig.json
+
+# Now include the mobile app with the correct path
+!/apps/mobile
+!/apps/mobile/application  # <-- This is crucial!
+
+# Inside packages, only include what's needed
+/packages/*
+# Uncomment the packages your mobile app uses
+# !/packages/ui
+# !/packages/types
+# !/packages/shared
+# !/packages/api
+
+# Standard ignores for all directories
+**/node_modules
+**/.git
+**/.expo
+**/android/build
+**/ios/build
+**/dist
+**/build
+**/.turbo
+**/.next
+**/coverage
+**/.env
+**/.env.*
+**/docs
+**/__tests__
+**/__mocks__
+**/tests
+**/test
+*.log
+.DS_Store
+
+# Exclude other apps (but keep mobile)
+/apps/*
+!/apps/mobile

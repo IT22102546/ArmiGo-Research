@@ -64,7 +64,7 @@ export default function App() {
 
   // Socket connection for real-time notifications
   useEffect(() => {
-    if (!isSignedIn || !currentUser?.id || !accessToken) return;
+    if (!isSignedIn || !currentUser?.id || !accessToken || !authChecked) return;
     socket.connect();
     socket.emit('authenticate', { userId: currentUser.id, token: accessToken });
     socket.on('notification', (data: any) => {
@@ -97,9 +97,14 @@ export default function App() {
     };
   }, [isSignedIn, currentUser?.id, accessToken]);
 
-  // Prevent blank screen: show nothing until authChecked
+  // Prevent blank screen: show loading spinner until authChecked
   if (!authChecked) {
-    return null;
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 border-solid"></div>
+        <span className="ml-4 text-lg text-slate-600">Loading...</span>
+      </div>
+    );
   }
 
   return (

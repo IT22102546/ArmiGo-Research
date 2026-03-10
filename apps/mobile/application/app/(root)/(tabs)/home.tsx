@@ -64,7 +64,7 @@ const EXERCISE_CONFIG: { key: string; label: string; icon: keyof typeof Ionicons
   { key: "exerciseShoulder", label: "Shoulder", icon: "body-outline", color: "#ec4899", bg: "#fdf2f8" },
 ];
 
-type ChildInfo = { id: string; firstName?: string; lastName?: string };
+type ChildInfo = { id: string; displayId?: string; firstName?: string; lastName?: string };
 type PhysioInfo = {
   id?: string;
   name?: string;
@@ -327,6 +327,11 @@ const Home = () => {
           <View style={styles.greetingWrap}>
             <Text style={styles.greetingText}>{greeting} 👋</Text>
             <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
+            {childDetail?.displayId && (
+              <View style={{ backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: "flex-start", marginTop: 4 }}>
+                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "600", fontFamily: "monospace" }}>{childDetail.displayId}</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.topActions}>
@@ -730,7 +735,7 @@ const Home = () => {
             <Text style={styles.signOutTextEnhanced}>Sign Out</Text>
           </TouchableOpacity>
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: 100 }} />
         </View>
       </View>
         </ScrollView>

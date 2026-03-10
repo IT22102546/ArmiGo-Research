@@ -4,13 +4,13 @@
     "slug": "faite",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/LearnUpLogo.png",
-    "scheme": "learnapp",
+    "icon": "./assets/images/logo.png",
+    "scheme": "armigo",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.learnapp.app",
+      "bundleIdentifier": "com.armigo.app",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Allow this app to access your photo library to upload images."
       }
@@ -18,7 +18,7 @@
     "android": {
       "permissions": ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/LearnUpLogo.png",
+        "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.armigo.app"
@@ -26,14 +26,14 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/LearnUpLogo.png"
+      "favicon": "./assets/images/logo.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/LearnUpLogo.png",
+          "image": "./assets/images/logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -68,11 +68,11 @@
       "router": {
         "origin": false
       },
-      "eas": {
-        "projectId": "8ad0f96f-f73e-467b-a809-c37d49ce50d7"
+     "eas": {
+        "projectId": "7d4c8626-81b3-4c5e-836d-d4870b9c3e46"
       }
     },
-    "owner": "sanjananimesh2001",
+    "owner": "sanjananimesh",
     "runtimeVersion": {
       "policy": "appVersion"
     }

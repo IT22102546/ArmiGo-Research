@@ -16,7 +16,7 @@ export default function TitleBar() {
     <div className="h-8 gradient-primary flex items-center justify-between select-none shrink-0"
          style={{ WebkitAppRegion: 'drag' } as any}>
       <div className="flex items-center gap-2 px-4">
-        <img src="/logo.png" alt="ArmiGo Logo" className="w-6 h-6 rounded-md bg-white/20 object-contain" />
+        <img src="./logo.png" alt="ArmiGo Logo" className="w-6 h-6 rounded-md bg-white/20 object-contain" />
         <span className="text-white/90 text-xs font-semibold tracking-wide">ArmiGo Desktop</span>
       </div>
       <div className="flex h-full" style={{ WebkitAppRegion: 'no-drag' } as any}>

@@ -42,9 +42,13 @@ import {
   Move,
   Maximize,
   Minimize,
-  Repeat
+  Repeat,
+  Wifi,
+  BatteryFull,
+  Zap
 } from "lucide-react";
 
+// Animation constants - fixed types
 const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0 },
@@ -66,7 +70,7 @@ const bounceAnimation = {
     scale: 1, 
     opacity: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 260,
       damping: 20
     }
@@ -93,8 +97,45 @@ const staggerContainer = {
   },
 };
 
+// Types
+interface Movement {
+  name: string;
+  description: string;
+  icon: any;
+  color: string;
+}
+
+interface Device {
+  id: number;
+  name: string;
+  description: string;
+  longDescription: string;
+  movements: Movement[];
+  connection: string;
+  setup: string;
+  color: string;
+  bgColor: string;
+  iconColor: string;
+  emoji: string;
+  gameExample: string;
+}
+
+interface SetupStep {
+  step: number;
+  title: string;
+  description: string;
+  icon: any;
+  color: string;
+}
+
+interface FAQ {
+  question: string;
+  answer: string;
+  icon: any;
+}
+
 // Device Data
-const devices = [
+const devices: Device[] = [
   {
     id: 1,
     name: "Finger Hero Glove",
@@ -107,8 +148,8 @@ const devices = [
       { name: "Adduction", description: "Bringing fingers together", icon: Minimize, color: "blue" },
       { name: "Circumduction", description: "Circular finger movements", icon: RotateCw, color: "blue" }
     ],
-    connection: "USB Connection to Computer",
-    setup: "Plug into any USB port, launch the game, and start playing!",
+    connection: "WiFi Wireless Connection",
+    setup: "Power on the device, connect to WiFi, launch the game, and start playing!",
     color: "from-blue-400 to-blue-600",
     bgColor: "bg-blue-50",
     iconColor: "text-blue-600",
@@ -126,8 +167,8 @@ const devices = [
       { name: "Radial Deviation", description: "Bending toward thumb side", icon: ArrowRight, color: "purple" },
       { name: "Ulnar Deviation", description: "Bending toward little finger side", icon: ArrowRight, color: "purple" }
     ],
-    connection: "USB Connection to Laptop/Computer",
-    setup: "Connect via USB, launch your favorite game, and watch the magic happen!",
+    connection: "WiFi Wireless Connection",
+    setup: "Turn on the device, connect to WiFi, launch your favorite game, and watch the magic happen!",
     color: "from-purple-400 to-purple-600",
     bgColor: "bg-purple-50",
     iconColor: "text-purple-600",
@@ -145,8 +186,8 @@ const devices = [
       { name: "Pronation", description: "Rotating palm down", icon: RotateCw, color: "green" },
       { name: "Supination", description: "Rotating palm up", icon: RotateCw, color: "green" }
     ],
-    connection: "USB Connection to Computer",
-    setup: "Simple USB plug-and-play. Start the game and begin your adventure!",
+    connection: "WiFi Wireless Connection",
+    setup: "Switch on the device, connect to WiFi, start the game and begin your adventure!",
     color: "from-green-400 to-green-600",
     bgColor: "bg-green-50",
     iconColor: "text-green-600",
@@ -165,8 +206,8 @@ const devices = [
       { name: "Adduction", description: "Bringing arm down to side", icon: Minimize, color: "orange" },
       { name: "Circumduction", description: "Circular arm movements", icon: RotateCw, color: "orange" }
     ],
-    connection: "USB Connection to Laptop/Desktop",
-    setup: "Connect to USB port, launch any ArmiGo game, and let the adventure begin!",
+    connection: "WiFi Wireless Connection",
+    setup: "Power on the device, connect to WiFi, launch any ArmiGo game, and let the adventure begin!",
     color: "from-orange-400 to-orange-600",
     bgColor: "bg-orange-50",
     iconColor: "text-orange-600",
@@ -175,56 +216,82 @@ const devices = [
   }
 ];
 
-const setupSteps = [
+const setupSteps: SetupStep[] = [
   {
     step: 1,
-    title: "Connect the Device",
-    description: "Simply plug the device into any available USB port on your computer",
-    icon: Usb,
+    title: "Power On the Device",
+    description: "Press the power button - the built-in 2000mAh rechargeable battery keeps it running for hours",
+    icon: Zap,
     color: "blue"
   },
   {
     step: 2,
-    title: "Launch the Game",
-    description: "Open any ArmiGo game from our collection",
-    icon: Gamepad,
+    title: "Connect to WiFi",
+    description: "The device connects wirelessly to your computer via WiFi - no cables needed!",
+    icon: Wifi,
     color: "purple"
   },
   {
     step: 3,
-    title: "Start Playing",
-    description: "The device automatically syncs - no complicated setup needed!",
-    icon: Play,
+    title: "Launch the Game",
+    description: "Open any ArmiGo game from our collection",
+    icon: Gamepad,
     color: "green"
+  },
+  {
+    step: 4,
+    title: "Start Playing",
+    description: "The device automatically syncs wirelessly - no complicated setup needed!",
+    icon: Play,
+    color: "orange"
   }
 ];
 
-const faqs = [
+const faqs: FAQ[] = [
   {
-    question: "Do I need to install drivers?",
-    answer: "No! All ArmiGo devices are plug-and-play. Just connect via USB and they work immediately with our games.",
-    icon: Cable
+    question: "Do I need any cables or wires?",
+    answer: "No! All ArmiGo devices connect wirelessly via WiFi. Just power on the device and it connects automatically to our games. Completely cable-free!",
+    icon: Wifi
+  },
+  {
+    question: "How long does the battery last?",
+    answer: "Each device has a built-in 2000mAh rechargeable LiPo battery that lasts for multiple therapy sessions. Simply recharge using the included charger when needed.",
+    icon: BatteryFull
   },
   {
     question: "Can multiple devices work together?",
-    answer: "Yes! You can connect multiple devices simultaneously for combined therapy sessions.",
+    answer: "Yes! You can connect multiple devices simultaneously via WiFi for combined therapy sessions.",
     icon: Repeat
   },
   {
     question: "How do I know if it's working?",
-    answer: "The device has a small LED indicator that lights up when connected. Our games also show real-time movement feedback.",
+    answer: "The device has a small LED indicator that lights up when powered on and connected. Our games also show real-time movement feedback.",
     icon: Info
   },
   {
     question: "Is it safe for children?",
-    answer: "Absolutely! All devices are FDA-registered, child-safe, and designed with input from pediatric therapists.",
+    answer: "Absolutely! All devices are child-safe, wireless, portable, and designed with input from pediatric therapists.",
     icon: Shield
   }
 ];
 
+// Color mapping for dynamic classes
+const colorMap: Record<string, string> = {
+  blue: "blue",
+  purple: "purple",
+  green: "green",
+  orange: "orange",
+  pink: "pink",
+  yellow: "yellow",
+  red: "red",
+  indigo: "indigo",
+  teal: "teal",
+  cyan: "cyan"
+};
+
 export default function ParentsPage() {
-  const [selectedDevice, setSelectedDevice] = useState(null);
-  const [activeTab, setActiveTab] = useState(0);
+  const [selectedDevice, setSelectedDevice] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<number>(0);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50 overflow-x-hidden">
@@ -257,144 +324,124 @@ export default function ParentsPage() {
       </div>
 
       {/* Hero Section */}
-  {/* Hero Section - Fixed */}
-<section className="relative pt-24 pb-20 px-4 overflow-hidden">
-  {/* Colorful Gradient Background */}
-  <div className="absolute inset-0 bg-gradient-to-br from-blue-400 via-purple-400 to-pink-400"></div>
-  
-  {/* Animated Shapes */}
-  <div className="absolute inset-0 opacity-30">
-    {[...Array(6)].map((_, i) => (
-      <motion.div
-        key={i}
-        className="absolute w-32 h-32 md:w-48 md:h-48 bg-white rounded-full"
-        style={{
-          left: `${[5, 70, 85, 10, 90, 30][i]}%`,
-          top: `${[10, 15, 60, 80, 30, 70][i]}%`,
-        }}
-        animate={{
-          scale: [1, 1.2, 1],
-          x: [0, (i % 2 === 0 ? 20 : -20), 0],
-          y: [0, (i % 3 === 0 ? 20 : -20), 0],
-        }}
-        transition={{
-          duration: 8 + i,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
-    ))}
-  </div>
-
-  {/* Floating Icons */}
-  <div className="absolute inset-0 pointer-events-none">
-    {['🦸', '🦸‍♀️', '💪', '🎮', '❤️', '⭐','👩‍👧'].map((emoji, i) => (
-      <motion.div
-        key={i}
-        className="absolute text-4xl md:text-5xl"
-        style={{
-          left: `${[15, 80, 25, 70, 40, 60][i]}%`,
-          top: `${[20, 30, 70, 80, 40, 60][i]}%`,
-        }}
-        animate={{
-          y: [0, -30, 0],
-          rotate: [0, 10, -10, 0],
-          scale: [1, 1.2, 1],
-        }}
-        transition={{
-          duration: 5 + i,
-          repeat: Infinity,
-          delay: i * 0.3,
-        }}
-      >
-        {emoji}
-      </motion.div>
-    ))}
-  </div>
-
-  {/* Hero Content */}
-  <div className="container-custom max-w-5xl mx-auto text-center relative z-10">
-    {/* Welcome Badge */}
-    <motion.div
-      initial={{ scale: 0, rotate: -180 }}
-      animate={{ scale: 1, rotate: 0 }}
-      transition={{ type: "spring", stiffness: 260, damping: 20 }}
-      className="inline-block mb-6"
-    >
-      <span className="inline-flex items-center gap-3 bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-full text-lg font-bold border-2 border-white/30 shadow-xl">
-        <Heart className="w-5 h-5 animate-pulse fill-current" />
-        For Parents & Heroes
-        <Heart className="w-5 h-5 animate-pulse fill-current" />
-      </span>
-    </motion.div>
-
-    {/* Main Title */}
-    <motion.h1 
-      className="text-5xl md:text-7xl font-black mb-6"
-      initial={{ opacity: 0, y: 50 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay: 0.2 }}
-    >
-      <span className="text-white drop-shadow-lg">
-        Your Guide to ArmiGo
-      </span>
-    </motion.h1>
-
-    {/* Emoji Row */}
-   
-
-    {/* Description Card - Fixed the white background issue */}
-    <motion.div 
-      className="max-w-3xl mx-auto"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.3 }}
-    >
-      <div className="relative">
-        {/* Decorative Elements */}
-        <div className="absolute -top-4 -left-4 w-20 h-20 bg-yellow-300 rounded-full opacity-60 blur-xl"></div>
-        <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-pink-300 rounded-full opacity-60 blur-xl"></div>
+      <section className="relative pt-24 pb-20 px-4 overflow-hidden">
+        {/* Colorful Gradient Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-400 via-purple-400 to-pink-400"></div>
         
-      
-      </div>
-    </motion.div>
+        {/* Animated Shapes */}
+        <div className="absolute inset-0 opacity-30">
+          {[...Array(6)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-32 h-32 md:w-48 md:h-48 bg-white rounded-full"
+              style={{
+                left: `${[5, 70, 85, 10, 90, 30][i]}%`,
+                top: `${[10, 15, 60, 80, 30, 70][i]}%`,
+              }}
+              animate={{
+                scale: [1, 1.2, 1],
+                x: [0, (i % 2 === 0 ? 20 : -20), 0],
+                y: [0, (i % 3 === 0 ? 20 : -20), 0],
+              }}
+              transition={{
+                duration: 8 + i,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            />
+          ))}
+        </div>
 
-    {/* Quick Stats Row */}
-    <motion.div 
-      className="flex flex-wrap justify-center gap-4 mt-8"
-      variants={staggerContainer}
-      initial="hidden"
-      animate="visible"
-    >
-      {[
-        { icon: '🎮', text: '4 Fun Games' },
-        { icon: '🖐️', text: '4 Smart Devices' },
-        { icon: '⚡', text: 'Plug & Play' },
-        { icon: '📈', text: 'Track Progress' },
-      ].map((stat, i) => (
-        <motion.div
-          key={i}
-          variants={fadeInUp}
-          className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full border border-white/30 text-white flex items-center gap-2"
-        >
-          <span>{stat.icon}</span>
-          <span className="text-sm font-medium">{stat.text}</span>
-        </motion.div>
-      ))}
-    </motion.div>
-  </div>
+        {/* Floating Icons */}
+        <div className="absolute inset-0 pointer-events-none">
+          {['🦸', '🦸‍♀️', '💪', '🎮', '❤️', '⭐','👩‍👧'].map((emoji, i) => (
+            <motion.div
+              key={i}
+              className="absolute text-4xl md:text-5xl"
+              style={{
+                left: `${[15, 80, 25, 70, 40, 60][i]}%`,
+                top: `${[20, 30, 70, 80, 40, 60][i]}%`,
+              }}
+              animate={{
+                y: [0, -30, 0],
+                rotate: [0, 10, -10, 0],
+                scale: [1, 1.2, 1],
+              }}
+              transition={{
+                duration: 5 + i,
+                repeat: Infinity,
+                delay: i * 0.3,
+              }}
+            >
+              {emoji}
+            </motion.div>
+          ))}
+        </div>
 
-  {/* Bottom Wave Decoration */}
-  <div className="absolute bottom-0 left-0 right-0">
-    <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <motion.path
-        d="M0 120L60 105C120 90 240 60 360 45C480 30 600 30 720 37.5C840 45 960 60 1080 67.5C1200 75 1320 75 1380 75L1440 75V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z"
-        fill="white"
-        fillOpacity="0.1"
-      />
-    </svg>
-  </div>
-</section>
+        {/* Hero Content */}
+        <div className="container-custom max-w-5xl mx-auto text-center relative z-10">
+          {/* Welcome Badge */}
+          <motion.div
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 20 }}
+            className="inline-block mb-6"
+          >
+            <span className="inline-flex items-center gap-3 bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-full text-lg font-bold border-2 border-white/30 shadow-xl">
+              <Heart className="w-5 h-5 animate-pulse fill-current" />
+              For Parents & Heroes
+              <Heart className="w-5 h-5 animate-pulse fill-current" />
+            </span>
+          </motion.div>
+
+          {/* Main Title */}
+          <motion.h1 
+            className="text-5xl md:text-7xl font-black mb-6"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+          >
+            <span className="text-white drop-shadow-lg">
+              Your Guide to ArmiGo
+            </span>
+          </motion.h1>
+
+          {/* Quick Stats Row */}
+          <motion.div 
+            className="flex flex-wrap justify-center gap-4 mt-8"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+          >
+            {[
+              { icon: '🎮', text: '4 Fun Games' },
+              { icon: '🖐️', text: '4 Smart Devices' },
+              { icon: '⚡', text: 'Plug & Play' },
+              { icon: '📈', text: 'Track Progress' },
+            ].map((stat, i) => (
+              <motion.div
+                key={i}
+                variants={fadeInUp}
+                className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full border border-white/30 text-white flex items-center gap-2"
+              >
+                <span>{stat.icon}</span>
+                <span className="text-sm font-medium">{stat.text}</span>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+
+        {/* Bottom Wave Decoration */}
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <motion.path
+              d="M0 120L60 105C120 90 240 60 360 45C480 30 600 30 720 37.5C840 45 960 60 1080 67.5C1200 75 1320 75 1380 75L1440 75V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z"
+              fill="white"
+              fillOpacity="0.1"
+            />
+          </svg>
+        </div>
+      </section>
 
       {/* Quick Setup Guide */}
       <section className="py-16 px-4">
@@ -416,32 +463,38 @@ export default function ParentsPage() {
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {setupSteps.map((step, i) => (
-              <motion.div
-                key={i}
-                className="relative"
-                variants={bounceAnimation}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                whileHover={{ y: -10 }}
-              >
-                <div className={`bg-gradient-to-br from-${step.color}-400 to-${step.color}-600 p-1 rounded-3xl`}>
-                  <div className="bg-white p-6 rounded-3xl text-center">
-                    <div className="relative mb-4">
-                      <div className={`w-16 h-16 mx-auto bg-${step.color}-100 rounded-2xl flex items-center justify-center`}>
-                        <step.icon className={`w-8 h-8 text-${step.color}-600`} />
+            {setupSteps.map((step, i) => {
+              const bgColor = `from-${step.color}-400 to-${step.color}-600`;
+              const lightBg = `bg-${step.color}-100`;
+              const textColor = `text-${step.color}-600`;
+              
+              return (
+                <motion.div
+                  key={i}
+                  className="relative"
+                  variants={bounceAnimation}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  whileHover={{ y: -10 }}
+                >
+                  <div className={`bg-gradient-to-br ${bgColor} p-1 rounded-3xl`}>
+                    <div className="bg-white p-6 rounded-3xl text-center">
+                      <div className="relative mb-4">
+                        <div className={`w-16 h-16 mx-auto ${lightBg} rounded-2xl flex items-center justify-center`}>
+                          <step.icon className={`w-8 h-8 ${textColor}`} />
+                        </div>
+                        <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full flex items-center justify-center text-white font-bold">
+                          {step.step}
+                        </div>
                       </div>
-                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full flex items-center justify-center text-white font-bold">
-                        {step.step}
-                      </div>
+                      <h3 className="font-bold text-lg mb-2">{step.title}</h3>
+                      <p className="text-sm text-gray-600">{step.description}</p>
                     </div>
-                    <h3 className="font-bold text-lg mb-2">{step.title}</h3>
-                    <p className="text-sm text-gray-600">{step.description}</p>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
 
           <motion.div 
@@ -452,8 +505,8 @@ export default function ParentsPage() {
             viewport={{ once: true }}
           >
             <p className="text-gray-700 flex items-center justify-center gap-2">
-              <Usb className="w-5 h-5 text-blue-600" />
-              <span className="font-bold">Note:</span> All devices connect via USB port - no batteries or charging needed!
+              <Wifi className="w-5 h-5 text-blue-600" />
+              <span className="font-bold">Note:</span> All devices connect wirelessly via WiFi and are powered by a rechargeable 2000mAh LiPo battery - simply charge when the battery is low!
             </p>
           </motion.div>
         </div>
@@ -482,123 +535,133 @@ export default function ParentsPage() {
           </motion.div>
 
           <div className="space-y-12">
-            {devices.map((device, index) => (
-              <motion.div
-                key={device.id}
-                className="relative"
-                variants={fadeInUp}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-              >
-                <div className={`bg-gradient-to-br ${device.color} p-1 rounded-[50px]`}>
-                  <div className="bg-white rounded-[50px] p-8 md:p-10">
-                    <div className="grid md:grid-cols-2 gap-8 items-start">
-                      {/* Left Column - Device Info */}
-                      <div>
-                        <div className="flex items-center gap-4 mb-6">
-                          <div className={`w-20 h-20 bg-gradient-to-br ${device.color} rounded-2xl flex items-center justify-center text-white text-4xl`}>
-                            {device.emoji}
-                          </div>
-                          <div>
-                            <h3 className="text-3xl font-bold">{device.name}</h3>
-                            <p className={`text-${device.color.split('-')[2]}-600 font-medium`}>
-                              {device.connection}
-                            </p>
-                          </div>
-                        </div>
-
-                        <p className="text-gray-700 text-lg mb-6">{device.longDescription}</p>
-
-                        <div className="bg-gray-50 p-6 rounded-3xl mb-6">
-                          <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
-                            <Gamepad className={`w-5 h-5 text-${device.color.split('-')[2]}-600`} />
-                            In the Game:
-                          </h4>
-                          <p className="text-gray-700">{device.gameExample}</p>
-                        </div>
-
-                        <div className="bg-green-50 p-6 rounded-3xl">
-                          <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
-                            <Power className="w-5 h-5 text-green-600" />
-                            How to Start:
-                          </h4>
-                          <p className="text-gray-700">{device.setup}</p>
-                          <div className="flex items-center gap-2 mt-3 text-sm text-green-600">
-                            <CheckCircle className="w-4 h-4" />
-                            <span>Plug & Play - No drivers needed</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right Column - Movements */}
-                      <div>
-                        <h4 className="font-bold text-xl mb-6 flex items-center gap-2">
-                          <Activity className={`w-6 h-6 text-${device.color.split('-')[2]}-600`} />
-                          Movements Tracked:
-                        </h4>
-                        
-                        <div className="space-y-4">
-                          {device.movements.map((movement, i) => (
-                            <motion.div
-                              key={i}
-                              className="bg-gray-50 p-4 rounded-2xl"
-                              initial={{ x: -20, opacity: 0 }}
-                              whileInView={{ x: 0, opacity: 1 }}
-                              transition={{ delay: i * 0.1 }}
-                              whileHover={{ scale: 1.02, backgroundColor: 'white' }}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 bg-${movement.color}-100 rounded-xl flex items-center justify-center`}>
-                                  <movement.icon className={`w-5 h-5 text-${movement.color}-600`} />
-                                </div>
-                                <div>
-                                  <h5 className="font-bold">{movement.name}</h5>
-                                  <p className="text-sm text-gray-600">{movement.description}</p>
-                                </div>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </div>
-
-                        {/* Real-time Status Indicator */}
-                        <motion.div 
-                          className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-2xl border-2 border-dashed border-purple-200"
-                          animate={{ scale: [1, 1.02, 1] }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                              <motion.div 
-                                className="absolute -inset-1 bg-green-500 rounded-full"
-                                animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
-                                transition={{ duration: 2, repeat: Infinity }}
-                              />
+            {devices.map((device, index) => {
+              const deviceColor = device.color.split('-')[1]; // Get the color name
+              const textColor = `text-${deviceColor}-600`;
+              
+              return (
+                <motion.div
+                  key={device.id}
+                  className="relative"
+                  variants={fadeInUp}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                >
+                  <div className={`bg-gradient-to-br ${device.color} p-1 rounded-[50px]`}>
+                    <div className="bg-white rounded-[50px] p-8 md:p-10">
+                      <div className="grid md:grid-cols-2 gap-8 items-start">
+                        {/* Left Column - Device Info */}
+                        <div>
+                          <div className="flex items-center gap-4 mb-6">
+                            <div className={`w-20 h-20 bg-gradient-to-br ${device.color} rounded-2xl flex items-center justify-center text-white text-4xl`}>
+                              {device.emoji}
                             </div>
                             <div>
-                              <p className="font-bold text-gray-800">Real-time Game Feedback</p>
-                              <p className="text-sm text-gray-600">Every movement is instantly reflected in the game</p>
+                              <h3 className="text-3xl font-bold">{device.name}</h3>
+                              <p className={`${textColor} font-medium`}>
+                                {device.connection}
+                              </p>
                             </div>
                           </div>
-                        </motion.div>
+
+                          <p className="text-gray-700 text-lg mb-6">{device.longDescription}</p>
+
+                          <div className="bg-gray-50 p-6 rounded-3xl mb-6">
+                            <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                              <Gamepad className={`w-5 h-5 ${textColor}`} />
+                              In the Game:
+                            </h4>
+                            <p className="text-gray-700">{device.gameExample}</p>
+                          </div>
+
+                          <div className="bg-green-50 p-6 rounded-3xl">
+                            <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                              <Power className="w-5 h-5 text-green-600" />
+                              How to Start:
+                            </h4>
+                            <p className="text-gray-700">{device.setup}</p>
+                            <div className="flex items-center gap-2 mt-3 text-sm text-green-600">
+                              <CheckCircle className="w-4 h-4" />
+                              <span>Wireless & Portable - No cables needed</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Column - Movements */}
+                        <div>
+                          <h4 className="font-bold text-xl mb-6 flex items-center gap-2">
+                            <Activity className={`w-6 h-6 ${textColor}`} />
+                            Movements Tracked:
+                          </h4>
+                          
+                          <div className="space-y-4">
+                            {device.movements.map((movement, i) => {
+                              const movementBg = `bg-${movement.color}-100`;
+                              const movementText = `text-${movement.color}-600`;
+                              
+                              return (
+                                <motion.div
+                                  key={i}
+                                  className="bg-gray-50 p-4 rounded-2xl"
+                                  initial={{ x: -20, opacity: 0 }}
+                                  whileInView={{ x: 0, opacity: 1 }}
+                                  transition={{ delay: i * 0.1 }}
+                                  whileHover={{ scale: 1.02, backgroundColor: 'white' }}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 ${movementBg} rounded-xl flex items-center justify-center`}>
+                                      <movement.icon className={`w-5 h-5 ${movementText}`} />
+                                    </div>
+                                    <div>
+                                      <h5 className="font-bold">{movement.name}</h5>
+                                      <p className="text-sm text-gray-600">{movement.description}</p>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Real-time Status Indicator */}
+                          <motion.div 
+                            className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-2xl border-2 border-dashed border-purple-200"
+                            animate={{ scale: [1, 1.02, 1] }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                <motion.div 
+                                  className="absolute -inset-1 bg-green-500 rounded-full"
+                                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
+                                  transition={{ duration: 2, repeat: Infinity }}
+                                />
+                              </div>
+                              <div>
+                                <p className="font-bold text-gray-800">Real-time Game Feedback</p>
+                                <p className="text-sm text-gray-600">Every movement is instantly reflected in the game</p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Connector Line between devices */}
-                {index < devices.length - 1 && (
-                  <div className="hidden md:block absolute -bottom-6 left-1/2 transform -translate-x-1/2">
-                    <motion.div 
-                      className="w-0.5 h-12 bg-gradient-to-b from-purple-400 to-pink-400"
-                      animate={{ scaleY: [1, 1.2, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    />
-                  </div>
-                )}
-              </motion.div>
-            ))}
+                  {/* Connector Line between devices */}
+                  {index < devices.length - 1 && (
+                    <div className="hidden md:block absolute -bottom-6 left-1/2 transform -translate-x-1/2">
+                      <motion.div 
+                        className="w-0.5 h-12 bg-gradient-to-b from-purple-400 to-pink-400"
+                        animate={{ scaleY: [1, 1.2, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -648,23 +711,28 @@ export default function ParentsPage() {
                 icon: Brain,
                 color: "orange"
               }
-            ].map((item, i) => (
-              <motion.div
-                key={i}
-                className="bg-white p-6 rounded-3xl shadow-lg"
-                variants={bounceAnimation}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                whileHover={{ y: -5 }}
-              >
-                <div className={`w-14 h-14 bg-${item.color}-100 rounded-xl flex items-center justify-center mb-4`}>
-                  <item.icon className={`w-7 h-7 text-${item.color}-600`} />
-                </div>
-                <h3 className="font-bold text-lg mb-2">{item.title}</h3>
-                <p className="text-gray-600">{item.desc}</p>
-              </motion.div>
-            ))}
+            ].map((item, i) => {
+              const bgColor = `bg-${item.color}-100`;
+              const textColor = `text-${item.color}-600`;
+              
+              return (
+                <motion.div
+                  key={i}
+                  className="bg-white p-6 rounded-3xl shadow-lg"
+                  variants={bounceAnimation}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  whileHover={{ y: -5 }}
+                >
+                  <div className={`w-14 h-14 ${bgColor} rounded-xl flex items-center justify-center mb-4`}>
+                    <item.icon className={`w-7 h-7 ${textColor}`} />
+                  </div>
+                  <h3 className="font-bold text-lg mb-2">{item.title}</h3>
+                  <p className="text-gray-600">{item.desc}</p>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -731,29 +799,29 @@ export default function ParentsPage() {
             </div>
 
             <div className="relative z-10 text-center">
-              <Usb className="w-16 h-16 mx-auto mb-6 text-white/80" />
+              <Wifi className="w-16 h-16 mx-auto mb-6 text-white/80" />
               
               <h2 className="text-3xl md:text-4xl font-black mb-4">
-                Simple USB Connection
+                Wireless WiFi Connection
               </h2>
               
               <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-                All ArmiGo devices connect via standard USB ports. Just plug in and play - 
-                no complicated setup, no batteries to charge, no wireless interference.
+                All ArmiGo devices connect wirelessly via WiFi. Powered by a built-in 2000mAh 
+                rechargeable LiPo battery - no cables, no hassle, completely portable.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                 <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Plug & Play</span>
+                  <span>100% Wireless</span>
                 </div>
                 <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
                   <CheckCircle className="w-4 h-4" />
-                  <span>No Drivers Needed</span>
+                  <span>Rechargeable Battery</span>
                 </div>
                 <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Works with All Games</span>
+                  <span>Portable & Lightweight</span>
                 </div>
               </div>
             </div>

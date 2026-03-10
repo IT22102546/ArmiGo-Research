@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsPhoneNumber, IsOptional, IsNotEmpty, IsEnum, IsInt, IsBoolean } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsNotEmpty, IsEnum, IsInt, IsBoolean, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum HospitalTypeEnum {
@@ -35,14 +35,16 @@ export class CreateHospitalDto {
   @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ example: '+94701234567' })
+  @ApiProperty({ example: '0701234567' })
   @IsString()
   @IsNotEmpty()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   phone: string;
 
-  @ApiProperty({ example: '+94701234568', required: false })
+  @ApiProperty({ example: '0701234568', required: false })
   @IsString()
   @IsOptional()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   alternatePhone?: string;
 
   @ApiProperty({ example: 'www.hospital.lk', required: false })
@@ -144,11 +146,13 @@ export class UpdateHospitalDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   phone?: string;
 
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
+  @Matches(/^07[0-24-8]\d{7}$/, { message: 'Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078' })
   alternatePhone?: string;
 
   @ApiProperty({ required: false })

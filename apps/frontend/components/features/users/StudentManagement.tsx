@@ -40,7 +40,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power, Users, Activity, Hand, CircleDot } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power, Users, Activity, Hand, CircleDot, Copy, UserPlus, UserCheck } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
@@ -77,6 +77,7 @@ type Zone = {
 
 type Patient = {
   id: string;
+  displayId?: string;
   firstName: string;
   lastName: string;
   address?: string;
@@ -196,6 +197,9 @@ export default function StudentManagement() {
   >(null);
   const [showParentPassword, setShowParentPassword] = useState(false);
   const [formData, setFormData] = useState<PatientForm>(initialForm);
+  const [parentMode, setParentMode] = useState<"new" | "existing">("new");
+  const [selectedParentId, setSelectedParentId] = useState("");
+  const [parentSearch, setParentSearch] = useState("");
 
   useEffect(() => {
     if (!isHospitalScopedUser) return;
@@ -343,6 +347,20 @@ export default function StudentManagement() {
       const list = payload?.data || payload || [];
       return Array.isArray(list)
         ? list.filter((item: any) => item?.id && item?.name)
+        : [];
+    },
+  });
+
+  const { data: parentUsers = [] } = useQuery({
+    queryKey: ["patients-management", "parent-users"],
+    queryFn: async () => {
+      const response = await ApiClient.get<any>("/users", {
+        params: { role: "PARENT", limit: 10000 },
+      });
+      const payload = response?.data ?? response ?? {};
+      const list = payload?.data || payload || [];
+      return Array.isArray(list)
+        ? list.filter((item: any) => item?.id && item?.firstName)
         : [];
     },
   });
@@ -544,10 +562,23 @@ export default function StudentManagement() {
     setEditingPatient(null);
     setFormData(initialForm);
     setShowParentPassword(false);
+    setParentMode("new");
+    setSelectedParentId("");
+    setParentSearch("");
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    // Birthdate future validation
+    if (formData.dateOfBirth) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (new Date(formData.dateOfBirth) > today) {
+        toast.error("Date of birth cannot be in the future");
+        return;
+      }
+    }
 
     if (
       !formData.firstName.trim() ||
@@ -556,15 +587,34 @@ export default function StudentManagement() {
       !formData.gender ||
       !formData.address.trim() ||
       (!isHospitalScopedUser && !formData.districtId) ||
-      !formData.parentName.trim() ||
-      !formData.parentEmail.trim() ||
-      !formData.parentPhone.trim() ||
-      (!editingPatient && !formData.parentPassword.trim()) ||
       !formData.hospitalId ||
       !formData.physiotherapistId
     ) {
       toast.error("Please fill all required fields");
       return;
+    }
+
+    if (parentMode === "existing") {
+      if (!selectedParentId) {
+        toast.error("Please select an existing parent");
+        return;
+      }
+    } else {
+      if (
+        !formData.parentName.trim() ||
+        !formData.parentEmail.trim() ||
+        !formData.parentPhone.trim() ||
+        (!editingPatient && !formData.parentPassword.trim())
+      ) {
+        toast.error("Please fill all parent fields");
+        return;
+      }
+
+      const slPhoneRegex = /^07[0-24-8]\d{7}$/;
+      if (!slPhoneRegex.test(formData.parentPhone.trim())) {
+        toast.error("Invalid mobile number. Must be 10 digits starting with 070/071/072/074/075/076/077/078");
+        return;
+      }
     }
 
     const selectedPhysio = physiotherapists.find(
@@ -598,14 +648,19 @@ export default function StudentManagement() {
             districtId: formData.districtId,
             zoneId: formData.zoneId || undefined,
           }),
-      parentName: formData.parentName.trim(),
-      parentEmail: formData.parentEmail.trim(),
-      parentPhone: formData.parentPhone.trim(),
-      ...(formData.parentPassword.trim()
-        ? { parentPassword: formData.parentPassword.trim() }
-        : {}),
+      ...(parentMode === "existing"
+        ? { parentId: selectedParentId }
+        : {
+            parentName: formData.parentName.trim(),
+            parentEmail: formData.parentEmail.trim(),
+            parentPhone: formData.parentPhone.trim(),
+            ...(formData.parentPassword.trim()
+              ? { parentPassword: formData.parentPassword.trim() }
+              : {}),
+          }),
       hospitalId: resolvedHospitalId,
       assignedDoctor: selectedPhysio.name,
+      physiotherapistId: formData.physiotherapistId,
       exerciseFingers: formData.exerciseFingers,
       exerciseWrist: formData.exerciseWrist,
       exerciseElbow: formData.exerciseElbow,
@@ -636,7 +691,7 @@ export default function StudentManagement() {
   const selectedDistrict = districts.find(
     (item: District) => item.id === formData.districtId
   );
-  const tableColumnCount = isHospitalScopedUser ? 13 : 16;
+  const tableColumnCount = isHospitalScopedUser ? 14 : 17;
 
   const toProgressValue = (value?: number) => {
     const parsed = Number(value ?? 0);
@@ -766,6 +821,7 @@ export default function StudentManagement() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>ID</TableHead>
                   <TableHead>Child Name</TableHead>
                   <TableHead>Age</TableHead>
                   <TableHead>Parent</TableHead>
@@ -809,6 +865,16 @@ export default function StudentManagement() {
                 ) : (
                   filteredPatients.map((patient: Patient) => (
                     <TableRow key={patient.id}>
+                      <TableCell>
+                        <button
+                          onClick={() => patient.displayId && copyToClipboard(patient.displayId, "ID")}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20 font-mono tracking-wide whitespace-nowrap hover:bg-indigo-100 transition-colors cursor-pointer"
+                          title="Click to copy"
+                        >
+                          {patient.displayId || "-"}
+                          {patient.displayId && <Copy className="h-3 w-3 text-indigo-400" />}
+                        </button>
+                      </TableCell>
                       <TableCell className="font-medium">
                         {patient.firstName} {patient.lastName}
                       </TableCell>
@@ -979,6 +1045,7 @@ export default function StudentManagement() {
                   <Input
                     id="dateOfBirth"
                     type="date"
+                    max={new Date().toISOString().split("T")[0]}
                     value={formData.dateOfBirth}
                     onChange={(event) =>
                       setFormData((prev) => ({ ...prev, dateOfBirth: event.target.value }))
@@ -1168,7 +1235,126 @@ export default function StudentManagement() {
             </div>
 
             <div className="rounded-lg border p-4 space-y-4">
-              <p className="text-sm font-medium">Parent Details</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Parent Details</p>
+                {!editingPatient && (
+                  <div className="flex items-center gap-1 rounded-lg border p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setParentMode("new");
+                        setSelectedParentId("");
+                        setParentSearch("");
+                      }}
+                      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        parentMode === "new"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      New Parent
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setParentMode("existing");
+                        setFormData((prev) => ({
+                          ...prev,
+                          parentName: "",
+                          parentEmail: "",
+                          parentPhone: "",
+                          parentPassword: "",
+                        }));
+                      }}
+                      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        parentMode === "existing"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <UserCheck className="h-3.5 w-3.5" />
+                      Existing Parent
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {parentMode === "existing" && !editingPatient ? (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Search & Select Parent</Label>
+                    <Input
+                      placeholder="Search by name, email, or phone..."
+                      value={parentSearch}
+                      onChange={(e) => setParentSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto rounded-md border">
+                    {parentUsers
+                      .filter((p: any) => {
+                        if (!parentSearch.trim()) return true;
+                        const term = parentSearch.toLowerCase();
+                        return (
+                          `${p.firstName} ${p.lastName}`.toLowerCase().includes(term) ||
+                          (p.email || "").toLowerCase().includes(term) ||
+                          (p.phone || "").includes(term)
+                        );
+                      })
+                      .map((p: any) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setSelectedParentId(p.id)}
+                          className={`w-full text-left px-3 py-2.5 text-sm border-b last:border-b-0 transition-colors ${
+                            selectedParentId === p.id
+                              ? "bg-primary/10 text-primary font-medium"
+                              : "hover:bg-accent/50"
+                          }`}
+                        >
+                          <div className="font-medium">
+                            {p.firstName} {p.lastName}
+                            {p.displayId && (
+                              <span className="ml-2 text-xs text-muted-foreground font-mono">
+                                {p.displayId}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {p.email || "No email"} • {p.phone || "No phone"}
+                          </div>
+                        </button>
+                      ))}
+                    {parentUsers.filter((p: any) => {
+                      if (!parentSearch.trim()) return true;
+                      const term = parentSearch.toLowerCase();
+                      return (
+                        `${p.firstName} ${p.lastName}`.toLowerCase().includes(term) ||
+                        (p.email || "").toLowerCase().includes(term) ||
+                        (p.phone || "").includes(term)
+                      );
+                    }).length === 0 && (
+                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                        No parents found
+                      </div>
+                    )}
+                  </div>
+                  {selectedParentId && (() => {
+                    const selected = parentUsers.find((p: any) => p.id === selectedParentId);
+                    return selected ? (
+                      <div className="rounded-md bg-green-50 border border-green-200 p-3 text-sm">
+                        <p className="font-medium text-green-800">
+                          Selected: {selected.firstName} {selected.lastName}
+                        </p>
+                        <p className="text-green-600 text-xs">
+                          {selected.email} • {selected.phone}
+                        </p>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              ) : (
+                <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="parentName">Parent Name</Label>
@@ -1197,10 +1383,13 @@ export default function StudentManagement() {
                 <Label htmlFor="parentPhone">Parent Mobile Number</Label>
                 <Input
                   id="parentPhone"
+                  placeholder="07XXXXXXXX"
+                  maxLength={10}
                   value={formData.parentPhone}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, parentPhone: event.target.value }))
-                  }
+                  onChange={(event) => {
+                    const val = event.target.value.replace(/\D/g, "").slice(0, 10);
+                    setFormData((prev) => ({ ...prev, parentPhone: val }));
+                  }}
                 />
               </div>
 
@@ -1256,6 +1445,8 @@ export default function StudentManagement() {
                   </Button>
                 </div>
               </div>
+                </>
+              )}
             </div>
 
             <div className="rounded-lg border p-4 space-y-4">
@@ -1364,9 +1555,19 @@ export default function StudentManagement() {
               <div className="rounded-lg border p-4 space-y-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold">
-                      {viewingPatient.firstName} {viewingPatient.lastName}
-                    </h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-lg font-semibold">
+                        {viewingPatient.firstName} {viewingPatient.lastName}
+                      </h3>
+                      <button
+                        onClick={() => viewingPatient.displayId && copyToClipboard(viewingPatient.displayId, "ID")}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20 font-mono tracking-wide whitespace-nowrap hover:bg-indigo-100 transition-colors cursor-pointer"
+                        title="Click to copy"
+                      >
+                        {viewingPatient.displayId || "-"}
+                        {viewingPatient.displayId && <Copy className="h-3 w-3 text-indigo-400" />}
+                      </button>
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       Age: {viewingPatient.age ?? "-"} • Gender: {viewingPatient.gender}
                     </p>
