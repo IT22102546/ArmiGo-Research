@@ -222,20 +222,6 @@ export class PatientService {
           },
         });
 
-        // Create PhysiotherapyAssignment if physiotherapistId is provided
-        if (data.physiotherapistId && createdById) {
-          await this.prisma.physiotherapyAssignment.create({
-            data: {
-              childId: patient.id,
-              physiotherapistId: data.physiotherapistId,
-              hospitalId: data.hospitalId,
-              title: 'Initial Assignment',
-              status: 'ACTIVE',
-              createdById,
-            },
-          });
-        }
-
         return this.mapChildToPatientResponse(patient);
       }
 
@@ -394,20 +380,6 @@ export class PatientService {
           },
         },
       });
-
-      // Create PhysiotherapyAssignment if physiotherapistId is provided
-      if (data.physiotherapistId && createdById) {
-        await this.prisma.physiotherapyAssignment.create({
-          data: {
-            childId: patient.id,
-            physiotherapistId: data.physiotherapistId,
-            hospitalId: data.hospitalId,
-            title: 'Initial Assignment',
-            status: 'ACTIVE',
-            createdById,
-          },
-        });
-      }
 
       const response = this.mapChildToPatientResponse(patient);
 
@@ -2716,7 +2688,7 @@ export class PatientService {
       }),
     ]);
 
-    // Get children assigned to the chosen physiotherapist (via admission tracking + physio assignments)
+    // Get children for the chosen physiotherapist
     let children: any[] = [];
     if (physiotherapistId) {
       const childSelect = {
@@ -2729,7 +2701,13 @@ export class PatientService {
         hospital: { select: { id: true, name: true } },
       } as const;
 
-      const [admissions, physioAssignments] = await Promise.all([
+      // Find the physiotherapist's hospital so we can include all children from that hospital
+      const physio = await this.prisma.hospitalStaff.findUnique({
+        where: { id: physiotherapistId },
+        select: { hospitalId: true },
+      });
+
+      const [admissions, physioAssignments, hospitalChildren] = await Promise.all([
         this.prisma.admissionTracking.findMany({
           where: { physiotherapistId },
           select: { child: { select: childSelect } },
@@ -2738,12 +2716,22 @@ export class PatientService {
           where: { physiotherapistId },
           select: { child: { select: childSelect } },
         }),
+        // Also include all active children from the physiotherapist's hospital
+        physio?.hospitalId
+          ? this.prisma.child.findMany({
+              where: { hospitalId: physio.hospitalId, isActive: true },
+              select: childSelect,
+            })
+          : Promise.resolve([]),
       ]);
 
-      // Deduplicate children from both sources
+      // Deduplicate children from all three sources
       const seen = new Set<string>();
-      children = [...admissions, ...physioAssignments]
-        .map((a) => a.child)
+      children = [
+        ...admissions.map((a) => a.child),
+        ...physioAssignments.map((a) => a.child),
+        ...hospitalChildren,
+      ]
         .filter((c) => {
           if (seen.has(c.id)) return false;
           seen.add(c.id);
