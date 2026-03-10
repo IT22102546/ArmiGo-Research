@@ -735,7 +735,7 @@ const Home = () => {
             <Text style={styles.signOutTextEnhanced}>Sign Out</Text>
           </TouchableOpacity>
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: 100 }} />
         </View>
       </View>
         </ScrollView>

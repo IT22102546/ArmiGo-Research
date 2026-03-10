@@ -9,6 +9,8 @@ import {
   StyleSheet,
   Animated,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   KeyboardTypeOptions,
   Dimensions,
 } from "react-native";
@@ -18,6 +20,7 @@ import CheckBox from "expo-checkbox";
 import { useRouter } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import useAuthStore from "@/stores/authStore";
 
 // Hospital & physiotherapy themed icons for floating header animation
@@ -158,6 +161,7 @@ const SignIn = () => {
     setError,
     clearErrors,
     watch,
+    setValue,
   } = useForm({
     defaultValues: {
       identifier: "",
@@ -226,6 +230,25 @@ const SignIn = () => {
     return () => {
       stopAnimations();
     };
+  }, []);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const loadSavedCredentials = async () => {
+      try {
+        const saved = await AsyncStorage.getItem("rememberMe");
+        if (saved === "true") {
+          const savedIdentifier = await AsyncStorage.getItem("savedIdentifier");
+          const savedPassword = await AsyncStorage.getItem("savedPassword");
+          if (savedIdentifier) setValue("identifier", savedIdentifier);
+          if (savedPassword) setValue("password", savedPassword);
+          setRememberMe(true);
+        }
+      } catch (e) {
+        console.log("Failed to load saved credentials", e);
+      }
+    };
+    loadSavedCredentials();
   }, []);
 
   const clearApiErrors = (field: string) => {
@@ -302,6 +325,16 @@ const SignIn = () => {
 
       // Backend uses access token only (no refresh token endpoint); reuse it as the stored refresh token
       await signIn(user, accessToken, accessToken);
+
+      // Save or clear credentials based on Remember Me
+      if (rememberMe) {
+        await AsyncStorage.setItem("rememberMe", "true");
+        await AsyncStorage.setItem("savedIdentifier", credentials.identifier);
+        await AsyncStorage.setItem("savedPassword", credentials.password);
+      } else {
+        await AsyncStorage.multiRemove(["rememberMe", "savedIdentifier", "savedPassword"]);
+      }
+
       console.log("✅ Parent sign in successful!");
       router.replace("/(root)/(tabs)/home");
     } catch (error: any) {
@@ -368,7 +401,7 @@ const SignIn = () => {
         <Text style={styles.tagline}>Parent Portal</Text>
 
         <View style={styles.lightBlueWaveContainer}>
-          <Svg height="92" width="90%" viewBox="0 0 1440 320">
+          <Svg height="92" width="100%" viewBox="0 0 1440 320">
             <Path
               fill="#4B9BFF"
               d="M0,180L48,170C96,160,192,140,288,130C384,120,480,120,576,135C672,150,768,180,864,190C960,200,1056,190,1152,175C1248,160,1344,130,1392,115L1440,100L1440,320L0,320Z"
@@ -384,6 +417,10 @@ const SignIn = () => {
         </Svg>
       </LinearGradient>
 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
@@ -515,6 +552,7 @@ const SignIn = () => {
           </Text>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
@@ -560,15 +598,15 @@ const styles = StyleSheet.create({
   },
   whiteWaveWrapper: {
     position: "absolute",
-    bottom: -5,
+    bottom: -6,
     left: 0,
     zIndex: 3,
   },
   lightBlueWaveContainer: {
     position: "absolute",
-    bottom: -0.1,
-    left: "5%",
-    right: "-20%",
+    bottom: -6,
+    left: 0,
+    right: 0,
     alignItems: "center",
     zIndex: 2,
   },
