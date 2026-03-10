@@ -411,12 +411,13 @@ const TabsLayout = () => {
                 />
               </View>
               <Text
+                numberOfLines={1}
                 style={[
                   styles.navText,
                   activeTab === "assignments" && styles.navTextActive,
                 ]}
               >
-                Assignments
+                Assign
               </Text>
             </TouchableOpacity>
           )}
