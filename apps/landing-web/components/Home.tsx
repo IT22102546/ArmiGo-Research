@@ -37,6 +37,8 @@ import {
   Cloud,
   Sun,
   Moon,
+  Monitor,
+  Download,
   Star as StarIcon,
   PartyPopper
 } from "lucide-react";
@@ -1584,6 +1586,141 @@ const HomeSection = () => {
               ✨ Join 500+ families sharing their superhero journeys ✨
             </p>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Get Started - Hospital or Parent */}
+      <section className="py-20 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 right-0 w-72 h-72 bg-blue-200/20 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-200/20 rounded-full blur-3xl"></div>
+        </div>
+
+        <div className="container-custom relative z-10">
+          <motion.div 
+            className="text-center mb-16"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeInUp}
+          >
+            <span className="inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full text-sm font-bold mb-6 shadow-lg">
+              <Rocket className="inline w-4 h-4 mr-2" />
+              GET STARTED TODAY
+            </span>
+            <h2 className="text-4xl md:text-5xl font-black mb-4">
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Ready to Join ArmiGo?
+              </span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Choose your path to get started with ArmiGo
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Hospital Card */}
+            <motion.div
+              className="relative group"
+              variants={bounceAnimation}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              whileHover={{ y: -8 }}
+            >
+              <div className="bg-gradient-to-br from-blue-400 to-indigo-600 p-1 rounded-3xl h-full">
+                <div className="bg-white p-8 rounded-3xl h-full text-center">
+                  <motion.div
+                    className="w-20 h-20 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                    animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                  >
+                    <Hospital className="w-10 h-10 text-blue-600" />
+                  </motion.div>
+                  <h3 className="text-2xl font-bold mb-3">I'm a Hospital</h3>
+                  <p className="text-gray-600 mb-6">
+                    Access the ArmiGo web dashboard to manage patients, track progress, and coordinate therapy sessions.
+                  </p>
+                  <div className="space-y-3 mb-8">
+                    {["Web-based dashboard", "Patient management", "Progress analytics", "Staff coordination"].map((feature, i) => (
+                      <div key={i} className="flex items-center gap-2 justify-center">
+                        <span className="text-green-500">✓</span>
+                        <span className="text-sm text-gray-700">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <a
+                    href="https://web.armigorehab.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:shadow-xl transition-all group"
+                  >
+                    <Monitor className="w-5 h-5" />
+                    Go to Dashboard
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </a>
+                </div>
+              </div>
+              <motion.div
+                className="absolute -top-4 -right-4 bg-blue-500 text-white px-4 py-2 rounded-full font-bold text-sm"
+                animate={{ rotate: [0, 5, -5, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                🏥 For Hospitals
+              </motion.div>
+            </motion.div>
+
+            {/* Parent Card */}
+            <motion.div
+              className="relative group"
+              variants={bounceAnimation}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              whileHover={{ y: -8 }}
+            >
+              <div className="bg-gradient-to-br from-pink-400 to-purple-500 p-1 rounded-3xl h-full">
+                <div className="bg-white p-8 rounded-3xl h-full text-center">
+                  <motion.div
+                    className="w-20 h-20 bg-pink-100 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                    animate={{ scale: [1, 1.1, 1], rotate: [0, -5, 5, 0] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                  >
+                    <Smartphone className="w-10 h-10 text-pink-600" />
+                  </motion.div>
+                  <h3 className="text-2xl font-bold mb-3">I'm a Parent</h3>
+                  <p className="text-gray-600 mb-6">
+                    Download the ArmiGo mobile or desktop app to track your child's therapy progress and stay connected.
+                  </p>
+                  <div className="space-y-3 mb-8">
+                    {["Mobile app (Android)", "Desktop app (Windows)", "Real-time progress tracking", "Free for parents"].map((feature, i) => (
+                      <div key={i} className="flex items-center gap-2 justify-center">
+                        <span className="text-green-500">✓</span>
+                        <span className="text-sm text-gray-700">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <a
+                    href="https://mysliit-my.sharepoint.com/:f:/g/personal/it22102546_my_sliit_lk/IgD_EZIQOxLqT5gTFwVohlZBAUDXMp0MSfMi9OGTnZJQeMo?e=LiSTNB"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white px-8 py-4 rounded-full font-bold text-lg hover:shadow-xl transition-all group"
+                  >
+                    <Download className="w-5 h-5" />
+                    Download Apps
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </a>
+                </div>
+              </div>
+              <motion.div
+                className="absolute -top-4 -left-4 bg-pink-500 text-white px-4 py-2 rounded-full font-bold text-sm"
+                animate={{ rotate: [0, -5, 5, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                👨‍👩‍👧 For Parents
+              </motion.div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
