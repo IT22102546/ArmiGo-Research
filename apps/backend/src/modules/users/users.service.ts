@@ -966,6 +966,45 @@ export class UsersService {
       `findChildrenForParent(${parentId}): searched ids=${[...allParentIds].join(',')} → ${children.length} children`,
     );
 
+    // For children with no physioAssignments but an assignedDoctor name,
+    // look up HospitalStaff by name and inject a synthetic assignment
+    const childrenNeedingLookup = children.filter(
+      (c: any) => (!c.physioAssignments || c.physioAssignments.length === 0) && c.assignedDoctor?.trim()
+    );
+    if (childrenNeedingLookup.length > 0) {
+      const doctorNames = [...new Set(childrenNeedingLookup.map((c: any) => c.assignedDoctor.trim()))];
+      const staffByName = await this.prisma.hospitalStaff.findMany({
+        where: {
+          name: { in: doctorNames },
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          specialization: true,
+          phone: true,
+          email: true,
+          isActive: true,
+          availabilityStatus: true,
+          availabilityNote: true,
+          availabilityUpdatedAt: true,
+          unavailableDates: {
+            where: { date: { gte: new Date() } },
+            orderBy: { date: 'asc' as const },
+            select: { id: true, date: true, reason: true },
+          },
+        },
+      });
+      const staffMap = new Map(staffByName.map((s) => [s.name, s]));
+      for (const child of childrenNeedingLookup) {
+        const staff = staffMap.get(child.assignedDoctor!.trim());
+        if (staff) {
+          (child as any).physioAssignments = [{ id: `fallback-${child.id}`, physiotherapist: staff }];
+        }
+      }
+    }
+
     return children.map((child: any) => {
       const admissionPlayTimeMinutes = (Array.isArray(child.admissionTrackings) ? child.admissionTrackings : [])
         .filter(

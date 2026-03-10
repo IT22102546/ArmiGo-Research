@@ -417,7 +417,7 @@ export default function PhysiotherapistsTab() {
                               <Ionicons name="help-circle-outline" size={14} color={COLORS.slate[500]} />
                             </View>
                             <Text style={styles.infoLabel}>Availability:</Text>
-                            <Text style={[styles.infoValue, { color: COLORS.slate[500] }]}>Run backfill to see details</Text>
+                            <Text style={[styles.infoValue, { color: COLORS.slate[500] }]}>Assigned via name only</Text>
                           </View>
                         )}
 
