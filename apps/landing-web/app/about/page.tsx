@@ -158,14 +158,14 @@ const developers = [
 ];
 
 const milestones = [
-  { year: "2024", title: "The Dream Begins", desc: "ArmiGo research project initiated at SLIIT to revolutionize pediatric rehabilitation", icon: Star, color: "text-yellow-500" },
-  { year: "2024", title: "Clinical Partnership", desc: "Partnership established with Sirimavo Bandaranaike Children's Hospital", icon: Hospital, color: "text-blue-500" },
-  { year: "2024", title: "First Prototype", desc: "Our first smart rehabilitation device successfully tested with children", icon: Hand, color: "text-green-500" },
-  { year: "2025", title: "4-Device System", desc: "Complete upper limb rehabilitation system with finger, wrist, elbow and shoulder devices", icon: Activity, color: "text-purple-500" },
-  { year: "2025", title: "VR Integration", desc: "Unreal Engine VR game integrated for immersive therapy experience", icon: Gamepad2, color: "text-orange-500" },
-  { year: "2025", title: "Platform Launch", desc: "Full platform with mobile app, desktop app and web dashboard deployed", icon: Globe, color: "text-green-500" },
-  { year: "2025", title: "AI Monitoring", desc: "AI-powered movement analysis and progress tracking implemented", icon: Brain, color: "text-purple-500" },
-  { year: "2026", title: "Growing Impact", desc: "Expanding to more hospitals and helping more children every day", icon: Trophy, color: "text-yellow-500" },
+  { year: "Aug 2025", title: "Project Initiated", desc: "ArmiGo research project kicked off at SLIIT to revolutionize pediatric rehabilitation", icon: Star, color: "text-yellow-500" },
+  { year: "Sep 2025", title: "Clinical Partnership", desc: "Partnership established with Sirimavo Bandaranaike Children's Hospital for clinical guidance", icon: Hospital, color: "text-blue-500" },
+  { year: "Oct 2025", title: "Data Collection", desc: "Clinical data gathered from patients at the hospital to guide device and game design", icon: Activity, color: "text-green-500" },
+  { year: "Dec 2025", title: "First Version Implemented", desc: "Initial prototypes of IoT rehabilitation devices built and tested", icon: Hand, color: "text-blue-500" },
+  { year: "Jan 2026", title: "Development & Refinement", desc: "Full development cycle — firmware, mobile app, web dashboard and desktop app built out", icon: Globe, color: "text-purple-500" },
+  { year: "Feb 2026", title: "Game Development", desc: "Unreal Engine VR rehabilitation games designed and developed for each device", icon: Gamepad2, color: "text-orange-500" },
+  { year: "Feb 2026", title: "WiFi Integration", desc: "Devices connected wirelessly via WiFi for seamless real-time gameplay", icon: Activity, color: "text-green-500" },
+  { year: "Apr 2026", title: "Full System Release", desc: "Complete ArmiGo platform released — 4 devices, VR games, mobile app, desktop app and web dashboard", icon: Trophy, color: "text-yellow-500" },
 ];
 
 const stats = [
