@@ -81,7 +81,21 @@ const useAuthStore = create<AuthState>((set, get) => ({
     const accessToken = localStorage.getItem('access_token');
     const refreshToken = localStorage.getItem('refresh_token');
     const user = userJson ? JSON.parse(userJson) : null;
-    if (user && accessToken) {
+
+    // Check if JWT is expired by decoding the payload
+    let tokenExpired = false;
+    if (accessToken) {
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          tokenExpired = true;
+        }
+      } catch {
+        tokenExpired = true;
+      }
+    }
+
+    if (user && accessToken && !tokenExpired) {
       set({
         isSignedIn: true,
         currentUser: user,
@@ -90,6 +104,10 @@ const useAuthStore = create<AuthState>((set, get) => ({
         authChecked: true,
       });
     } else {
+      // Token missing or expired — clear everything so user sees login screen
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
       set({
         isSignedIn: false,
         currentUser: null,
