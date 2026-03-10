@@ -49,7 +49,7 @@ export default defineConfig(({ mode }) => {
 server: {
   proxy: {
     '/api': {
-      target: 'https://api.armigorehab.com',
+      target: 'http://192.168.1.103:5000',
       changeOrigin: true,
       rewrite: (path) => path.replace(/^\/api/, ''), // Remove /api, not add another one
       configure: (proxy, _options) => {
