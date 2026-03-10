@@ -638,6 +638,26 @@ export class PatientService {
       updateData.age = this.calculateAge(birthDate);
     }
 
+    // Convert scalar FK fields to Prisma relation connect syntax
+    if (updateData.districtId) {
+      updateData.district = { connect: { id: updateData.districtId } };
+      delete updateData.districtId;
+    }
+    if (updateData.zoneId) {
+      updateData.zone = { connect: { id: updateData.zoneId } };
+      delete updateData.zoneId;
+    }
+    if (updateData.hospitalId) {
+      updateData.hospital = { connect: { id: updateData.hospitalId } };
+      delete updateData.hospitalId;
+    }
+    if (updateData.subHospitalId) {
+      updateData.subHospital = { connect: { id: updateData.subHospitalId } };
+      delete updateData.subHospitalId;
+    }
+    // physiotherapistId is not a direct field on Child, remove it
+    delete updateData.physiotherapistId;
+
     const parentFullName = (data.parentName || '').trim();
     if (patient.parentId && (parentFullName || data.parentEmail || data.parentPhone)) {
       const [parentFirstName, ...parentLastNameParts] = parentFullName.split(' ');
@@ -2696,35 +2716,40 @@ export class PatientService {
       }),
     ]);
 
-    // Get children assigned to the chosen physiotherapist (via admission tracking)
+    // Get children assigned to the chosen physiotherapist (via admission tracking + physio assignments)
     let children: any[] = [];
     if (physiotherapistId) {
-      const admissions = await this.prisma.admissionTracking.findMany({
-        where: { physiotherapistId },
-        select: {
-          childId: true,
-          child: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              age: true,
-              diagnosis: true,
-              hospitalId: true,
-              hospital: { select: { id: true, name: true } },
-            },
-          },
-        },
-      });
-      // Deduplicate children
+      const childSelect = {
+        id: true,
+        firstName: true,
+        lastName: true,
+        age: true,
+        diagnosis: true,
+        hospitalId: true,
+        hospital: { select: { id: true, name: true } },
+      } as const;
+
+      const [admissions, physioAssignments] = await Promise.all([
+        this.prisma.admissionTracking.findMany({
+          where: { physiotherapistId },
+          select: { child: { select: childSelect } },
+        }),
+        this.prisma.physiotherapyAssignment.findMany({
+          where: { physiotherapistId },
+          select: { child: { select: childSelect } },
+        }),
+      ]);
+
+      // Deduplicate children from both sources
       const seen = new Set<string>();
-      children = admissions
+      children = [...admissions, ...physioAssignments]
         .map((a) => a.child)
         .filter((c) => {
           if (seen.has(c.id)) return false;
           seen.add(c.id);
           return true;
-        });
+        })
+        .sort((a, b) => a.firstName.localeCompare(b.firstName) || a.lastName.localeCompare(b.lastName));
     } else if (hospitalId) {
       // No physiotherapist selected yet – return all active children for the hospital
       children = await this.prisma.child.findMany({
