@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ArmiGo – Finger Health Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f172a;
+      --surface:  #1e293b;
+      --border:   #334155;
+      --text:     #e2e8f0;
+      --muted:    #94a3b8;
+      --healthy:  #22c55e;
+      --moderate: #f59e0b;
+      --bad:      #ef4444;
+      --accent:   #6366f1;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 900px; margin: 0 auto; }
+
+    header {
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    header .logo {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 700; color: #fff;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p  { color: var(--muted); font-size: 0.875rem; margin-top: 2px; }
+
+    .grid { display: grid; gap: 1.25rem; grid-template-columns: 1fr 1fr; }
+    @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+    }
+    .card-title {
+      font-size: 0.75rem; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 1rem;
+    }
+
+    /* ── Result card ── */
+    #result-card {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; gap: 1.5rem;
+      transition: border-color .3s;
+    }
+    .status-badge {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; flex-shrink: 0;
+      transition: background .3s;
+    }
+    .result-text h2 { font-size: 1.25rem; font-weight: 700; }
+    .result-text p  { color: var(--muted); font-size: 0.875rem; margin-top: 4px; }
+    .confidence-row { display: flex; gap: 1rem; margin-top: .75rem; flex-wrap: wrap; }
+    .prob-chip {
+      font-size: 0.75rem; padding: 3px 10px; border-radius: 99px;
+      background: var(--border); color: var(--text);
+    }
+    .prob-chip.active { font-weight: 700; }
+
+    /* ── Form inputs ── */
+    .input-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: .6rem;
+    }
+    label { display: block; font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; }
+    input[type=number], select {
+      width: 100%; padding: .4rem .6rem;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 0.85rem;
+      outline: none;
+    }
+    input[type=number]:focus, select:focus { border-color: var(--accent); }
+
+    /* ── Buttons ── */
+    .btn-row { display: flex; gap: .75rem; margin-top: 1rem; flex-wrap: wrap; }
+    button {
+      padding: .55rem 1.25rem; border-radius: 10px; border: none;
+      font-size: 0.875rem; font-weight: 600; cursor: pointer;
+      transition: opacity .15s;
+    }
+    button:hover { opacity: .85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-danger { background: #7f1d1d; color: #fca5a5; }
+
+    /* ── Sequence builder ── */
+    #seq-table {
+      width: 100%; border-collapse: collapse; font-size: 0.75rem;
+      overflow-x: auto; display: block;
+    }
+    #seq-table th, #seq-table td {
+      padding: 4px 8px; border: 1px solid var(--border); text-align: right;
+    }
+    #seq-table th { background: var(--bg); color: var(--muted); position: sticky; top: 0; }
+    #seq-table tr:hover td { background: #243046; }
+    .seq-wrapper { max-height: 240px; overflow-y: auto; margin-top: .75rem; }
+
+    /* ── Progress bar ── */
+    .bar-wrap { background: var(--border); border-radius: 99px; height: 6px; margin-top: 6px; }
+    .bar { height: 6px; border-radius: 99px; transition: width .4s; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: .65rem 1.2rem; border-radius: 12px;
+      font-size: 0.85rem; opacity: 0;
+      transition: opacity .25s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── API log ── */
+    #log {
+      font-family: monospace; font-size: 0.75rem;
+      color: var(--muted); max-height: 140px; overflow-y: auto;
+      white-space: pre-wrap; word-break: break-all;
+    }
+
+    footer {
+      text-align: center; color: var(--muted);
+      font-size: 0.75rem; margin-top: 3rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">A</div>
+    <div>
+      <h1>ArmiGo — Finger Health Analyzer</h1>
+      <p>LSTM · 3-class · {{ metadata.n_features }} sensor features · Seq {{ metadata.sequence_length }}</p>
+    </div>
+  </header>
+
+  <!-- Result card -->
+  <div class="card" id="result-card">
+    <div class="status-badge" id="badge">🤚</div>
+    <div class="result-text" style="flex:1">
+      <h2 id="status-label">Waiting for data…</h2>
+      <p  id="status-msg">Add sensor readings and click Predict.</p>
+      <div class="confidence-row" id="prob-row"></div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:1.25rem">
+
+    <!-- Single reading input -->
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title">Add sensor timestep</div>
+      <div class="input-grid" id="input-grid"></div>
+      <div class="btn-row">
+        <button class="btn-primary"   onclick="addRow()">＋ Add Row</button>
+        <button class="btn-secondary" onclick="fillSample()">Sample Data</button>
+        <button class="btn-secondary" onclick="clearSeq()">Clear Sequence</button>
+      </div>
+      <p id="seq-counter" style="margin-top:.6rem;font-size:.8rem;color:var(--muted)">
+        Sequence: 0 / {{ metadata.sequence_length }} rows
+      </p>
+    </div>
+
+    <!-- Sequence table -->
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title">Current Sequence</div>
+      <div class="seq-wrapper">
+        <table id="seq-table">
+          <thead><tr id="seq-head"></tr></thead>
+          <tbody id="seq-body"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary"   onclick="runPredict()">Predict</button>
+        <button class="btn-secondary" onclick="autoFill()">Auto-fill to {{ metadata.sequence_length }}</button>
+        <button class="btn-danger"    onclick="clearSeq()">Clear</button>
+      </div>
+    </div>
+
+    <!-- API log -->
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title">API response</div>
+      <pre id="log">—</pre>
+    </div>
+
+  </div>
+
+  <footer>
+    ArmiGo Research · Finger LSTM 3-class ·
+    Test acc {{ "%.1f"|format(metadata.test_accuracy * 100) }}% ·
+    K-Fold {{ "%.1f"|format(metadata.kfold_mean * 100) }}% ± {{ "%.1f"|format(metadata.kfold_std * 100) }}%
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const SEQ_LEN  = {{ metadata.sequence_length }};
+  const COLS     = {{ metadata.sensor_features | tojson }};
+  const sequence = [];  // array of row objects
+
+  // ── Build input form ─────────────────────────────────────────────────────────
+  const grid = document.getElementById('input-grid');
+  COLS.forEach(col => {
+    const wrap = document.createElement('div');
+    const lbl  = document.createElement('label');
+    lbl.textContent = col;
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.step = 'any'; inp.id = 'inp_' + col;
+    inp.placeholder = '0';
+    wrap.append(lbl, inp);
+    grid.appendChild(wrap);
+  });
+
+  // Build table header
+  const head = document.getElementById('seq-head');
+  head.innerHTML = '<th>#</th>' + COLS.map(c => `<th>${c}</th>`).join('') + '<th>Del</th>';
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  function readRow() {
+    const row = {};
+    COLS.forEach(c => {
+      const v = parseFloat(document.getElementById('inp_' + c).value) || 0;
+      row[c] = v;
+    });
+    return row;
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('seq-body');
+    tbody.innerHTML = '';
+    sequence.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${i+1}</td>` +
+        COLS.map(c => `<td>${(+row[c]).toFixed(2)}</td>`).join('') +
+        `<td><button onclick="delRow(${i})" style="background:transparent;color:#ef4444;border:none;cursor:pointer;font-size:.9rem">✕</button></td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('seq-counter').textContent =
+      `Sequence: ${sequence.length} / ${SEQ_LEN} rows`;
+  }
+
+  function delRow(i) { sequence.splice(i, 1); renderTable(); }
+  function clearSeq() { sequence.length = 0; renderTable(); resetResult(); }
+
+  function addRow() {
+    sequence.push(readRow());
+    renderTable();
+  }
+
+  function fillSample() {
+    // Healthy-looking default values derived from dataset statistics
+    const defaults = {
+      Thumb: 731, Index: 1106, Middle: 683, Ring: 717, Pinky: 889,
+      AngleThumb: 13.5, AngleIndex: 21.3, AngleMiddle: 11.7, AngleRing: 10.8, AnglePinky: 12.5,
+      AccelX: 0.5, AccelY: -0.33, AccelZ: 0.01,
+      GyroX: -1.8, GyroY: 1.2, GyroZ: 0.5,
+      AngleX: -89.3, AngleY: -56.2, AngleZ: -33.7,
+      AbductionAngle: 0.0, RotationAngle: 0.0, MovementMagnitude: 0.0
+    };
+    COLS.forEach(c => {
+      const el = document.getElementById('inp_' + c);
+      el.value = defaults[c] !== undefined ? defaults[c] : 0;
+    });
+  }
+
+  function autoFill() {
+    if (sequence.length === 0) { toast('Add at least one row first'); return; }
+    while (sequence.length < SEQ_LEN) {
+      const base = sequence[sequence.length - 1];
+      const jittered = {};
+      COLS.forEach(c => {
+        jittered[c] = +(base[c] + (Math.random() - 0.5) * 0.5).toFixed(4);
+      });
+      sequence.push(jittered);
+    }
+    if (sequence.length > SEQ_LEN) sequence.length = SEQ_LEN;
+    renderTable();
+    toast(`Filled to ${SEQ_LEN} rows`);
+  }
+
+  // ── Predict ──────────────────────────────────────────────────────────────────
+  async function runPredict() {
+    if (sequence.length !== SEQ_LEN) {
+      toast(`Need exactly ${SEQ_LEN} rows (have ${sequence.length})`);
+      return;
+    }
+    const body = JSON.stringify({ sequence });
+    try {
+      const res  = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body
+      });
+      const data = await res.json();
+      document.getElementById('log').textContent = JSON.stringify(data, null, 2);
+      if (data.error) { toast('Error: ' + data.error); return; }
+      showResult(data);
+    } catch (e) {
+      toast('Network error: ' + e.message);
+    }
+  }
+
+  function showResult(data) {
+    const colors = { Healthy: '#22c55e', Moderate: '#f59e0b', Bad: '#ef4444' };
+    const icons  = { Healthy: '✅', Moderate: '⚠️', Bad: '🚨' };
+
+    const card = document.getElementById('result-card');
+    card.style.borderColor = colors[data.status] || '#6366f1';
+
+    document.getElementById('badge').textContent = icons[data.status] || '🤚';
+    document.getElementById('badge').style.background = (colors[data.status] || '#6366f1') + '33';
+
+    document.getElementById('status-label').textContent =
+      `${data.status}  —  ${data.confidence}% confidence`;
+    document.getElementById('status-msg').textContent = data.message;
+
+    // Probability chips
+    const row = document.getElementById('prob-row');
+    row.innerHTML = '';
+    if (data.all_probs) {
+      Object.entries(data.all_probs).forEach(([cls, pct]) => {
+        const chip = document.createElement('span');
+        chip.className = 'prob-chip' + (cls === data.status ? ' active' : '');
+        chip.style.borderLeft = `3px solid ${colors[cls] || '#6366f1'}`;
+        chip.textContent = `${cls}: ${pct}%`;
+        row.appendChild(chip);
+      });
+    }
+  }
+
+  function resetResult() {
+    const card = document.getElementById('result-card');
+    card.style.borderColor = '';
+    document.getElementById('badge').textContent = '🤚';
+    document.getElementById('badge').style.background = '';
+    document.getElementById('status-label').textContent = 'Waiting for data…';
+    document.getElementById('status-msg').textContent = 'Add sensor readings and click Predict.';
+    document.getElementById('prob-row').innerHTML = '';
+    document.getElementById('log').textContent = '—';
+  }
+
+  // ── Toast ────────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // init
+  renderTable();
+</script>
+</body>
+</html>

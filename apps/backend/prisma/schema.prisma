@@ -430,6 +430,11 @@ model Child {
   appointments    Appointment[]
   admissionTrackings AdmissionTracking[]
   physioAssignments   PhysiotherapyAssignment[] @relation("ChildPhysioAssignments")
+
+  // Game data
+  shoulderElbowSensorData ShoulderElbowSensorData[] @relation("ChildShoulderElbowSensor")
+  fingerSensorData        FingerSensorData[]        @relation("ChildFingerSensor")
+  gameResults             GameResult[]              @relation("ChildGameResults")
   
   @@index([parentId])
   @@index([hospitalId])
@@ -976,4 +981,96 @@ model PhysioUnavailableDate {
   @@index([staffId])
   @@index([date])
   @@map("physio_unavailable_dates")
+}
+
+// ============================================
+// GAME DATA MODELS
+// ============================================
+
+model ShoulderElbowSensorData {
+  id           Int      @id @default(autoincrement())
+  childId      String
+  playerId     String
+  exerciseType String
+  sessionId    String
+  timestamp    DateTime
+  sensorName   String
+  qx           Float
+  qy           Float
+  qz           Float
+  qw           Float
+  armAngle     Float
+  repCount     Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  child        Child    @relation("ChildShoulderElbowSensor", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@index([playerId])
+  @@index([sessionId])
+  @@map("shoulder_elbow_sensor_data")
+}
+
+model FingerSensorData {
+  id            Int      @id @default(autoincrement())
+  childId       String
+  playerId      String
+  exerciseType  String
+  sessionId     String
+  timestamp     DateTime
+  thumbValue    Int
+  indexValue    Int
+  middleValue   Int
+  ringValue     Int
+  pinkyValue    Int
+  thumbYaw      Float
+  thumbPitch    Float
+  thumbRoll     Float
+  thumbFlexPct  Float
+  indexFlexPct  Float
+  middleFlexPct Float
+  ringFlexPct   Float
+  pinkyFlexPct  Float
+  repCount      Int      @default(0)
+  exerciseState String?
+  createdAt     DateTime @default(now())
+
+  child         Child    @relation("ChildFingerSensor", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@index([playerId])
+  @@index([sessionId])
+  @@map("finger_sensor_data")
+}
+
+model GameResult {
+  id            Int      @id @default(autoincrement())
+  childId       String
+  playerId      String
+  exerciseType  String
+  sessionId     String
+  finalScore    Int
+  repsCompleted Int
+  duration      Int
+  timestamp     DateTime
+  maxAngle      Float?
+  averageAngle  Float?
+  maxThumb      Int?
+  maxIndex      Int?
+  maxMiddle     Int?
+  maxRing       Int?
+  maxPinky      Int?
+  avgThumb      Int?
+  avgIndex      Int?
+  avgMiddle     Int?
+  avgRing       Int?
+  avgPinky      Int?
+  createdAt     DateTime @default(now())
+
+  child         Child    @relation("ChildGameResults", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@index([playerId])
+  @@index([sessionId])
+  @@map("game_results")
 }
