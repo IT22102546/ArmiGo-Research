@@ -20,6 +20,7 @@ import { GeographyModule } from "./modules/geography/geography.module";
 import { HospitalModule } from "./modules/hospitals/hospital.module";
 import { AnnouncementsModule } from "@modules/announcements/announcements.module";
 import { PublicationsModule } from "@modules/publications/publications.module";
+import { GameModule } from "./modules/game/game.module";
 
 // Infrastructure - ONLY keep what's necessary
 import { HealthModule } from "./infrastructure/health/health.module";
@@ -56,6 +57,7 @@ import { CorrelationIdMiddleware } from "./common/middleware";
     HospitalModule,
     AnnouncementsModule,
     PublicationsModule,
+    GameModule,
 
     // Infrastructure - only Health module
     HealthModule,

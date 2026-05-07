@@ -33,8 +33,19 @@ type ProgressTracker = {
   shoulderProgress?: number;
 };
 
+type GameExerciseStat = { sessions: number; avgScore: number; totalReps: number };
+
+type GameSummary = {
+  totalSessions: number;
+  totalReps: number;
+  avgScore: number;
+  totalGameResults: number;
+  byExerciseType: Record<string, GameExerciseStat>;
+};
+
 type ChildData = {
   id: string;
+  displayId?: string;
   firstName?: string;
   lastName?: string;
   exerciseFingers?: boolean;
@@ -238,6 +249,7 @@ const ExerciseProgressScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [childData, setChildData] = useState<ChildData | null>(null);
+  const [gameSummary, setGameSummary] = useState<GameSummary | null>(null);
 
   const fetchData = useCallback(
     async (isRefresh = false) => {
@@ -259,7 +271,21 @@ const ExerciseProgressScreen = () => {
             const match = childId
               ? rows.find((c) => c.id === childId) || rows[0]
               : rows[0];
-            if (match) setChildData(match);
+            if (match) {
+              setChildData(match);
+              // Fetch game summary for this child using their UUID
+              try {
+                const gameRes = await apiFetch(
+                  `/api/v1/game/patient/by-child/${match.id}/summary`,
+                  { method: "GET" }
+                );
+                if (gameRes?.ok) {
+                  const gameJson = await gameRes.json();
+                  const raw = extractData(gameJson);
+                  setGameSummary(raw?.data ?? raw ?? null);
+                }
+              } catch {}
+            }
           }
         }
       } catch {
@@ -280,12 +306,39 @@ const ExerciseProgressScreen = () => {
   const currentProg = tracker?.currentProgress ?? 0;
   const overallProgress = Math.min(100, Math.max(0, currentProg));
   const improvement = currentProg - startProg;
-  const enabledExercises = EXERCISE_DETAILS.filter(
-    (ex) => !!(childData as any)?.[ex.flag],
-  );
   const childName = childData
     ? `${childData.firstName || ""} ${childData.lastName || ""}`.trim()
     : "";
+
+  // Normalize game exercise type keys (lowercase, no separators) and merge duplicates
+  const normGame: Record<string, GameExerciseStat> = {};
+  if (gameSummary?.byExerciseType) {
+    for (const [k, v] of Object.entries(gameSummary.byExerciseType)) {
+      const norm = k.toLowerCase().replace(/[\s_-]/g, "");
+      if (!normGame[norm]) {
+        normGame[norm] = { ...v };
+      } else {
+        normGame[norm].sessions += v.sessions;
+        normGame[norm].totalReps += v.totalReps;
+        normGame[norm].avgScore = Math.round((normGame[norm].avgScore + v.avgScore) / 2);
+      }
+    }
+  }
+
+  // Keys to check per exercise (handles "fingers"/"finger", etc.)
+  const EXERCISE_NORM_KEYS: Record<string, string[]> = {
+    fingers: ["fingers", "finger"],
+    wrist: ["wrist"],
+    elbow: ["elbow"],
+    shoulder: ["shoulder"],
+  };
+  const getGameStats = (exKey: string): GameExerciseStat | null =>
+    (EXERCISE_NORM_KEYS[exKey] ?? [exKey]).map((k) => normGame[k]).find(Boolean) ?? null;
+
+  // Show exercise if assigned to patient OR game has data for it
+  const visibleExercises = EXERCISE_DETAILS.filter(
+    (ex) => !!(childData as any)?.[ex.flag] || !!getGameStats(ex.key)
+  );
 
   /* ---------- loading / empty ---------- */
   if (loading) {
@@ -295,7 +348,7 @@ const ExerciseProgressScreen = () => {
       </View>
     );
   }
-  if (!childData || enabledExercises.length === 0) {
+  if (!childData || visibleExercises.length === 0) {
     return (
       <View style={s.center}>
         <View style={s.emptyIcon}>
@@ -409,6 +462,24 @@ const ExerciseProgressScreen = () => {
               </Text>
             </View>
           )}
+
+          {/* game summary pills */}
+          {gameSummary && gameSummary.totalGameResults > 0 && (
+            <View style={s.heroGameRow}>
+              <View style={s.heroGamePill}>
+                <Ionicons name="trophy-outline" size={12} color="#c7d2fe" />
+                <Text style={s.heroGamePillText}>Avg {gameSummary.avgScore} pts</Text>
+              </View>
+              <View style={s.heroGamePill}>
+                <Ionicons name="layers-outline" size={12} color="#c7d2fe" />
+                <Text style={s.heroGamePillText}>{gameSummary.totalSessions} sessions</Text>
+              </View>
+              <View style={s.heroGamePill}>
+                <Ionicons name="repeat-outline" size={12} color="#c7d2fe" />
+                <Text style={s.heroGamePillText}>{gameSummary.totalReps} reps</Text>
+              </View>
+            </View>
+          )}
         </LinearGradient>
 
         {/* ========== Exercise Cards ========== */}
@@ -418,9 +489,12 @@ const ExerciseProgressScreen = () => {
             <Text style={s.sectionTitle}>Exercise Breakdown</Text>
           </View>
 
-          {enabledExercises.map((ex) => {
-            const pct =
-              (tracker as any)?.[ex.progressKey] ?? currentProg;
+          {visibleExercises.map((ex) => {
+            const isAssigned = !!(childData as any)?.[ex.flag];
+            const gStats = getGameStats(ex.key);
+            const pct = isAssigned
+              ? ((tracker as any)?.[ex.progressKey] ?? currentProg)
+              : 0;
             const exImp = pct - startProg;
             const clamped = Math.min(100, Math.max(0, pct));
 
@@ -439,7 +513,7 @@ const ExerciseProgressScreen = () => {
                   colors={ex.lightGradient}
                   style={s.cardBody}
                 >
-                  {/* Top row: emoji + label + percentage */}
+                  {/* Top row: emoji + label + percentage / game badge */}
                   <View style={s.cardTop}>
                     <View style={[s.cardIconWrap, { backgroundColor: ex.color + "18" }]}>
                       <Text style={s.cardEmoji}>{ex.emoji}</Text>
@@ -450,59 +524,91 @@ const ExerciseProgressScreen = () => {
                     </View>
                     <View style={[s.pctBadge, { backgroundColor: ex.color + "18" }]}>
                       <Text style={[s.pctBadgeText, { color: ex.color }]}>
-                        {clamped.toFixed(0)}%
+                        {isAssigned ? `${clamped.toFixed(0)}%` : "Game"}
                       </Text>
                     </View>
                   </View>
 
-                  {/* progress bar */}
-                  <View style={{ marginTop: 14, marginBottom: 12 }}>
-                    <ProgressBar
-                      progress={clamped}
-                      colors={ex.gradient}
-                      height={10}
-                      trackColor={ex.color + "20"}
-                    />
-                  </View>
-
-                  {/* metrics row */}
-                  <View style={s.metricsRow}>
-                    <View style={s.metricChip}>
-                      <View style={[s.metricDot, { backgroundColor: "#94a3b8" }]} />
-                      <Text style={s.metricChipLabel}>Start</Text>
-                      <Text style={s.metricChipValue}>{startProg.toFixed(1)}%</Text>
-                    </View>
-                    <View style={s.metricChip}>
-                      <View style={[s.metricDot, { backgroundColor: ex.color }]} />
-                      <Text style={s.metricChipLabel}>Current</Text>
-                      <Text style={[s.metricChipValue, { color: ex.color }]}>
-                        {clamped.toFixed(1)}%
-                      </Text>
-                    </View>
-                    <View style={s.metricChip}>
-                      <Ionicons
-                        name={exImp >= 0 ? "arrow-up" : "arrow-down"}
-                        size={10}
-                        color={exImp >= 0 ? "#10b981" : "#ef4444"}
+                  {/* progress bar — only when assigned */}
+                  {isAssigned && (
+                    <View style={{ marginTop: 14, marginBottom: 12 }}>
+                      <ProgressBar
+                        progress={clamped}
+                        colors={ex.gradient}
+                        height={10}
+                        trackColor={ex.color + "20"}
                       />
-                      <Text style={s.metricChipLabel}>Change</Text>
-                      <Text
-                        style={[
-                          s.metricChipValue,
-                          { color: exImp >= 0 ? "#10b981" : "#ef4444" },
-                        ]}
-                      >
-                        {exImp >= 0 ? "+" : ""}
-                        {exImp.toFixed(1)}%
-                      </Text>
                     </View>
-                  </View>
+                  )}
 
-                  {/* Active badge */}
-                  <View style={s.activeBadge}>
+                  {/* metrics row — only when assigned */}
+                  {isAssigned && (
+                    <View style={s.metricsRow}>
+                      <View style={s.metricChip}>
+                        <View style={[s.metricDot, { backgroundColor: "#94a3b8" }]} />
+                        <Text style={s.metricChipLabel}>Start</Text>
+                        <Text style={s.metricChipValue}>{startProg.toFixed(1)}%</Text>
+                      </View>
+                      <View style={s.metricChip}>
+                        <View style={[s.metricDot, { backgroundColor: ex.color }]} />
+                        <Text style={s.metricChipLabel}>Current</Text>
+                        <Text style={[s.metricChipValue, { color: ex.color }]}>
+                          {clamped.toFixed(1)}%
+                        </Text>
+                      </View>
+                      <View style={s.metricChip}>
+                        <Ionicons
+                          name={exImp >= 0 ? "arrow-up" : "arrow-down"}
+                          size={10}
+                          color={exImp >= 0 ? "#10b981" : "#ef4444"}
+                        />
+                        <Text style={s.metricChipLabel}>Change</Text>
+                        <Text
+                          style={[
+                            s.metricChipValue,
+                            { color: exImp >= 0 ? "#10b981" : "#ef4444" },
+                          ]}
+                        >
+                          {exImp >= 0 ? "+" : ""}
+                          {exImp.toFixed(1)}%
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* game stats chips */}
+                  {gStats ? (
+                    <View style={[s.gameChipsRow, { marginTop: isAssigned ? 8 : 14 }]}>
+                      <View style={[s.gameChip, { backgroundColor: ex.color + "15" }]}>
+                        <Ionicons name="game-controller-outline" size={10} color={ex.color} />
+                        <Text style={[s.gameChipText, { color: ex.color }]}>
+                          {gStats.sessions} sessions
+                        </Text>
+                      </View>
+                      <View style={[s.gameChip, { backgroundColor: ex.color + "15" }]}>
+                        <Ionicons name="repeat-outline" size={10} color={ex.color} />
+                        <Text style={[s.gameChipText, { color: ex.color }]}>
+                          {gStats.totalReps} reps
+                        </Text>
+                      </View>
+                      <View style={[s.gameChip, { backgroundColor: ex.color + "15" }]}>
+                        <Ionicons name="trophy-outline" size={10} color={ex.color} />
+                        <Text style={[s.gameChipText, { color: ex.color }]}>
+                          Avg {gStats.avgScore} pts
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <Text style={[s.noGameText, { marginTop: isAssigned ? 8 : 14 }]}>
+                      No game data yet
+                    </Text>
+                  )}
+
+                  {/* status badge */}
+                  <View style={[s.activeBadge, { marginTop: 8 }]}>
                     <View style={[s.activeDot, { backgroundColor: ex.color }]} />
                     <Text style={[s.activeText, { color: ex.color }]}>
-                      Active Exercise
+                      {isAssigned ? "Active Exercise" : "From Game Data"}
                     </Text>
                   </View>
                 </LinearGradient>
@@ -524,8 +630,8 @@ const ExerciseProgressScreen = () => {
               <View style={{ flex: 1 }}>
                 <Text style={s.summaryTitle}>Progress Summary</Text>
                 <Text style={s.summaryText}>
-                  {enabledExercises.length} active exercise
-                  {enabledExercises.length > 1 ? "s" : ""}
+                  {visibleExercises.length} active exercise
+                  {visibleExercises.length > 1 ? "s" : ""}
                   {improvement > 0
                     ? ` \u2022 ${improvement.toFixed(1)}% improvement`
                     : " \u2022 Keep going!"}
@@ -872,6 +978,54 @@ const s = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     marginTop: 2,
     lineHeight: 16,
+  },
+
+  /* hero game summary pills */
+  heroGameRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10,
+  },
+  heroGamePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  heroGamePillText: {
+    fontSize: 11,
+    color: "#c7d2fe",
+    fontFamily: "Poppins-Regular",
+  },
+
+  /* per-exercise game chips */
+  gameChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  gameChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  gameChipText: {
+    fontSize: 10,
+    fontWeight: "600",
+    fontFamily: "Poppins-Regular",
+  },
+  noGameText: {
+    fontSize: 11,
+    color: "#94a3b8",
+    fontFamily: "Poppins-Regular",
+    fontStyle: "italic",
   },
 });
 

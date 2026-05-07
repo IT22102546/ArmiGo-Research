@@ -86,13 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isVisible, onClose }) => {
       path: "/(tabs)/publications",
       icon: icons.sidebar_publications,
     },
-    { name: "Exams", path: "/(root)/(tabs)/exams", icon: icons.nav_exam },
-    {
-      name: "Class Links",
-      path: "/(root)/(screens)/class_link",
-      icon: icons.sidebar_classlink,
-    },
-    { name: "Admin Chat", path: "/admin-chat", icon: icons.sidebar_admin },
+
   ];
 
   if (!isVisible) return null;

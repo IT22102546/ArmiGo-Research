@@ -40,10 +40,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power, Users, Activity, Hand, CircleDot, Copy, UserPlus, UserCheck } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Eye, EyeOff, Power, Users, Activity, Hand, CircleDot, Copy, UserPlus, UserCheck, Gamepad2, Trophy, RotateCcw, Clock } from "lucide-react";
 import { ApiClient } from "@/lib/api/api-client";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
+import { gameApi } from "@/lib/api/endpoints/game";
+import type { GameSummary } from "@/lib/api/endpoints/game";
 
 type Hospital = {
   id: string;
@@ -189,6 +191,8 @@ export default function StudentManagement() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [viewingPatient, setViewingPatient] = useState<Patient | null>(null);
+  const [gameSummary, setGameSummary] = useState<GameSummary | null>(null);
+  const [gameSummaryLoading, setGameSummaryLoading] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
@@ -516,14 +520,25 @@ export default function StudentManagement() {
     setDialogOpen(true);
   };
 
-  const handleOpenViewDialog = (patient: Patient) => {
+  const handleOpenViewDialog = async (patient: Patient) => {
     setViewingPatient(patient);
     setViewDialogOpen(true);
+    setGameSummaryLoading(true);
+    setGameSummary(null);
+    try {
+      const summary = await gameApi.getPatientSummaryByChildId(patient.id);
+      setGameSummary(summary);
+    } catch {
+      // Game data not available yet — show empty state
+    } finally {
+      setGameSummaryLoading(false);
+    }
   };
 
   const handleCloseViewDialog = () => {
     setViewDialogOpen(false);
     setViewingPatient(null);
+    setGameSummary(null);
   };
 
   const handleOpenEditDialog = (patient: Patient) => {
@@ -821,7 +836,7 @@ export default function StudentManagement() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead>Player ID</TableHead>
                   <TableHead>Child Name</TableHead>
                   <TableHead>Age</TableHead>
                   <TableHead>Parent</TableHead>
@@ -867,9 +882,9 @@ export default function StudentManagement() {
                     <TableRow key={patient.id}>
                       <TableCell>
                         <button
-                          onClick={() => patient.displayId && copyToClipboard(patient.displayId, "ID")}
+                          onClick={() => patient.displayId && copyToClipboard(patient.displayId, "Player ID")}
                           className="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20 font-mono tracking-wide whitespace-nowrap hover:bg-indigo-100 transition-colors cursor-pointer"
-                          title="Click to copy"
+                          title="Click to copy Player ID"
                         >
                           {patient.displayId || "-"}
                           {patient.displayId && <Copy className="h-3 w-3 text-indigo-400" />}
@@ -1560,9 +1575,9 @@ export default function StudentManagement() {
                         {viewingPatient.firstName} {viewingPatient.lastName}
                       </h3>
                       <button
-                        onClick={() => viewingPatient.displayId && copyToClipboard(viewingPatient.displayId, "ID")}
+                        onClick={() => viewingPatient.displayId && copyToClipboard(viewingPatient.displayId, "Player ID")}
                         className="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20 font-mono tracking-wide whitespace-nowrap hover:bg-indigo-100 transition-colors cursor-pointer"
-                        title="Click to copy"
+                        title="Click to copy Player ID (use this in the ArmiGo game)"
                       >
                         {viewingPatient.displayId || "-"}
                         {viewingPatient.displayId && <Copy className="h-3 w-3 text-indigo-400" />}
@@ -1630,118 +1645,219 @@ export default function StudentManagement() {
                 </div>
               </div>
 
+              {/* ── Progress & Gameplay ─────────────────────────────────── */}
               <div className="rounded-lg border p-4 space-y-4">
-                <h4 className="text-sm font-medium">Overall Progress</h4>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Start Progress</span>
-                    <span className="font-medium">
-                      {viewingPatient.progressTracker?.startProgress ?? 0}%
-                    </span>
-                  </div>
-                  <Progress
-                    value={toProgressValue(viewingPatient.progressTracker?.startProgress)}
-                    className="h-2"
-                  />
+                <div className="flex items-center gap-2">
+                  <Gamepad2 className="h-4 w-4 text-indigo-500" />
+                  <h4 className="text-sm font-medium">Progress &amp; Gameplay</h4>
+                  <span className="ml-auto text-xs text-muted-foreground font-mono">
+                    Player ID: <span className="font-semibold text-indigo-600 dark:text-indigo-400">{viewingPatient.displayId || "-"}</span>
+                  </span>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Current Progress</span>
-                    <span className="font-medium">
-                      {viewingPatient.progressTracker?.currentProgress ?? 0}%
-                    </span>
+                {/* Overall progress bars */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Start Progress</span>
+                        <span className="font-medium">{viewingPatient.progressTracker?.startProgress ?? 0}%</span>
+                      </div>
+                      <Progress value={toProgressValue(viewingPatient.progressTracker?.startProgress)} className="h-2" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Current Progress</span>
+                        <span className="font-medium">{viewingPatient.progressTracker?.currentProgress ?? 0}%</span>
+                      </div>
+                      <Progress value={toProgressValue(viewingPatient.progressTracker?.currentProgress)} className="h-2" />
+                    </div>
                   </div>
-                  <Progress
-                    value={toProgressValue(viewingPatient.progressTracker?.currentProgress)}
-                    className="h-2"
-                  />
+
+                  {/* Session stats from tracker + game */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-md bg-muted/40 p-3">
+                      <p className="text-xs text-muted-foreground">Play Time</p>
+                      <p className="text-lg font-bold">{viewingPatient.progressTracker?.playTimeMinutes ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">min</p>
+                    </div>
+                    <div className="rounded-md bg-muted/40 p-3">
+                      <p className="text-xs text-muted-foreground">Played Days</p>
+                      <p className="text-lg font-bold">{viewingPatient.progressTracker?.playedDays ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">days</p>
+                    </div>
+                    {gameSummaryLoading ? (
+                      <div className="col-span-2 text-xs text-muted-foreground">Loading game data…</div>
+                    ) : gameSummary && gameSummary.totalGameResults > 0 ? (
+                      <>
+                        <div className="rounded-md bg-indigo-50 dark:bg-indigo-950/40 p-3">
+                          <Trophy className="h-3 w-3 mb-1 text-indigo-500" />
+                          <p className="text-lg font-bold text-indigo-700 dark:text-indigo-300">{gameSummary.avgScore}</p>
+                          <p className="text-xs text-muted-foreground">Avg Score</p>
+                        </div>
+                        <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/40 p-3">
+                          <RotateCcw className="h-3 w-3 mb-1 text-emerald-500" />
+                          <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{gameSummary.totalReps}</p>
+                          <p className="text-xs text-muted-foreground">Total Reps</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-2 text-xs text-muted-foreground">No game sessions yet.</div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Play Time</p>
-                    <p className="font-semibold">
-                      {viewingPatient.progressTracker?.playTimeMinutes ?? 0} min
-                    </p>
+                {/* Per-exercise cards: shown if patient is assigned the exercise OR game has data for it */}
+                {(() => {
+                  // Normalize game exercise type keys to lowercase, no separators, and merge duplicates
+                  const normGame: Record<string, { sessions: number; avgScore: number; totalReps: number }> = {};
+                  if (gameSummary?.byExerciseType) {
+                    for (const [k, v] of Object.entries(gameSummary.byExerciseType)) {
+                      const norm = k.toLowerCase().replace(/[\s_-]/g, "");
+                      if (!normGame[norm]) {
+                        normGame[norm] = { sessions: v.sessions, avgScore: v.avgScore, totalReps: v.totalReps };
+                      } else {
+                        normGame[norm].sessions += v.sessions;
+                        normGame[norm].totalReps += v.totalReps;
+                        normGame[norm].avgScore = Math.round((normGame[norm].avgScore + v.avgScore) / 2);
+                      }
+                    }
+                  }
+
+                  const exerciseConfigs = [
+                    {
+                      label: "Fingers",
+                      icon: <Hand className="h-4 w-4 text-blue-500" />,
+                      border: "border-blue-200 dark:border-blue-800",
+                      bar: "h-2 [&>div]:bg-blue-500",
+                      text: "text-blue-600 dark:text-blue-400",
+                      assigned: !!viewingPatient.exerciseFingers,
+                      progress: viewingPatient.progressTracker?.fingerProgress,
+                      normKeys: ["fingers", "finger"],
+                    },
+                    {
+                      label: "Wrist",
+                      icon: <CircleDot className="h-4 w-4 text-emerald-500" />,
+                      border: "border-emerald-200 dark:border-emerald-800",
+                      bar: "h-2 [&>div]:bg-emerald-500",
+                      text: "text-emerald-600 dark:text-emerald-400",
+                      assigned: !!viewingPatient.exerciseWrist,
+                      progress: viewingPatient.progressTracker?.wristProgress,
+                      normKeys: ["wrist"],
+                    },
+                    {
+                      label: "Elbow",
+                      icon: <Activity className="h-4 w-4 text-amber-500" />,
+                      border: "border-amber-200 dark:border-amber-800",
+                      bar: "h-2 [&>div]:bg-amber-500",
+                      text: "text-amber-600 dark:text-amber-400",
+                      assigned: !!viewingPatient.exerciseElbow,
+                      progress: viewingPatient.progressTracker?.elbowProgress,
+                      normKeys: ["elbow"],
+                    },
+                    {
+                      label: "Shoulder",
+                      icon: <Users className="h-4 w-4 text-purple-500" />,
+                      border: "border-purple-200 dark:border-purple-800",
+                      bar: "h-2 [&>div]:bg-purple-500",
+                      text: "text-purple-600 dark:text-purple-400",
+                      assigned: !!viewingPatient.exerciseShoulder,
+                      progress: viewingPatient.progressTracker?.shoulderProgress,
+                      normKeys: ["shoulder"],
+                    },
+                  ];
+
+                  const getGameStats = (cfg: typeof exerciseConfigs[number]) =>
+                    cfg.normKeys.map((k) => normGame[k]).find(Boolean) ?? null;
+
+                  // Show card if assigned to patient OR game sent data for this exercise
+                  const visible = exerciseConfigs.filter((cfg) => cfg.assigned || !!getGameStats(cfg));
+
+                  // Exercise types from game that don't match any of the 4 known types
+                  const knownKeys = new Set(exerciseConfigs.flatMap((c) => c.normKeys));
+                  const unknownGame = Object.entries(gameSummary?.byExerciseType ?? {}).filter(
+                    ([k]) => !knownKeys.has(k.toLowerCase().replace(/[\s_-]/g, ""))
+                  );
+
+                  if (visible.length === 0 && unknownGame.length === 0) return null;
+
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">By Exercise</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {visible.map((cfg) => {
+                          const gStats = getGameStats(cfg);
+                          return (
+                            <div key={cfg.label} className={`rounded-lg border ${cfg.border} p-3 space-y-2`}>
+                              <div className="flex items-center gap-2 text-sm font-medium">
+                                {cfg.icon}
+                                <span>{cfg.label}</span>
+                                {cfg.assigned && (
+                                  <span className={`ml-auto ${cfg.text}`}>{cfg.progress ?? 0}%</span>
+                                )}
+                              </div>
+                              {cfg.assigned && (
+                                <Progress value={toProgressValue(cfg.progress)} className={cfg.bar} />
+                              )}
+                              {gStats ? (
+                                <div className="flex gap-3 text-xs text-muted-foreground pt-1">
+                                  <span>{gStats.sessions} sessions</span>
+                                  <span>{gStats.totalReps} reps</span>
+                                  <span className="font-semibold text-foreground">Avg {gStats.avgScore} pts</span>
+                                </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground italic">No game data yet</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {unknownGame.map(([type, stats]) => (
+                          <div key={type} className="rounded-lg border p-3 space-y-2">
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              <Gamepad2 className="h-4 w-4 text-indigo-500" />
+                              <span className="capitalize">{type.replace(/[_-]/g, " ")}</span>
+                            </div>
+                            <div className="flex gap-3 text-xs text-muted-foreground">
+                              <span>{stats.sessions} sessions</span>
+                              <span>{stats.totalReps} reps</span>
+                              <span className="font-semibold text-foreground">Avg {stats.avgScore} pts</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Recent game sessions */}
+                {gameSummary && gameSummary.recentResults.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recent Sessions</p>
+                    <div className="rounded-md border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Exercise</TableHead>
+                            <TableHead className="text-xs text-right">Score</TableHead>
+                            <TableHead className="text-xs text-right">Reps</TableHead>
+                            <TableHead className="text-xs text-right">Duration</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {gameSummary.recentResults.slice(0, 5).map((r) => (
+                            <TableRow key={r.id}>
+                              <TableCell className="text-xs">{r.exerciseType.replace(/_/g, " ")}</TableCell>
+                              <TableCell className="text-xs text-right font-semibold">{r.finalScore}</TableCell>
+                              <TableCell className="text-xs text-right">{r.repsCompleted}</TableCell>
+                              <TableCell className="text-xs text-right">{r.duration}s</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Played Days</p>
-                    <p className="font-semibold">
-                      {viewingPatient.progressTracker?.playedDays ?? 0}
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
-
-              {(viewingPatient.exerciseFingers || viewingPatient.exerciseWrist || viewingPatient.exerciseElbow || viewingPatient.exerciseShoulder) && (
-                <div className="rounded-lg border p-4 space-y-4">
-                  <h4 className="text-sm font-medium">Per-Exercise Progress</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {viewingPatient.exerciseFingers && (
-                      <div className="rounded-lg border border-blue-200 dark:border-blue-800 p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                          <Hand className="h-4 w-4 text-blue-500" />
-                          <span>Fingers</span>
-                          <span className="ml-auto text-blue-600 dark:text-blue-400">
-                            {viewingPatient.progressTracker?.fingerProgress ?? 0}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={toProgressValue(viewingPatient.progressTracker?.fingerProgress)}
-                          className="h-2 [&>div]:bg-blue-500"
-                        />
-                      </div>
-                    )}
-                    {viewingPatient.exerciseWrist && (
-                      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                          <CircleDot className="h-4 w-4 text-emerald-500" />
-                          <span>Wrist</span>
-                          <span className="ml-auto text-emerald-600 dark:text-emerald-400">
-                            {viewingPatient.progressTracker?.wristProgress ?? 0}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={toProgressValue(viewingPatient.progressTracker?.wristProgress)}
-                          className="h-2 [&>div]:bg-emerald-500"
-                        />
-                      </div>
-                    )}
-                    {viewingPatient.exerciseElbow && (
-                      <div className="rounded-lg border border-amber-200 dark:border-amber-800 p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                          <Activity className="h-4 w-4 text-amber-500" />
-                          <span>Elbow</span>
-                          <span className="ml-auto text-amber-600 dark:text-amber-400">
-                            {viewingPatient.progressTracker?.elbowProgress ?? 0}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={toProgressValue(viewingPatient.progressTracker?.elbowProgress)}
-                          className="h-2 [&>div]:bg-amber-500"
-                        />
-                      </div>
-                    )}
-                    {viewingPatient.exerciseShoulder && (
-                      <div className="rounded-lg border border-purple-200 dark:border-purple-800 p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                          <Users className="h-4 w-4 text-purple-500" />
-                          <span>Shoulder</span>
-                          <span className="ml-auto text-purple-600 dark:text-purple-400">
-                            {viewingPatient.progressTracker?.shoulderProgress ?? 0}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={toProgressValue(viewingPatient.progressTracker?.shoulderProgress)}
-                          className="h-2 [&>div]:bg-purple-500"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           ) : null}
 

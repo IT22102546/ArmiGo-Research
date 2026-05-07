@@ -797,6 +797,9 @@ export class PatientService {
         },
       });
 
+      await tx.gameResult.deleteMany({ where: { childId: id } });
+      await tx.fingerSensorData.deleteMany({ where: { childId: id } });
+      await tx.shoulderElbowSensorData.deleteMany({ where: { childId: id } });
       await tx.deviceAssignment.deleteMany({ where: { childId: id } });
       await tx.appointment.deleteMany({ where: { childId: id } });
       await tx.therapySession.deleteMany({ where: { childId: id } });
