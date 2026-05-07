@@ -1,0 +1,25 @@
+RESEARCH GAP
+
+1.2 Research Gap 
+
+The literature review reveals critical gaps in existing rehabilitation systems. Table 1.2.1 presents a structured comparison of existing systems against the ArmiGo platform. 
+
+ 
+
+Table 1.2.1: Research Gap Analysis — Comparison of Existing Systems 
+
+All gaps addressed 
+
+ 
+
+Based on this analysis, the following specific research gaps are identified: 
+
+No existing published system integrates wearable sensor tracking for all four upper limb joints — shoulder, elbow, wrist, and fingers — simultaneously with joint-specific LSTM classification and dedicated therapeutic VR game environments in a single, affordable platform designed for children with hemiplegia. 
+
+LSTM models for therapeutic movement classification have not been deployed as embedded real-time ONNX Runtime inference components within a commercial VR game engine for paediatric rehabilitation at interactive frame rates. 
+
+No affordable, child-centred multi-joint rehabilitation system exists for the Sri Lankan clinical context, where therapist shortages, geographic barriers, and cost constraints severely limit access to conventional physiotherapy. 
+
+Multi-level monitoring ecosystems combining therapist clinical dashboard, parent mobile application, AI voice assistant, and four-joint wearable therapy have not been implemented in a unified system. 
+
+Most existing VR rehabilitation systems target adult stroke populations and lack the child-specific narrative, motivational, and cognitive design elements required for sustained engagement in children aged 5–15. 
