@@ -101,6 +101,34 @@ export default function ContactPage() {
   const [activeField, setActiveField] = useState<string | null>(null);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const containerRef = useRef(null);
+
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    ageGroup: "",
+    message: "",
+  });
+
+  const handleFieldChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const subject = encodeURIComponent("ArmiGo Enquiry from " + (formData.name || "a parent"));
+    const body = encodeURIComponent(
+      `Hi ArmiGo Team,\n\nYou have a new message from the contact form:\n\n` +
+      `Name: ${formData.name}\n` +
+      `Email: ${formData.email}\n` +
+      `Phone: ${formData.phone}\n` +
+      `Child's Age Group: ${formData.ageGroup}\n\n` +
+      `Message:\n${formData.message}\n`
+    );
+    const to = "sanjnana.nim2001@gmail.com,asankadilshanme@gmail.com,dinithineranjana@gmail.com,anushkasiyambalapitiya.edu@gmail.com,didula.c@sliit.lk,eishan.w@sliit.lk";
+    const cc = "djsenevi@gmail.com";
+    window.location.href = `mailto:${to}?cc=${cc}&subject=${subject}&body=${body}`;
+  };
   
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -474,13 +502,13 @@ export default function ContactPage() {
                   </div>
                 </div>
 
-                <form className="space-y-5">
+                <form className="space-y-5" onSubmit={handleSubmit}>
                   {[
                     { id: 'name', label: 'Your name', type: 'text', placeholder: "e.g., Sarah's Mom", icon: Smile, color: 'blue' },
                     { id: 'email', label: 'Email address', type: 'email', placeholder: 'hello@example.com', icon: Mail, color: 'purple' },
                     { id: 'phone', label: 'Phone number', type: 'tel', placeholder: '071 148 4037', icon: Phone, color: 'green' },
                   ].map((field) => (
-                    <motion.div 
+                    <motion.div
                       key={field.id}
                       className="relative"
                       whileHover={{ scale: 1.02 }}
@@ -495,6 +523,8 @@ export default function ContactPage() {
                         <input
                           type={field.type}
                           placeholder={field.placeholder}
+                          value={formData[field.id as keyof typeof formData]}
+                          onChange={(e) => handleFieldChange(field.id, e.target.value)}
                           className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-purple-400 focus:ring-4 focus:ring-purple-100 outline-none transition-all text-base"
                           onFocus={() => setActiveField(field.id)}
                           onBlur={() => setActiveField(null)}
@@ -511,11 +541,15 @@ export default function ContactPage() {
                       <span className="w-2 h-2 bg-pink-500 rounded-full animate-pulse"></span>
                       Child's age (tell us about your little hero!)
                     </label>
-                    <select className="w-full px-5 py-4 rounded-2xl border-2 border-gray-200 focus:border-pink-400 focus:ring-4 focus:ring-pink-100 outline-none transition-all text-base text-gray-600 bg-white">
-                      <option>🌟 Select age group 🌟</option>
-                      <option>6-8 years (Junior Hero)</option>
-                      <option>9-11 years (Super Hero)</option>
-                      <option>12-14 years (Mega Hero)</option>
+                    <select
+                      value={formData.ageGroup}
+                      onChange={(e) => handleFieldChange('ageGroup', e.target.value)}
+                      className="w-full px-5 py-4 rounded-2xl border-2 border-gray-200 focus:border-pink-400 focus:ring-4 focus:ring-pink-100 outline-none transition-all text-base text-gray-600 bg-white"
+                    >
+                      <option value="">🌟 Select age group 🌟</option>
+                      <option value="6-8 years (Junior Hero)">6-8 years (Junior Hero)</option>
+                      <option value="9-11 years (Super Hero)">9-11 years (Super Hero)</option>
+                      <option value="12-14 years (Mega Hero)">12-14 years (Mega Hero)</option>
                     </select>
                   </div>
 
@@ -527,11 +561,14 @@ export default function ContactPage() {
                     <textarea
                       placeholder="Hi ArmiGo team! I'd love to know more about..."
                       rows={5}
+                      value={formData.message}
+                      onChange={(e) => handleFieldChange('message', e.target.value)}
                       className="w-full px-5 py-4 rounded-2xl border-2 border-gray-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100 outline-none transition-all text-base resize-none"
                     />
                   </div>
 
-                  <motion.button 
+                  <motion.button
+                    type="submit"
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.98 }}
                     className="w-full bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 text-white py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 hover:shadow-xl transition-all group"

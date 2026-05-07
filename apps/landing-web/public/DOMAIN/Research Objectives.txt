@@ -1,0 +1,19 @@
+Research Objectives 
+
+1.4.1 Main Objective 
+
+To design, develop, and evaluate an integrated four-joint wearable movement tracking, LSTM classification, and VR therapy system — ArmiGo — for upper limb rehabilitation in children with hemiplegia, enabling real-time per-joint movement classification and therapeutic VR gameplay across the shoulder, elbow, wrist, and finger joints within a unified, affordable, and home-deployable platform. 
+
+1.4.2 Specific Objectives 
+
+Shoulder: To develop a wearable MPU-9250 IMU shoulder module with Kalman-filtered UDP streaming, session calibration, and an LSTM classifier achieving at least 80% average accuracy across six therapeutic shoulder movement classes, integrated via ONNX Runtime into an Unreal Engine VR game. 
+
+Elbow: To develop a wearable MPU-6050 IMU elbow sleeve with real-time signal conditioning, LSTM-based classification of elbow movements achieving at least 90% mean accuracy, and integration with the "Knight's Quest: The Shield of Strength" VR game via ONNX Runtime. 
+
+Wrist: To develop a wearable MPU-9250 IMU wrist module with Kalman filtering and complementary filter sensor fusion, LSTM-based classification of four wrist movements (flexion, extension, pronation, supination), and integration with the "Fishing Adventure" VR game. 
+
+Fingers: To develop a flex-sensor glove with five per-finger sensors and ESP32 processing, implementing two-step calibration and LSTM-based classification of five therapeutic finger movements with at least 90% target accuracy, integrated with the "Magic Quest: The Enchanted Fingers" VR game. 
+
+System Integration: To establish a shared WiFi WebSocket data pipeline from all four wearable modules to Unreal Engine 5, with a unified Azure Cosmos DB cloud backend, React.js therapist dashboard, and parent mobile application providing multi-level remote monitoring across all joints. 
+
+Evaluation: To evaluate the usability, comfort, clinical utility, and technical performance of the complete ArmiGo system through structured stakeholder feedback from parents, children, and a consulting physiotherapist. 

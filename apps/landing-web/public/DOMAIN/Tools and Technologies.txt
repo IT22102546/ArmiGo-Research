@@ -1,0 +1,73 @@
+2.10 Tools and Technologies 
+The implementation of the proposed elbow rehabilitation system is contingent upon a well
+conceived technology stack that incorporates hardware, firmware, data processing, machine 
+learning, game development, cloud services, mobile interfaces, and AI-supported services. The 
+key design objective is to ensure that system components can be integrated to produce a fun and 
+enjoyable rehabilitation experience for children while simultaneously maintaining affordability, 
+scalability, and clinical relevance in low-resource environments such as Sri Lanka.  
+2.10.1  Hardware Layer 
+At the hardware level, the foundation of the system is the ESP32 microcontroller, which offers a 
+cost-effective, compact device with built-in Wi-Fi and Bluetooth connectivity. Its processing speed 
+is satisfactory for real-time biomedical applications such as developing motion tracking for 
+pediatric rehabilitation. The ESP32 microcontroller can interface with IMU sensors such as the 
+MPU6050 or MPU9250, fixed onto the child-friendly elastic sleeve to capture acceleration, 
+angular velocity, and orientation for flexion, extension, pronation, supination, and reaching 
+movements. Instead of employing rechargeable batteries, we would rely on a simple breadboard
+based power distribution arrangement that would enable continuous operation safely, while male
+female jumper wires would provide stable connections between system components while the 
+system is tested and developed. The system can also facilitate low-cost VR headsets such as 
+Google Cardboard or Oculus Quest, which have been reported to have clinical applications in 
+immersive pediatric rehabilitation.  
+2.10.2  Firmware and Data Handling Layer 
+The firmware and data handling layer is developed with Arduino IDE and Micro Python, 
+convenient platforms for IoT and biomedical prototyping. They control the IMU sensors, 
+preprocess motion signals, and send data through serial or Wi-Fi communication protocols with a 
+minimal delay. During this data logging phase real-time noise filtering techniques including 
+Kalman and moving average filters reduce noise in the raw sensor signal and help smooth any 
+inaccuracies in measuring elbow movement which is important for accurate therapy. 
+2.10.3  Machine Learning Layer 
+39 
+Machine Learning underpins personalizing therapy. Support Vector Machines were used to classify 
+static postures (such as flexed or extended positions) and Long Short-Term Memory (LSTM) 
+networks were utilized to develop temporal dynamics of sequential movements (such as repeated 
+pronation, supination, and lifts of the participants' upper extremities) The various models were 
+created in Python and optimized for light deployment environments using TensorFlow Lite or 
+Open Neural Network Exchange (ONNX). This process was used to develop a lightweight 
+deployable format for real-time classification of gestures through the ESP32 microcontroller and 
+insertion into the VR environment. The use of Kalman filters and moving average smoothing 
+techniques was implemented as a preprocessing technique to stabilize the signal and improve 
+classification accuracy. 
+2.10.4  Game Development Layer 
+In the game development layer, rehabilitation exercises are integrated into a VR environment, 
+"Knight's Quest: The Shield of Strength." This narrative game transforms every movement of the 
+elbow either by flexion, extension, or rotation into a motivation act of play in the VR environment. 
+The flexion of the elbow allows the user to raise sword. The extension allows for striking/pushing 
+obstacles. The pronation/supination rotates a shield. The reaching movements allow for picking 
+up treasures. The games is able to automatically calculate adaptive difficulty scaling so as the child 
+gets better at performing a motion the game properly challenges the child's goal of improving their 
+skills while staying engaged but not so frustrated. Each of these dimensions are important 
+influences on the overall play value of the VR game. The VR game is implemented inside either 
+Unity3D or Unreal Engine where reasonable priced VR headsets are compatible with the resources 
+found in low-resource settings. 
+2.10.5  Cloud and Monitoring Layer 
+The cloud and monitoring layer provides remote access to rehabilitation data for doctors and 
+caregivers. They can use platforms like Firebase or AWS to securely store all of the session data, 
+as well as have access to a visualization dashboard of a clinician view that contains metrics about 
+movement quality, trends in progress, and therapy adherence. This remote monitoring decreases 
+the barriers potential physiotherapists would experience related to access to a specialized pediatric 
+physiotherapist. The mobile and caregiver interface is developed with cross-platform K
+frameworks like Flutter or React Native and is developed to support parent engagement in tracking 
+40 
+daily participation and any improvements in the elbow range of motion and provide 
+encouragement. The notifications and summary analytics foster everyday practice and strengthen 
+the link between rehabilitation at home and in the clinic. Finally, the AI-enabled support layer has 
+a voice assistant which is used through platforms such as Dialogflow or Rasa to improve 
+participant interaction and the AI app's capabilities to provide real-time, interactive support, 
+motivational comments, and playful anecdotes when a clinician is not available. This layer ensures 
+that therapeutic continuity continues, supporting timely interventions and lowering dropout rates. 
+In the case of clinicians being available, the teleconsultation feature permits others to directly 
+monitor and supervise, continuously improving this hybrid form of human-AI monitoring. In 
+summary, this multi-layered technology stack provides low latency, clinical efficacy, and 
+flexibility. The technology stack setup has the flexibility to support integrating future innovations 
+such as haptic feedback, advanced AI personalization, and expanded sceneries for VR 
+rehabilitation, aligned with the global trends for gamification therapy for motor impairments.
