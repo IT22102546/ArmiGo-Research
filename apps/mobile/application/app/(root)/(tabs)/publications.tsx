@@ -1,1120 +1,610 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
+  Alert,
   Image,
+  Linking,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
-import { LineChart, PieChart } from "react-native-chart-kit";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { apiFetch } from "@/utils/api";
 import useAuthStore from "@/stores/authStore";
-import { router } from "expo-router";
-import { icons, images } from "@/constants";
 
-const { width: screenWidth } = Dimensions.get("window");
+const configuredBaseUrl =
+  process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_KEY || "";
 
-export default function ProgressOverview() {
+const normalizeBaseUrl = (value?: string) => (value || "").trim().replace(/\/+$/, "");
+
+const getBaseOrigin = () => {
+  const normalized = normalizeBaseUrl(configuredBaseUrl);
+  if (!normalized) return "";
+  try {
+    const parsed = new URL(normalized);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return "";
+  }
+};
+
+const resolveRemoteUrl = (value?: string) => {
+  if (!value) return "";
+  const input = value.trim();
+  if (!input) return "";
+
+  const base = normalizeBaseUrl(configuredBaseUrl);
+  const baseOrigin = getBaseOrigin();
+
+  if (input.startsWith("http://") || input.startsWith("https://")) {
+    try {
+      const parsed = new URL(input);
+      const localhostHosts = new Set(["localhost", "127.0.0.1", "10.0.2.2"]);
+      if (localhostHosts.has(parsed.hostname) && baseOrigin) {
+        return `${baseOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return input;
+    } catch {
+      return input;
+    }
+  }
+
+  if (!base) return input;
+  return input.startsWith("/") ? `${base}${input}` : `${base}/${input}`;
+};
+
+type PublicationItem = {
+  id: string;
+  title: string;
+  description?: string;
+  shortDescription?: string;
+  coverImage?: string;
+  fileUrl?: string;
+  author?: string;
+  publisher?: string;
+  price?: number;
+  discountPrice?: number;
+  status?: string;
+  createdAt?: string;
+  createdBy?: {
+    firstName?: string;
+    lastName?: string;
+  };
+};
+
+const getPublicationsFromResponse = (payload: any): PublicationItem[] => {
+  const root = payload?.success && payload?.data ? payload.data : payload;
+
+  if (Array.isArray(root?.publications)) {
+    return root.publications;
+  }
+
+  if (Array.isArray(root?.data?.publications)) {
+    return root.data.publications;
+  }
+
+  if (Array.isArray(root)) {
+    return root;
+  }
+
+  return [];
+};
+
+const formatPrice = (price?: number, discountPrice?: number) => {
+  const finalPrice = typeof discountPrice === "number" ? discountPrice : price;
+  if (typeof finalPrice !== "number" || finalPrice <= 0) return "Free";
+  return `$${finalPrice.toFixed(2)}`;
+};
+
+const formatDate = (value?: string) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString();
+};
+
+export default function PublicationsScreen() {
   const { currentUser, isSignedIn } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [selectedTimeframe, setSelectedTimeframe] = useState("week");
-  const [selectedChild, setSelectedChild] = useState(null);
-  const [isPhysiotherapist, setIsPhysiotherapist] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [publications, setPublications] = useState<PublicationItem[]>([]);
 
-  // Mock children data
-  const children = [
-    { id: 1, name: "Emma Johnson", age: 8, condition: "Elbow Rehabilitation", image: images.test },
-    { id: 2, name: "Noah Smith", age: 10, condition: "Knee Strengthening", image: images.test },
-  ];
+  const fetchPublications = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
-  // Mock patients data for physiotherapist
-  const patients = [
-    { id: 1, name: "John Smith", age: 8, condition: "Elbow Rehabilitation", sessions: 12, image: images.test },
-    { id: 2, name: "Sarah Wilson", age: 7, condition: "Finger Dexterity", sessions: 8, image: images.test },
-    { id: 3, name: "Michael Brown", age: 9, condition: "Shoulder Mobility", sessions: 15, image: images.test },
-  ];
+    setError(null);
 
-  // Mock progress data for parent view
-  const childProgressData = {
-    week: [65, 70, 72, 75, 78, 80, 82],
-    month: [60, 65, 68, 72, 75, 78, 80, 82, 85, 88, 90, 92],
-    year: [50, 55, 60, 65, 70, 75, 80, 82, 85, 88, 90, 92],
-  };
+    try {
+      const response = await apiFetch("/api/v1/publications?page=1&limit=50", {
+        method: "GET",
+      });
 
-  // Mock body part progress for parent view
-  const bodyPartProgress = [
-    { part: "Fingers", progress: 85, color: "#4B9BFF", sessions: 15 },
-    { part: "Wrist", progress: 78, color: "#6BCF7F", sessions: 12 },
-    { part: "Elbow", progress: 92, color: "#FF6B6B", sessions: 20 },
-    { part: "Shoulder", progress: 70, color: "#FFB74D", sessions: 10 },
-  ];
+      if (response.status === 401) {
+        setError("Session expired. Please sign in again.");
+        setPublications([]);
+        return;
+      }
 
-  // Mock gaming/play data
-  const gamingData = [
-    { date: "Today", duration: "45 mins", exercises: 8, score: 95 },
-    { date: "Yesterday", duration: "38 mins", exercises: 6, score: 88 },
-    { date: "2 days ago", duration: "42 mins", exercises: 7, score: 92 },
-  ];
+      if (!response.ok) {
+        throw new Error(`Failed to load publications (${response.status})`);
+      }
 
-  // Mock analysis insights for parent
-  const analysisInsights = [
-    { 
-      title: "Excellent Progress!", 
-      description: "Emma has improved elbow mobility by 40% this week.",
-      icon: "trending-up",
-      color: "#6BCF7F"
-    },
-    { 
-      title: "Consistency Award", 
-      description: "Completed all exercises for 7 days straight!",
-      icon: "check-circle",
-      color: "#4B9BFF"
-    },
-    { 
-      title: "Focus Area", 
-      description: "Wrist exercises need more practice.",
-      icon: "warning",
-      color: "#FFB74D"
-    },
-  ];
-
-  // Mock patient overview for physiotherapist
-  const patientOverview = [
-    { 
-      patient: "John Smith", 
-      status: "Excellent Progress", 
-      lastSession: "Today",
-      nextSession: "Tomorrow, 3 PM",
-      compliance: 95
-    },
-    { 
-      patient: "Sarah Wilson", 
-      status: "Good Progress", 
-      lastSession: "Yesterday",
-      nextSession: "Dec 20, 10 AM",
-      compliance: 85
-    },
-    { 
-      patient: "Michael Brown", 
-      status: "Needs Attention", 
-      lastSession: "2 days ago",
-      nextSession: "Dec 19, 2 PM",
-      compliance: 65
-    },
-  ];
-
-  // Mock played activities for physiotherapist
-  const playedActivities = [
-    { patient: "John Smith", game: "Finger Flex Challenge", duration: "15 mins", score: 98, date: "Today" },
-    { patient: "Sarah Wilson", game: "Wrist Rotation Game", duration: "12 mins", score: 87, date: "Yesterday" },
-    { patient: "Michael Brown", game: "Elbow Bend Adventure", duration: "20 mins", score: 72, date: "Today" },
-  ];
+      const json = await response.json();
+      const rows = getPublicationsFromResponse(json);
+      setPublications(Array.isArray(rows) ? rows : []);
+    } catch (fetchError: any) {
+      setPublications([]);
+      setError(fetchError?.message || "Unable to load publications right now.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    // Simulate loading
-    setTimeout(() => {
-      setLoading(false);
-      // Check if user is physiotherapist
-      const userRole = currentUser?.role || "";
-      setIsPhysiotherapist(
-        userRole.includes("PHYSIOTHERAPIST") || 
-        userRole.includes("DOCTOR") ||
-        userRole === "Physiotherapist"
-      );
-      // Set first child/patient as selected
-      setSelectedChild(isPhysiotherapist ? patients[0] : children[0]);
-    }, 1000);
+    if (isSignedIn && currentUser) {
+      fetchPublications();
+      return;
+    }
+
+    setLoading(false);
+  }, [isSignedIn, currentUser, fetchPublications]);
+
+  const subtitle = useMemo(() => {
+    if (!currentUser) return "Latest content from your account";
+    const name = `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim();
+    return name ? `Welcome, ${name}` : "Latest content from your account";
   }, [currentUser]);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0057FF" />
-        <Text style={styles.loadingText}>Loading Progress Data...</Text>
-      </View>
-    );
-  }
+  const publicationStats = useMemo(() => {
+    const total = publications.length;
+    const free = publications.filter((item) => !item.discountPrice && !item.price).length;
+    const paid = total - free;
+    return { total, free, paid };
+  }, [publications]);
+
+  const openExternalUrl = async (url?: string, failureTitle = "Open failed") => {
+    if (!url || !url.trim()) {
+      Alert.alert("Not available", "This publication does not have a file URL.");
+      return false;
+    }
+
+    const resolved = resolveRemoteUrl(url);
+
+    if (!resolved) {
+      Alert.alert("Not available", "This publication does not have a file URL.");
+      return false;
+    }
+
+    try {
+      const canOpen = await Linking.canOpenURL(resolved);
+      if (!canOpen) {
+        Alert.alert("Cannot open file", "The publication link is not supported on this device.");
+        return false;
+      }
+
+      await Linking.openURL(resolved);
+      return true;
+    } catch {
+      Alert.alert(failureTitle, "Could not open this publication.");
+      return false;
+    }
+  };
+
+  const handleRead = async (publication: PublicationItem) => {
+    const fileUrl = resolveRemoteUrl(publication.fileUrl);
+
+    if (!fileUrl) {
+      Alert.alert("Not available", "This publication does not have a readable file URL.");
+      return;
+    }
+
+    const lower = fileUrl.toLowerCase();
+    const isDoc = lower.endsWith(".doc") || lower.endsWith(".docx");
+    const isPdf = lower.endsWith(".pdf");
+
+    if (isDoc) {
+      const viewerUrl = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(fileUrl)}`;
+      await openExternalUrl(viewerUrl, "Read failed");
+      return;
+    }
+
+    if (isPdf) {
+      await openExternalUrl(fileUrl, "Read failed");
+      return;
+    }
+
+    await openExternalUrl(fileUrl, "Read failed");
+  };
+
+  const handleDownload = async (publication: PublicationItem) => {
+    if (!publication.id) {
+      await openExternalUrl(publication.fileUrl, "Download failed");
+      return;
+    }
+
+    try {
+      const response = await apiFetch(`/api/v1/publications/${publication.id}/download`, {
+        method: "GET",
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        const payload = json?.success && json?.data ? json.data : json;
+        const downloadUrl =
+          payload?.downloadUrl ||
+          payload?.url ||
+          payload?.fileUrl;
+
+        if (downloadUrl) {
+          const opened = await openExternalUrl(downloadUrl, "Download failed");
+          if (opened) return;
+        }
+      }
+    } catch {
+      // fallback to direct URL below
+    }
+
+    await openExternalUrl(publication.fileUrl, "Download failed");
+  };
 
   if (!isSignedIn || !currentUser) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Please sign in to view progress</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
+        <View style={styles.centerState}>
+          <Ionicons name="lock-closed-outline" size={28} color="#64748b" />
+          <Text style={styles.centerTitle}>Sign in required</Text>
+          <Text style={styles.centerDescription}>Please sign in to view publications.</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  // Chart configuration
-  const chartConfig = {
-    backgroundColor: "#ffffff",
-    backgroundGradientFrom: "#ffffff",
-    backgroundGradientTo: "#ffffff",
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(0, 87, 255, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: "6",
-      strokeWidth: "2",
-      stroke: "#0057FF",
-    },
-  };
-
-  const chartData = {
-    labels: selectedTimeframe === "week" 
-      ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-      : selectedTimeframe === "month"
-      ? ["W1", "W2", "W3", "W4"]
-      : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-    datasets: [{
-      data: selectedTimeframe === "week" ? childProgressData.week :
-             selectedTimeframe === "month" ? childProgressData.month :
-             childProgressData.year,
-      color: (opacity = 1) => `rgba(0, 87, 255, ${opacity})`,
-      strokeWidth: 2
-    }]
-  };
-
-  // Parent View Components
-  const ParentProgressView = () => (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.welcomeText}>Progress Overview</Text>
-            <Text style={styles.userName}>{currentUser?.firstName || "Parent"}</Text>
+  return (
+    <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
+      <View style={styles.headerCard}>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerIconWrap}>
+            <Ionicons name="book-outline" size={18} color="#1d4ed8" />
           </View>
-          <TouchableOpacity style={styles.shareButton}>
-            <MaterialIcons name="share" size={20} color="#0057FF" />
-          </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.title}>Publications</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
+          </View>
         </View>
 
-        {/* Child Selector */}
-        <View style={styles.childSelector}>
-          <Text style={styles.sectionTitle}>Select Child</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.childScroll}>
-            {children.map((child) => (
-              <TouchableOpacity
-                key={child.id}
-                style={[
-                  styles.childCard,
-                  selectedChild?.id === child.id && styles.selectedChildCard
-                ]}
-                onPress={() => setSelectedChild(child)}
-              >
-                <Image source={child.image} style={styles.childImage} />
-                <View style={styles.childInfo}>
-                  <Text style={styles.childName}>{child.name}</Text>
-                  <Text style={styles.childCondition}>{child.condition}</Text>
-                </View>
+        <View style={styles.statsRow}>
+          <View style={[styles.statChip, styles.statChipBlue]}>
+            <Text style={styles.statValue}>{publicationStats.total}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
+          <View style={[styles.statChip, styles.statChipGreen]}>
+            <Text style={styles.statValue}>{publicationStats.free}</Text>
+            <Text style={styles.statLabel}>Free</Text>
+          </View>
+          <View style={[styles.statChip, styles.statChipPurple]}>
+            <Text style={styles.statValue}>{publicationStats.paid}</Text>
+            <Text style={styles.statLabel}>Paid</Text>
+          </View>
+        </View>
+      </View>
+
+      {loading ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.centerDescription}>Loading publications...</Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchPublications(true)} />}
+        >
+          {error ? (
+            <View style={styles.errorCard}>
+              <Ionicons name="alert-circle-outline" size={20} color="#dc2626" />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => fetchPublications()}>
+                <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-
-      {/* Today's Gaming Hours */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Today's Gaming Hours</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllText}>Details</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.gamingCard}>
-          <View style={styles.gamingStats}>
-            <View style={styles.gamingStat}>
-              <MaterialIcons name="timer" size={24} color="#4B9BFF" />
-              <Text style={styles.gamingStatValue}>45 mins</Text>
-              <Text style={styles.gamingStatLabel}>Duration</Text>
             </View>
-            <View style={styles.gamingStat}>
-              <MaterialIcons name="fitness" size={24} color="#6BCF7F" />
-              <Text style={styles.gamingStatValue}>8</Text>
-              <Text style={styles.gamingStatLabel}>Exercises</Text>
+          ) : null}
+
+          {!error && publications.length === 0 ? (
+            <View style={styles.centerState}>
+              <Ionicons name="document-text-outline" size={28} color="#64748b" />
+              <Text style={styles.centerTitle}>No publications yet</Text>
+              <Text style={styles.centerDescription}>
+                Publications created on web and published to the database will appear here.
+              </Text>
             </View>
-            <View style={styles.gamingStat}>
-              <MaterialIcons name="star" size={24} color="#FFB74D" />
-              <Text style={styles.gamingStatValue}>95%</Text>
-              <Text style={styles.gamingStatLabel}>Score</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.startGamingButton}>
-            <MaterialIcons name="play-arrow" size={20} color="#FFF" />
-            <Text style={styles.startGamingText}>Continue Gaming</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+          ) : null}
 
-      {/* Progress Chart */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Progress Trend</Text>
-          <View style={styles.timeframeSelector}>
-            {["week", "month", "year"].map((timeframe) => (
-              <TouchableOpacity
-                key={timeframe}
-                style={[
-                  styles.timeframeButton,
-                  selectedTimeframe === timeframe && styles.selectedTimeframeButton
-                ]}
-                onPress={() => setSelectedTimeframe(timeframe)}
-              >
-                <Text style={[
-                  styles.timeframeText,
-                  selectedTimeframe === timeframe && styles.selectedTimeframeText
-                ]}>
-                  {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        <View style={styles.chartContainer}>
-          <LineChart
-            data={chartData}
-            width={screenWidth - 40}
-            height={220}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.chart}
-          />
-        </View>
-      </View>
+          {publications.map((publication) => {
+            const authorName = publication.author?.trim() ||
+              `${publication.createdBy?.firstName || ""} ${publication.createdBy?.lastName || ""}`.trim() ||
+              "Unknown author";
 
-      {/* Body Part Analysis */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Body Part Analysis</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllText}>View All</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.analysisGrid}>
-          {bodyPartProgress.map((item) => (
-            <View key={item.part} style={styles.analysisCard}>
-              <View style={styles.analysisHeader}>
-                <View style={[styles.analysisIcon, { backgroundColor: item.color }]}>
-                  <MaterialIcons name="accessibility" size={20} color="#FFF" />
-                </View>
-                <Text style={styles.analysisTitle}>{item.part}</Text>
-              </View>
-              <Text style={styles.analysisProgress}>{item.progress}%</Text>
-              <Text style={styles.analysisSessions}>{item.sessions} sessions</Text>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${item.progress}%`, backgroundColor: item.color }]} />
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
+            const publishedDate = formatDate(publication.createdAt);
+            const statusUpper = String(publication.status || "PUBLISHED").toUpperCase();
+            const accentColor = statusUpper.includes("DRAFT") ? "#f59e0b" : "#7c3aed";
 
-      {/* Insights & Recommendations */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Insights & Recommendations</Text>
-          <MaterialIcons name="insights" size={24} color="#0057FF" />
-        </View>
-        <View style={styles.insightsContainer}>
-          {analysisInsights.map((insight, index) => (
-            <View key={index} style={styles.insightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: insight.color + '20' }]}>
-                <MaterialIcons name={insight.icon} size={20} color={insight.color} />
-              </View>
-              <View style={styles.insightContent}>
-                <Text style={styles.insightTitle}>{insight.title}</Text>
-                <Text style={styles.insightDescription}>{insight.description}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
+            return (
+              <View key={publication.id} style={[styles.card, { borderLeftColor: accentColor }]}>
+                <View style={styles.cardTop}>
+                  {publication.coverImage ? (
+                    <Image
+                      source={{ uri: resolveRemoteUrl(publication.coverImage) }}
+                      style={styles.cover}
+                      resizeMode="cover"
+                      onError={() => {
+                        // keep silent fallback handled by placeholder state below if uri invalid in future refreshes
+                      }}
+                    />
+                  ) : (
+                    <View style={[styles.cover, styles.coverFallback]}>
+                      <Ionicons name="book-outline" size={22} color="#2563eb" />
+                    </View>
+                  )}
 
-      {/* Recent Gaming Sessions */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Gaming Sessions</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllText}>History</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.gamingSessions}>
-          {gamingData.map((session, index) => (
-            <View key={index} style={styles.gamingSession}>
-              <View style={styles.sessionHeader}>
-                <Text style={styles.sessionDate}>{session.date}</Text>
-                <View style={styles.sessionScore}>
-                  <MaterialIcons name="star" size={16} color="#FFB74D" />
-                  <Text style={styles.sessionScoreText}>{session.score}%</Text>
-                </View>
-              </View>
-              <View style={styles.sessionDetails}>
-                <View style={styles.sessionDetail}>
-                  <MaterialIcons name="timer" size={14} color="#666" />
-                  <Text style={styles.sessionDetailText}>{session.duration}</Text>
-                </View>
-                <View style={styles.sessionDetail}>
-                  <MaterialIcons name="fitness" size={14} color="#666" />
-                  <Text style={styles.sessionDetailText}>{session.exercises} exercises</Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    </ScrollView>
-  );
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle} numberOfLines={2}>
+                      {publication.title}
+                    </Text>
+                    <Text style={styles.cardDescription} numberOfLines={3}>
+                      {publication.shortDescription || publication.description || "No description"}
+                    </Text>
 
-  // Physiotherapist View Components
-  const PhysiotherapistProgressView = () => (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.welcomeText}>Patient Progress</Text>
-            <Text style={styles.userName}>Dr. {currentUser?.lastName || "Therapist"}</Text>
-          </View>
-          <TouchableOpacity style={styles.reportButton}>
-            <MaterialIcons name="description" size={20} color="#0057FF" />
-            <Text style={styles.reportButtonText}>Generate Report</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Patient Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{patients.length}</Text>
-            <Text style={styles.statLabel}>Active Patients</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>85%</Text>
-            <Text style={styles.statLabel}>Avg. Compliance</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>24</Text>
-            <Text style={styles.statLabel}>Total Sessions</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Patient Overview */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Patient Overview</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllText}>All Patients</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.patientsContainer}>
-          {patientOverview.map((patient, index) => (
-            <TouchableOpacity key={index} style={styles.patientCard}>
-              <View style={styles.patientHeader}>
-                <Image source={images.test} style={styles.patientImage} />
-                <View style={styles.patientInfo}>
-                  <Text style={styles.patientName}>{patient.patient}</Text>
-                  <Text style={styles.patientStatus}>{patient.status}</Text>
-                </View>
-                <View style={[
-                  styles.complianceBadge,
-                  patient.compliance >= 90 && styles.excellentCompliance,
-                  patient.compliance < 90 && patient.compliance >= 70 && styles.goodCompliance,
-                  patient.compliance < 70 && styles.needsAttentionCompliance
-                ]}>
-                  <Text style={styles.complianceText}>{patient.compliance}%</Text>
-                </View>
-              </View>
-              <View style={styles.patientDetails}>
-                <View style={styles.patientDetail}>
-                  <MaterialIcons name="history" size={14} color="#666" />
-                  <Text style={styles.patientDetailText}>Last: {patient.lastSession}</Text>
-                </View>
-                <View style={styles.patientDetail}>
-                  <MaterialIcons name="schedule" size={14} color="#666" />
-                  <Text style={styles.patientDetailText}>Next: {patient.nextSession}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Recently Played Activities */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Game Activities</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllText}>View All</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.activitiesContainer}>
-          {playedActivities.map((activity, index) => (
-            <View key={index} style={styles.activityCard}>
-              <View style={styles.activityHeader}>
-                <View style={styles.activityPatient}>
-                  <Image source={images.test} style={styles.activityPatientImage} />
-                  <View>
-                    <Text style={styles.activityPatientName}>{activity.patient}</Text>
-                    <Text style={styles.activityGame}>{activity.game}</Text>
+                    <Text style={styles.metaText}>By {authorName}</Text>
+                    {publication.publisher ? (
+                      <Text style={styles.metaText}>Publisher: {publication.publisher}</Text>
+                    ) : null}
+                    {publishedDate ? <Text style={styles.metaText}>Added: {publishedDate}</Text> : null}
                   </View>
                 </View>
-                <View style={styles.activityScore}>
-                  <Text style={styles.activityScoreText}>{activity.score}%</Text>
-                  <MaterialIcons name="star" size={16} color="#FFB74D" />
+
+                <View style={styles.cardFooter}>
+                  <View>
+                    <Text style={styles.priceText}>
+                      {formatPrice(publication.price, publication.discountPrice)}
+                    </Text>
+                    <Text style={styles.statusText}>{publication.status || "PUBLISHED"}</Text>
+                  </View>
+
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.readButton, !publication.fileUrl && styles.openButtonDisabled]}
+                      onPress={() => handleRead(publication)}
+                      disabled={!publication.fileUrl}
+                    >
+                      <Ionicons name="book-outline" size={15} color="#fff" />
+                      <Text style={styles.openButtonText}>Read</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: accentColor }, !publication.fileUrl && styles.openButtonDisabled]}
+                      onPress={() => handleDownload(publication)}
+                      disabled={!publication.fileUrl}
+                    >
+                      <Ionicons name="download-outline" size={15} color="#fff" />
+                      <Text style={styles.openButtonText}>Download</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-              <View style={styles.activityDetails}>
-                <View style={styles.activityDetail}>
-                  <MaterialIcons name="timer" size={14} color="#666" />
-                  <Text style={styles.activityDetailText}>{activity.duration}</Text>
-                </View>
-                <Text style={styles.activityDate}>{activity.date}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Compliance Analytics */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Compliance Analytics</Text>
-        <View style={styles.complianceChart}>
-          <PieChart
-            data={[
-              { name: "Excellent", population: 45, color: "#6BCF7F", legendFontColor: "#333" },
-              { name: "Good", population: 35, color: "#4B9BFF", legendFontColor: "#333" },
-              { name: "Needs Attention", population: 20, color: "#FF6B6B", legendFontColor: "#333" },
-            ]}
-            width={screenWidth - 40}
-            height={200}
-            chartConfig={chartConfig}
-            accessor="population"
-            backgroundColor="transparent"
-            paddingLeft="15"
-            absolute
-          />
-        </View>
-      </View>
-
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.quickActionsGrid}>
-          <TouchableOpacity style={styles.quickActionCard}>
-            <View style={[styles.quickActionIcon, { backgroundColor: "#E3F2FD" }]}>
-              <MaterialIcons name="assignment" size={24} color="#2196F3" />
-            </View>
-            <Text style={styles.quickActionText}>Add Exercise</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickActionCard}>
-            <View style={[styles.quickActionIcon, { backgroundColor: "#E8F5E9" }]}>
-              <MaterialIcons name="schedule" size={24} color="#4CAF50" />
-            </View>
-            <Text style={styles.quickActionText}>Schedule Session</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickActionCard}>
-            <View style={[styles.quickActionIcon, { backgroundColor: "#FFF3E0" }]}>
-              <MaterialIcons name="analytics" size={24} color="#FF9800" />
-            </View>
-            <Text style={styles.quickActionText}>Detailed Analytics</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickActionCard}>
-            <View style={[styles.quickActionIcon, { backgroundColor: "#F3E5F5" }]}>
-              <MaterialIcons name="message" size={24} color="#9C27B0" />
-            </View>
-            <Text style={styles.quickActionText}>Message Parents</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
+            );
+          })}
+        </ScrollView>
+      )}
+    </SafeAreaView>
   );
-
-  return isPhysiotherapist ? <PhysiotherapistProgressView /> : <ParentProgressView />;
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: "#f8fafc",
   },
-  loadingContainer: {
-    flex: 1,
+  headerCard: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    backgroundColor: "#eff6ff",
+    padding: 12,
+    gap: 10,
+  },
+  headerTopRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#dbeafe",
+  },
+  headerTextWrap: { flex: 1 },
+  statsRow: { flexDirection: "row", gap: 8 },
+  statChip: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
     alignItems: "center",
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#dbeafe",
   },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#666",
-    fontFamily: "Poppins-Regular",
+  statChipBlue: { backgroundColor: "#eef2ff", borderColor: "#c7d2fe" },
+  statChipGreen: { backgroundColor: "#ecfdf5", borderColor: "#86efac" },
+  statChipPurple: { backgroundColor: "#f3e8ff", borderColor: "#d8b4fe" },
+  statValue: { fontSize: 15, fontWeight: "700", color: "#1e3a8a" },
+  statLabel: { fontSize: 11, color: "#64748b", marginTop: 2 },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#64748b",
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 140,
+  },
+  centerState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  centerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  centerDescription: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+  },
+  errorCard: {
+    backgroundColor: "#fef2f2",
+    borderColor: "#fecaca",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
   },
   errorText: {
-    fontSize: 16,
-    color: "#dc3545",
-    textAlign: "center",
-    fontFamily: "Poppins-Regular",
+    color: "#991b1b",
+    fontSize: 13,
   },
-  header: {
-    backgroundColor: "#0057FF",
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-  },
-  headerTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 20,
-  },
-  welcomeText: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontFamily: "Poppins-Regular",
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-    fontFamily: "Poppins-Bold",
-  },
-  shareButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  reportButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  reportButtonText: {
-    color: "#0057FF",
-    fontSize: 12,
-    fontWeight: "600",
-    fontFamily: "Poppins-SemiBold",
-  },
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
-    marginHorizontal: 5,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
-    fontFamily: "Poppins-Bold",
-  },
-  statLabel: {
-    fontSize: 10,
-    color: "rgba(255, 255, 255, 0.8)",
-    marginTop: 4,
-    fontFamily: "Poppins-Regular",
-  },
-  childSelector: {
-    marginTop: 20,
-  },
-  childScroll: {
-    marginTop: 10,
-  },
-  childCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    padding: 12,
-    borderRadius: 12,
-    marginRight: 10,
-    width: 220,
-  },
-  selectedChildCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderWidth: 1,
-    borderColor: "#fff",
-  },
-  childImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  childInfo: {
-    flex: 1,
-  },
-  childName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#fff",
-    fontFamily: "Poppins-SemiBold",
-  },
-  childCondition: {
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.8)",
-    marginTop: 2,
-    fontFamily: "Poppins-Regular",
-  },
-  section: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1e293b",
-    fontFamily: "Poppins-Bold",
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: "#3b82f6",
-    fontWeight: "600",
-    fontFamily: "Poppins-SemiBold",
-  },
-  gamingCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  gamingStats: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 20,
-  },
-  gamingStat: {
-    alignItems: "center",
-  },
-  gamingStatValue: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginTop: 8,
-    fontFamily: "Poppins-Bold",
-  },
-  gamingStatLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 4,
-    fontFamily: "Poppins-Regular",
-  },
-  startGamingButton: {
-    backgroundColor: "#0057FF",
-    paddingVertical: 12,
-    borderRadius: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  startGamingText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "bold",
-    fontFamily: "Poppins-Bold",
-  },
-  timeframeSelector: {
-    flexDirection: "row",
-    backgroundColor: "#f1f5f9",
-    borderRadius: 20,
-    padding: 4,
-  },
-  timeframeButton: {
+  retryButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#dc2626",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 8,
   },
-  selectedTimeframeButton: {
+  retryText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 12,
+  },
+  card: {
     backgroundColor: "#fff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+    borderLeftWidth: 4,
+    borderLeftColor: "#7c3aed",
+    marginBottom: 14,
+    gap: 10,
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
-  timeframeText: {
+  cardTop: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  cover: {
+    width: 72,
+    height: 96,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+  },
+  coverFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardBody: {
+    flex: 1,
+    gap: 2,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  cardDescription: {
+    marginTop: 2,
+    fontSize: 13,
+    color: "#475569",
+    lineHeight: 18,
+  },
+  metaText: {
+    marginTop: 3,
     fontSize: 12,
     color: "#64748b",
-    fontWeight: "500",
-    fontFamily: "Poppins-Medium",
   },
-  selectedTimeframeText: {
-    color: "#0057FF",
-    fontWeight: "600",
-  },
-  chartContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  chart: {
-    borderRadius: 16,
-  },
-  analysisGrid: {
+  cardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    paddingTop: 10,
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
     justifyContent: "space-between",
   },
-  analysisCard: {
-    width: "48%",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+  priceText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#2563eb",
   },
-  analysisHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  analysisIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
-  },
-  analysisTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  analysisProgress: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginBottom: 4,
-    fontFamily: "Poppins-Bold",
-  },
-  analysisSessions: {
+  statusText: {
+    marginTop: 2,
     fontSize: 11,
     color: "#64748b",
-    marginBottom: 8,
-    fontFamily: "Poppins-Regular",
+    textTransform: "uppercase",
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: "#e2e8f0",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  insightsContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    padding: 16,
-  },
-  insightCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  insightIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  insightContent: {
-    flex: 1,
-  },
-  insightTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 4,
-    fontFamily: "Poppins-SemiBold",
-  },
-  insightDescription: {
-    fontSize: 12,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
-  },
-  gamingSessions: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    padding: 16,
-  },
-  gamingSession: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  sessionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  sessionDate: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  sessionScore: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  sessionScoreText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  sessionDetails: {
-    flexDirection: "row",
-    gap: 16,
-  },
-  sessionDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  sessionDetailText: {
-    fontSize: 12,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
-  },
-  // Physiotherapist specific styles
-  patientsContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    padding: 16,
-  },
-  patientCard: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  patientHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  patientImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  patientInfo: {
-    flex: 1,
-  },
-  patientName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  patientStatus: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 2,
-    fontFamily: "Poppins-Regular",
-  },
-  complianceBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  excellentCompliance: {
-    backgroundColor: "#E8F5E9",
-  },
-  goodCompliance: {
-    backgroundColor: "#E3F2FD",
-  },
-  needsAttentionCompliance: {
-    backgroundColor: "#FFEBEE",
-  },
-  complianceText: {
-    fontSize: 12,
-    fontWeight: "600",
-    fontFamily: "Poppins-SemiBold",
-  },
-  patientDetails: {
-    flexDirection: "row",
-    gap: 16,
-  },
-  patientDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  patientDetailText: {
-    fontSize: 12,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
-  },
-  activitiesContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    padding: 16,
-  },
-  activityCard: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  activityHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  activityPatient: {
+  actionsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  activityPatientImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  actionButton: {
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
-  activityPatientName: {
+  readButton: {
+    backgroundColor: "#2563eb",
+  },
+  downloadButton: {
+    backgroundColor: "#0f766e",
+  },
+  openButtonDisabled: {
+    opacity: 0.55,
+  },
+  openButtonText: {
+    color: "#fff",
     fontSize: 13,
     fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  activityGame: {
-    fontSize: 12,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
-  },
-  activityScore: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  activityScoreText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#1e293b",
-    fontFamily: "Poppins-Bold",
-  },
-  activityDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  activityDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  activityDetailText: {
-    fontSize: 12,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
-  },
-  activityDate: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontFamily: "Poppins-Regular",
-  },
-  complianceChart: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  quickActionsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  quickActionCard: {
-    width: "48%",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  quickActionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  quickActionText: {
-    fontSize: 12,
-    color: "#1e293b",
-    fontWeight: "600",
-    textAlign: "center",
-    fontFamily: "Poppins-SemiBold",
   },
 });

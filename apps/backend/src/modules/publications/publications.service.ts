@@ -1,177 +1,53 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "@database/prisma.service";
-import { WalletService } from "../wallet/wallet.service";
-import { ConfigService } from "@nestjs/config";
 import {
-  CreatePublicationDto,
-  UpdatePublicationDto,
-  PublicationQueryDto,
-  CreateReviewDto,
-} from "./dto/publication.dto";
-import { AdminGateway } from "../../infrastructure/websocket/admin.gateway";
-import { StorageService } from "../../infrastructure/storage/storage.service";
-import { AppException } from "../../common/errors/app-exception";
-import { ErrorCode } from "../../common/errors/error-codes.enum";
+  BadRequestException,
+  ForbiddenException,
+  InternalServerErrorException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { PrismaService } from "@database/prisma.service";
+import { CreatePublicationDto, UpdatePublicationDto } from "./dtos/publication.dto";
 
 @Injectable()
 export class PublicationsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly walletService: WalletService,
-    private readonly configService: ConfigService,
-    private readonly adminGateway: AdminGateway,
-    private readonly storageService: StorageService
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a new publication (Admin/Teacher only)
-   */
-  // async create(createPublicationDto: CreatePublicationDto, userId: string) {
-  //   const publication = await this.prisma.publication.create({
-  //     data: {
-  //       ...createPublicationDto,
-  //       createdById: userId,
-  //       status: createPublicationDto.status || "DRAFT",
-  //       views: 0,
-  //       downloads: 0,
-  //     },
-  //   });
-
-  //   // Emit real-time event
-  //   this.adminGateway.server.emit('publicationCreated', {
-  //     publicationId: publication.id,
-  //     data: publication,
-  //     timestamp: new Date().toISOString(),
-  //   });
-
-  //   return publication;
-  // }
-
-  async create(createPublicationDto: CreatePublicationDto, userId: string) {
-    const { gradeId, subjectId, mediumId, ...publicationData } =
-      createPublicationDto;
-
-    // Prepare the nested relations
-    const relations: any = {};
-
-    if (gradeId) {
-      relations.grades = {
-        create: {
-          gradeId: gradeId,
-        },
-      };
-    }
-
-    if (subjectId) {
-      relations.subjects = {
-        create: {
-          subjectId: subjectId,
-        },
-      };
-    }
-
-    if (mediumId) {
-      relations.mediums = {
-        create: {
-          mediumId: mediumId,
-        },
-      };
-    }
-
-    // Create publication with nested relations
-    const publication = await this.prisma.publication.create({
-      data: {
-        ...publicationData,
-        createdById: userId,
-        status: publicationData.status || "DRAFT",
-        views: 0,
-        downloads: 0,
-        ...relations,
-      },
-      include: {
-        grades: true,
-        subjects: true,
-        mediums: true,
-      },
-    });
-
-    // Emit real-time event
-    this.adminGateway.server.emit("publicationCreated", {
-      publicationId: publication.id,
-      data: publication,
-      timestamp: new Date().toISOString(),
-    });
-
-    return publication;
-  }
-
-  /**
-   * Update publication
-   */
-  async update(id: string, updatePublicationDto: UpdatePublicationDto) {
-    const publication = await this.prisma.publication.findUnique({
-      where: { id },
-    });
-
-    if (!publication) {
-      throw AppException.notFound(
-        ErrorCode.PUBLICATION_NOT_FOUND,
-        "Publication not found"
+  private get publicationModel() {
+    const model = (this.prisma as any).publication;
+    if (!model) {
+      throw new InternalServerErrorException(
+        "Publication model is not available in Prisma client. Run 'pnpm db:generate' and apply migrations, then restart backend."
       );
     }
-
-    // If publishing, set publishedAt
-    const updateData: any = { ...updatePublicationDto };
-    if (
-      updatePublicationDto.status === "PUBLISHED" &&
-      !publication.publishedAt
-    ) {
-      updateData.publishedAt = new Date();
-    }
-
-    const updatedPublication = await this.prisma.publication.update({
-      where: { id },
-      data: updateData,
-    });
-
-    // Emit real-time event
-    this.adminGateway.server.emit("publicationUpdated", {
-      publicationId: id,
-      data: updatedPublication,
-      timestamp: new Date().toISOString(),
-    });
-
-    return updatedPublication;
+    return model;
   }
 
-  /**
-   * Get all publications with filtering and pagination
-   */
-  async findAll(query: PublicationQueryDto) {
-    const {
-      page = 1,
-      limit = 20,
-      search,
-      grade,
-      subject,
-      medium,
-      status,
-      minPrice,
-      maxPrice,
-      sortBy = "newest",
-    } = query;
+  private getSkipTake(page?: number, limit?: number) {
+    const resolvedPage = Number(page || 1);
+    const resolvedLimit = Number(limit || 20);
+    return {
+      page: resolvedPage,
+      limit: resolvedLimit,
+      skip: (resolvedPage - 1) * resolvedLimit,
+      take: resolvedLimit,
+    };
+  }
 
-    const skip = (page - 1) * limit;
+  async getAll(options: {
+    userId: string;
+    role?: string;
+    scopedHospitalId?: string;
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { page, limit, skip, take } = this.getSkipTake(options.page, options.limit);
 
     const where: any = {};
 
-    // Filter by status if explicitly provided (not undefined or empty)
-    if (status && status !== "" && status !== "all") {
-      where.status = status;
-    }
-
-    // Search in title, description, author
-    if (search) {
+    if (options.search?.trim()) {
+      const search = options.search.trim();
       where.OR = [
         { title: { contains: search, mode: "insensitive" } },
         { description: { contains: search, mode: "insensitive" } },
@@ -179,557 +55,269 @@ export class PublicationsService {
       ];
     }
 
-    // Filter by grade
-    if (grade) {
-      where.grades = {
-        some: {
-          gradeId: grade,
-        },
-      };
-    }
+    const role = options.role || "";
 
-    // Filter by subject
-    if (subject) {
-      where.subjects = {
-        some: {
-          subjectId: subject,
-        },
-      };
-    }
+    if (role === "PARENT") {
+      where.status = "PUBLISHED";
 
-    // Filter by medium
-    if (medium) {
-      where.mediums = {
-        some: {
-          mediumId: medium,
-        },
-      };
-    }
-
-    // Price range filter
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      where.price = {};
-      if (minPrice !== undefined) {where.price.gte = minPrice;}
-      if (maxPrice !== undefined) {where.price.lte = maxPrice;}
-    }
-
-    // Determine sort order
-    let orderBy: any = {};
-    switch (sortBy) {
-      case "oldest":
-        orderBy = { createdAt: "asc" };
-        break;
-      case "price-asc":
-        orderBy = { price: "asc" };
-        break;
-      case "price-desc":
-        orderBy = { price: "desc" };
-        break;
-      case "popular":
-        orderBy = { downloads: "desc" };
-        break;
-      case "newest":
-      default:
-        orderBy = { createdAt: "desc" };
-        break;
-    }
-
-    const [publications, total] = await Promise.all([
-      this.prisma.publication.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limit,
-        include: {
-          _count: {
+      const parent = await this.prisma.user.findUnique({
+        where: { id: options.userId },
+        select: {
+          parentProfile: {
             select: {
-              purchases: true,
-              reviews: true,
-            },
-          },
-        },
-      }),
-      this.prisma.publication.count({ where }),
-    ]);
-
-    console.log(publications);
-
-    // RETURN THE CORRECT STRUCTURE
-    return {
-      data: publications,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  /**
-   * Get publication by ID
-   */
-  async findOne(id: string, userId?: string) {
-    const publication = await this.prisma.publication.findUnique({
-      where: { id },
-      include: {
-        reviews: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
+              children: {
+                select: {
+                  hospitalId: true,
+                },
               },
             },
           },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        },
-        _count: {
-          select: {
-            purchases: true,
-            reviews: true,
-          },
-        },
-      },
-    });
-
-    if (!publication) {
-      throw AppException.notFound(
-        ErrorCode.PUBLICATION_NOT_FOUND,
-        "Publication not found"
-      );
-    }
-
-    // Increment view count
-    await this.prisma.publication.update({
-      where: { id },
-      data: { views: { increment: 1 } },
-    });
-
-    // Check if user has purchased
-    let hasPurchased = false;
-    if (userId) {
-      const purchase = await this.prisma.publicationPurchase.findUnique({
-        where: {
-          publicationId_userId: {
-            publicationId: id,
-            userId,
-          },
         },
       });
-      hasPurchased = !!purchase;
-    }
 
-    return { ...publication, hasPurchased };
-  }
-
-  /**
-   * Purchase publication with wallet credits
-   */
-  async purchase(publicationId: string, userId: string) {
-    const publication = await this.prisma.publication.findUnique({
-      where: { id: publicationId },
-    });
-
-    if (!publication) {
-      throw AppException.notFound(
-        ErrorCode.PUBLICATION_NOT_FOUND,
-        "Publication not found"
+      const hospitalIds = Array.from(
+        new Set(
+          (parent?.parentProfile?.children || [])
+            .map((child) => child.hospitalId)
+            .filter((value): value is string => Boolean(value))
+        )
       );
-    }
 
-    if (publication.status !== "PUBLISHED") {
-      throw AppException.badRequest(
-        ErrorCode.PUBLICATION_NOT_AVAILABLE,
-        "Publication is not available for purchase"
-      );
-    }
-
-    // Check if already purchased
-    const existingPurchase = await this.prisma.publicationPurchase.findUnique({
-      where: {
-        publicationId_userId: {
-          publicationId,
-          userId,
+      where.AND = [
+        ...(where.AND || []),
+        {
+          OR: [
+            { hospitalId: null },
+            ...(hospitalIds.length > 0 ? [{ hospitalId: { in: hospitalIds } }] : []),
+          ],
         },
-      },
-    });
-
-    if (existingPurchase) {
-      throw AppException.conflict(
-        ErrorCode.PUBLICATION_ALREADY_PURCHASED,
-        "Publication already purchased"
-      );
-    }
-
-    // Calculate final price (use discount price if available)
-    const finalPrice = publication.discountPrice || publication.price;
-
-    // Check wallet balance
-    const hasSufficient = await this.walletService.hasSufficientBalance(
-      userId,
-      finalPrice
-    );
-
-    if (!hasSufficient) {
-      throw AppException.badRequest(
-        ErrorCode.INSUFFICIENT_WALLET_BALANCE,
-        "Insufficient wallet balance"
-      );
-    }
-
-    // Use transaction to ensure atomicity
-    return this.prisma.$transaction(async (tx) => {
-      // Debit wallet
-      await this.walletService.debit(
-        userId,
-        finalPrice,
-        `Purchase: ${publication.title}`,
-        publicationId,
-        "PUBLICATION"
-      );
-
-      // Create purchase record
-      const purchase = await tx.publicationPurchase.create({
-        data: {
-          publicationId,
-          userId,
-          amount: finalPrice,
+      ];
+    } else if (options.scopedHospitalId) {
+      if (options.status && options.status !== "all") {
+        where.status = options.status;
+      }
+      where.AND = [
+        ...(where.AND || []),
+        {
+          OR: [{ hospitalId: null }, { hospitalId: options.scopedHospitalId }],
         },
+      ];
+    } else if (options.status && options.status !== "all") {
+      where.status = options.status;
+    }
+
+    const [rows, total] = await Promise.all([
+      this.publicationModel.findMany({
+        where,
         include: {
-          publication: true,
-          user: {
+          createdBy: {
             select: {
-              id: true,
-              email: true,
               firstName: true,
               lastName: true,
             },
           },
         },
-      });
-
-      // Create payment record
-      await tx.payment.create({
-        data: {
-          userId,
-          amount: finalPrice,
-          method: "WALLET_CREDITS",
-          status: "COMPLETED",
-          description: `Publication purchase: ${publication.title}`,
-          referenceType: "PUBLICATION",
-          referenceId: publicationId,
-          processedAt: new Date(),
-        },
-      });
-
-      return purchase;
-    });
-  }
-
-  /**
-   * Get download URL for purchased publication (with signed URL)
-   */
-  async getDownloadUrl(publicationId: string, userId: string) {
-    // Verify purchase
-    const purchase = await this.prisma.publicationPurchase.findUnique({
-      where: {
-        publicationId_userId: {
-          publicationId,
-          userId,
-        },
-      },
-      include: {
-        publication: true,
-      },
-    });
-
-    if (!purchase) {
-      throw AppException.forbidden(
-        ErrorCode.PUBLICATION_NOT_PURCHASED,
-        "Publication not purchased. Please purchase before downloading."
-      );
-    }
-
-    // Check access expiry if set
-    if (purchase.accessExpiry && purchase.accessExpiry < new Date()) {
-      throw AppException.forbidden(
-        ErrorCode.ACCESS_EXPIRED,
-        "Access to this publication has expired"
-      );
-    }
-
-    // Check download limit if set
-    if (
-      purchase.maxDownloads &&
-      purchase.downloadCount >= purchase.maxDownloads
-    ) {
-      throw AppException.forbidden(
-        ErrorCode.DOWNLOAD_LIMIT_REACHED,
-        "Maximum download limit reached"
-      );
-    }
-
-    // Update download count and last accessed
-    await this.prisma.publicationPurchase.update({
-      where: { id: purchase.id },
-      data: {
-        downloadCount: { increment: 1 },
-        lastAccessedAt: new Date(),
-      },
-    });
-
-    // Increment publication download count
-    await this.prisma.publication.update({
-      where: { id: publicationId },
-      data: { downloads: { increment: 1 } },
-    });
-
-    // Generate signed URL for secure download
-    const expiresIn = 3600; // 1 hour
-    const signedUrl = await this.storageService.getSignedUrl(
-      purchase.publication.fileUrl,
-      expiresIn
-    );
+        orderBy: [{ createdAt: "desc" }],
+        skip,
+        take,
+      }),
+      this.publicationModel.count({ where }),
+    ]);
 
     return {
-      url: signedUrl,
-      expiresIn,
-      downloadCount: purchase.downloadCount + 1,
-      maxDownloads: purchase.maxDownloads,
+      publications: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
-  /**
-   * Create review for publication
-   */
-  async createReview(
-    publicationId: string,
-    userId: string,
-    createReviewDto: CreateReviewDto
-  ) {
-    // Verify purchase
-    const purchase = await this.prisma.publicationPurchase.findUnique({
-      where: {
-        publicationId_userId: {
-          publicationId,
-          userId,
-        },
-      },
-    });
-
-    if (!purchase) {
-      throw AppException.forbidden(
-        ErrorCode.PUBLICATION_NOT_PURCHASED,
-        "You must purchase the publication to review it"
-      );
-    }
-
-    // Check if review already exists
-    const existingReview = await this.prisma.publicationReview.findUnique({
-      where: {
-        publicationId_userId: {
-          publicationId,
-          userId,
-        },
-      },
-    });
-
-    if (existingReview) {
-      // Update existing review
-      return this.prisma.publicationReview.update({
-        where: { id: existingReview.id },
-        data: {
-          rating: createReviewDto.rating,
-          comment: createReviewDto.comment,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-        },
-      });
-    }
-
-    // Create new review
-    const review = await this.prisma.publicationReview.create({
-      data: {
-        publicationId,
-        userId,
-        rating: createReviewDto.rating,
-        comment: createReviewDto.comment,
-      },
+  async getById(id: string, options: { userId: string; role?: string; scopedHospitalId?: string }) {
+    const publication = await this.publicationModel.findUnique({
+      where: { id },
       include: {
-        user: {
+        createdBy: {
           select: {
-            id: true,
             firstName: true,
             lastName: true,
-            avatar: true,
           },
         },
       },
-    });
-
-    // Update publication average rating
-    await this.updatePublicationRating(publicationId);
-
-    return review;
-  }
-
-  /**
-   * Update publication average rating
-   */
-  private async updatePublicationRating(publicationId: string) {
-    const result = await this.prisma.publicationReview.aggregate({
-      where: { publicationId },
-      _avg: {
-        rating: true,
-      },
-    });
-
-    if (result._avg.rating) {
-      await this.prisma.publication.update({
-        where: { id: publicationId },
-        data: { rating: result._avg.rating },
-      });
-    }
-  }
-
-  /**
-   * Get user's purchased publications
-   */
-  async getUserPurchases(userId: string, page: number = 1, limit: number = 20) {
-    const skip = (page - 1) * limit;
-
-    const [purchases, total] = await Promise.all([
-      this.prisma.publicationPurchase.findMany({
-        where: { userId },
-        orderBy: { purchasedAt: "desc" },
-        skip,
-        take: limit,
-        include: {
-          publication: true,
-        },
-      }),
-      this.prisma.publicationPurchase.count({ where: { userId } }),
-    ]);
-
-    return {
-      purchases,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  /**
-   * Get users who purchased a specific publication (Admin only)
-   */
-  async getPublicationPurchasers(
-    publicationId: string,
-    page: number = 1,
-    limit: number = 50
-  ) {
-    const skip = (page - 1) * limit;
-
-    const [purchases, total] = await Promise.all([
-      this.prisma.publicationPurchase.findMany({
-        where: { publicationId },
-        orderBy: { purchasedAt: "desc" },
-        skip,
-        take: limit,
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              phone: true,
-              avatar: true,
-              role: true,
-              status: true,
-            },
-          },
-        },
-      }),
-      this.prisma.publicationPurchase.count({ where: { publicationId } }),
-    ]);
-
-    return {
-      purchasers: purchases,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  /** Delete publication - Admin/Teacher. Teachers can delete any publication. */
-  async remove(id: string, user?: any) {
-    const publication = await this.prisma.publication.findUnique({
-      where: { id },
     });
 
     if (!publication) {
-      throw AppException.notFound(
-        ErrorCode.PUBLICATION_NOT_FOUND,
-        "Publication not found"
-      );
+      throw new NotFoundException("Publication not found");
     }
 
-    // Check ownership - only creator or admin can delete
-    if (
-      user &&
-      publication.createdById &&
-      publication.createdById !== user.id
-    ) {
-      // Check if user is admin
-      const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
-      if (!isAdmin) {
-        throw AppException.forbidden(
-          ErrorCode.FORBIDDEN,
-          "Only the publication creator or admin can delete this publication"
-        );
+    if (options.role === "PARENT") {
+      const parent = await this.prisma.user.findUnique({
+        where: { id: options.userId },
+        select: {
+          parentProfile: {
+            select: {
+              children: {
+                select: {
+                  hospitalId: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const hospitalIds = new Set(
+        (parent?.parentProfile?.children || [])
+          .map((child) => child.hospitalId)
+          .filter((value): value is string => Boolean(value))
+      );
+
+      const canView =
+        publication.status === "PUBLISHED" &&
+        (publication.hospitalId === null || hospitalIds.has(publication.hospitalId));
+
+      if (!canView) {
+        throw new ForbiddenException("You do not have access to this publication");
       }
     }
 
-    // Check if publication has purchases
-    const purchaseCount = await this.prisma.publicationPurchase.count({
-      where: { publicationId: id },
-    });
-
-    if (purchaseCount > 0) {
-      throw AppException.badRequest(
-        ErrorCode.PUBLICATION_HAS_PURCHASES,
-        "Cannot delete publication with existing purchases. Archive it instead."
-      );
+    if (
+      options.scopedHospitalId &&
+      publication.hospitalId !== null &&
+      publication.hospitalId !== options.scopedHospitalId
+    ) {
+      throw new ForbiddenException("You do not have access to this publication");
     }
 
-    const deletedPublication = await this.prisma.publication.delete({
+    return publication;
+  }
+
+  async create(
+    data: CreatePublicationDto,
+    options: { userId: string; scopedHospitalId?: string }
+  ) {
+    if (!data.fileUrl?.trim()) {
+      throw new BadRequestException("Publication file URL is required");
+    }
+
+    return this.publicationModel.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        shortDescription: data.shortDescription,
+        price: data.price ?? 0,
+        discountPrice: data.discountPrice,
+        fileUrl: data.fileUrl,
+        fileSize: data.fileSize,
+        fileType: data.fileType,
+        coverImage: data.coverImage,
+        gradeId: data.gradeId,
+        subjectId: data.subjectId,
+        mediumId: data.mediumId,
+        author: data.author,
+        publisher: data.publisher,
+        status: data.status || "DRAFT",
+        createdById: options.userId,
+        hospitalId: options.scopedHospitalId || null,
+        publishedAt: (data.status || "DRAFT") === "PUBLISHED" ? new Date() : null,
+      },
+    });
+  }
+
+  async update(
+    id: string,
+    data: UpdatePublicationDto,
+    options: { userId: string; role?: string; scopedHospitalId?: string }
+  ) {
+    const existing = await this.publicationModel.findUnique({
       where: { id },
+      select: {
+        id: true,
+        createdById: true,
+        hospitalId: true,
+      },
     });
 
-    // Emit real-time event
-    this.adminGateway.server.emit("publicationDeleted", {
-      publicationId: id,
-      timestamp: new Date().toISOString(),
+    if (!existing) {
+      throw new NotFoundException("Publication not found");
+    }
+
+    const isSuperAdmin = options.role === "SUPER_ADMIN";
+    const isOwner = existing.createdById === options.userId;
+
+    if (!isSuperAdmin && !isOwner) {
+      throw new ForbiddenException("You can update only your own publication");
+    }
+
+    if (
+      options.scopedHospitalId &&
+      existing.hospitalId !== options.scopedHospitalId
+    ) {
+      throw new ForbiddenException("You can update only your hospital publications");
+    }
+
+    return this.publicationModel.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.shortDescription !== undefined
+          ? { shortDescription: data.shortDescription }
+          : {}),
+        ...(data.price !== undefined ? { price: data.price } : { price: 0 }),
+        ...(data.discountPrice !== undefined
+          ? { discountPrice: data.discountPrice }
+          : { discountPrice: null }),
+        ...(data.fileUrl !== undefined ? { fileUrl: data.fileUrl } : {}),
+        ...(data.fileSize !== undefined ? { fileSize: data.fileSize } : {}),
+        ...(data.fileType !== undefined ? { fileType: data.fileType } : {}),
+        ...(data.coverImage !== undefined ? { coverImage: data.coverImage } : {}),
+        ...(data.gradeId !== undefined ? { gradeId: data.gradeId } : {}),
+        ...(data.subjectId !== undefined ? { subjectId: data.subjectId } : {}),
+        ...(data.mediumId !== undefined ? { mediumId: data.mediumId } : {}),
+        ...(data.author !== undefined ? { author: data.author } : {}),
+        ...(data.publisher !== undefined ? { publisher: data.publisher } : {}),
+        ...(data.status !== undefined
+          ? {
+              status: data.status,
+              ...(data.status === "PUBLISHED" ? { publishedAt: new Date() } : {}),
+            }
+          : {}),
+      },
+    });
+  }
+
+  async delete(id: string, options: { userId: string; role?: string; scopedHospitalId?: string }) {
+    const existing = await this.publicationModel.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        createdById: true,
+        hospitalId: true,
+      },
     });
 
-    return deletedPublication;
+    if (!existing) {
+      throw new NotFoundException("Publication not found");
+    }
+
+    const isSuperAdmin = options.role === "SUPER_ADMIN";
+    const isOwner = existing.createdById === options.userId;
+
+    if (!isSuperAdmin && !isOwner) {
+      throw new ForbiddenException("You can delete only your own publication");
+    }
+
+    if (
+      options.scopedHospitalId &&
+      existing.hospitalId !== options.scopedHospitalId
+    ) {
+      throw new ForbiddenException("You can delete only your hospital publications");
+    }
+
+    await this.publicationModel.delete({ where: { id } });
+    return { message: "Publication deleted successfully" };
   }
 }

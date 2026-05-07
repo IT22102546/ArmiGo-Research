@@ -1,412 +1,215 @@
+// src/modules/system-settings/system-settings.service.ts
 import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "@database/prisma.service";
-import {
-  CreateSettingDto,
-  UpdateSettingDto,
-  CreateFeatureFlagDto,
-  UpdateFeatureFlagDto,
-} from "./dto/system-settings.dto";
-import { AppException } from "../../common/errors/app-exception";
-import { ErrorCode } from "../../common/errors/error-codes.enum";
 
 @Injectable()
 export class SystemSettingsService {
   private readonly logger = new Logger(SystemSettingsService.name);
+  private cache: Map<string, { value: string; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-  constructor(private readonly prisma: PrismaService) {}
-
-  // ==================== SYSTEM SETTINGS ====================
+  constructor(private prisma: PrismaService) {}
 
   /**
-   * Create a new system setting
+   * Helper to extract error message
    */
-  async createSetting(dto: CreateSettingDto, userId: string) {
-    // Check if key already exists
-    const existing = await this.prisma.systemSettings.findUnique({
-      where: { key: dto.key },
-    });
-
-    if (existing) {
-      throw AppException.conflict(
-        ErrorCode.DUPLICATE_ENTRY,
-        `Setting with key '${dto.key}' already exists`
-      );
-    }
-
-    return this.prisma.systemSettings.create({
-      data: {
-        ...dto,
-        updatedBy: userId,
-      },
-    });
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
   }
 
   /**
-   * Get all settings or by category
+   * Get a system setting by key
    */
-  async getSettings(category?: string, includePrivate: boolean = false) {
-    const where: any = {};
-
-    if (category) {
-      where.category = category;
+  async get(key: string, defaultValue?: string): Promise<string | null> {
+    // Check cache first
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.value;
     }
 
-    if (!includePrivate) {
-      where.isPublic = true;
-    }
-
-    return this.prisma.systemSettings.findMany({
-      where,
-      orderBy: { key: "asc" },
-    });
-  }
-
-  /**
-   * Get a setting by key
-   */
-  async getSettingByKey(key: string) {
-    const setting = await this.prisma.systemSettings.findUnique({
-      where: { key },
-    });
-
-    if (!setting) {
-      throw AppException.notFound(
-        ErrorCode.SETTING_NOT_FOUND,
-        `Setting with key '${key}' not found`
-      );
-    }
-
-    return setting;
-  }
-
-  /**
-   * Get setting value (typed)
-   */
-  async getSettingValue<T = any>(key: string, defaultValue?: T): Promise<T> {
     try {
-      const setting = await this.getSettingByKey(key);
+      const setting = await this.prisma.systemSettings.findUnique({
+        where: { key },
+      });
 
-      switch (setting.type) {
-        case "BOOLEAN":
-          return (setting.value === "true") as any;
-        case "NUMBER":
-          return parseFloat(setting.value) as any;
-        case "JSON":
-          return JSON.parse(setting.value);
-        case "DATE":
-          return new Date(setting.value) as any;
-        default:
-          return setting.value as any;
+      if (setting) {
+        // Update cache
+        this.cache.set(key, { value: setting.value, timestamp: Date.now() });
+        return setting.value;
       }
+
+      return defaultValue || null;
     } catch (error) {
-      if (defaultValue !== undefined) {
-        return defaultValue;
-      }
+      this.logger.error(`Failed to get setting ${key}: ${this.getErrorMessage(error)}`);
+      return defaultValue || null;
+    }
+  }
+
+  /**
+   * Get a boolean setting
+   */
+  async getBoolean(key: string, defaultValue: boolean = false): Promise<boolean> {
+    const value = await this.get(key);
+    if (value === null) return defaultValue;
+    return value.toLowerCase() === "true" || value === "1";
+  }
+
+  /**
+   * Get a number setting
+   */
+  async getNumber(key: string, defaultValue?: number): Promise<number | null> {
+    const value = await this.get(key);
+    if (value === null) return defaultValue ?? null;
+    const num = Number(value);
+    return isNaN(num) ? (defaultValue ?? null) : num;
+  }
+
+  /**
+   * Set a system setting
+   */
+  async set(key: string, value: string, description?: string): Promise<void> {
+    try {
+      await this.prisma.systemSettings.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value, description },
+      });
+
+      // Update cache
+      this.cache.set(key, { value, timestamp: Date.now() });
+      
+      this.logger.log(`Setting updated: ${key} = ${value}`);
+    } catch (error) {
+      this.logger.error(`Failed to set setting ${key}: ${this.getErrorMessage(error)}`);
       throw error;
     }
   }
 
   /**
-   * Update a setting
+   * Get all settings
    */
-  async updateSetting(key: string, dto: UpdateSettingDto, userId: string) {
-    const existing = await this.getSettingByKey(key);
-
-    if (!existing.isEditable) {
-      throw AppException.badRequest(
-        ErrorCode.SETTING_NOT_EDITABLE,
-        `Setting '${key}' is not editable`
-      );
+  async getAll(): Promise<Record<string, string>> {
+    try {
+      const settings = await this.prisma.systemSettings.findMany();
+      const result: Record<string, string> = {};
+      
+      for (const setting of settings) {
+        result[setting.key] = setting.value;
+        this.cache.set(setting.key, { value: setting.value, timestamp: Date.now() });
+      }
+      
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to get all settings: ${this.getErrorMessage(error)}`);
+      return {};
     }
-
-    return this.prisma.systemSettings.update({
-      where: { key },
-      data: {
-        ...dto,
-        updatedBy: userId,
-        updatedAt: new Date(),
-      },
-    });
   }
 
   /**
    * Delete a setting
    */
-  async deleteSetting(key: string) {
-    await this.getSettingByKey(key);
-
-    return this.prisma.systemSettings.delete({
-      where: { key },
-    });
-  }
-
-  /**
-   * Bulk update settings
-   */
-  async updateMultiple(
-    updates: { key: string; value: string }[],
-    userId: string
-  ) {
-    const updated: any[] = [];
-    for (const u of updates) {
-      try {
-        const existing = await this.prisma.systemSettings.findUnique({
-          where: { key: u.key },
-        });
-        if (!existing) {
-          throw AppException.notFound(
-            ErrorCode.SETTING_NOT_FOUND,
-            `Setting with key '${u.key}' not found`
-          );
-        }
-
-        if (!existing.isEditable) {
-          throw AppException.badRequest(
-            ErrorCode.SETTING_NOT_EDITABLE,
-            `Setting '${u.key}' is not editable`
-          );
-        }
-
-        const res = await this.prisma.systemSettings.update({
-          where: { key: u.key },
-          data: { value: u.value, updatedBy: userId, updatedAt: new Date() },
-        });
-        updated.push(res);
-      } catch (error) {
-        // Skip invalid updates but continue processing others
-        continue;
-      }
-    }
-    return { updatedCount: updated.length, updated };
-  }
-
-  // ==================== FEATURE FLAGS ====================
-
-  /**
-   * Create a new feature flag
-   */
-  async createFeatureFlag(dto: CreateFeatureFlagDto, userId: string) {
-    // Check if key already exists
-    const existing = await this.prisma.featureFlag.findUnique({
-      where: { key: dto.key },
-    });
-
-    if (existing) {
-      throw AppException.conflict(
-        ErrorCode.DUPLICATE_ENTRY,
-        `Feature flag with key '${dto.key}' already exists`
-      );
-    }
-
-    return this.prisma.featureFlag.create({
-      data: {
-        ...dto,
-        enabled: dto.enabled ?? false,
-        rolloutPercentage: dto.rolloutPercentage ?? 0,
-        targetRoles: dto.targetRoles ?? [],
-        targetUsers: dto.targetUsers ?? [],
-        createdBy: userId,
-        updatedBy: userId,
-      },
-    });
-  }
-
-  /**
-   * Get all feature flags
-   */
-  async getFeatureFlags(enabledOnly: boolean = false) {
-    const where: any = {};
-
-    if (enabledOnly) {
-      where.enabled = true;
-    }
-
-    return this.prisma.featureFlag.findMany({
-      where,
-      orderBy: { name: "asc" },
-    });
-  }
-
-  /**
-   * Get a feature flag by key
-   */
-  async getFeatureFlagByKey(key: string) {
-    const flag = await this.prisma.featureFlag.findUnique({
-      where: { key },
-    });
-
-    if (!flag) {
-      throw AppException.notFound(
-        ErrorCode.SETTING_NOT_FOUND,
-        `Feature flag with key '${key}' not found`
-      );
-    }
-
-    return flag;
-  }
-
-  /**
-   * Check if a feature is enabled for a user
-   */
-  async isFeatureEnabled(
-    key: string,
-    userId?: string,
-    userRole?: string
-  ): Promise<boolean> {
+  async delete(key: string): Promise<void> {
     try {
-      const flag = await this.getFeatureFlagByKey(key);
-
-      // If flag is disabled, return false
-      if (!flag.enabled) {
-        return false;
-      }
-
-      // If specific users are targeted, check if user is in the list
-      if (userId && flag.targetUsers.length > 0) {
-        return flag.targetUsers.includes(userId);
-      }
-
-      // If specific roles are targeted, check if user role matches
-      if (userRole && flag.targetRoles.length > 0) {
-        return flag.targetRoles.includes(userRole);
-      }
-
-      // If rollout percentage is set, use random selection
-      if (flag.rolloutPercentage > 0 && flag.rolloutPercentage < 100) {
-        const random = Math.random() * 100;
-        return random < flag.rolloutPercentage;
-      }
-
-      // Default: if no targeting and 100% rollout, return true
-      return flag.rolloutPercentage === 100;
+      await this.prisma.systemSettings.delete({
+        where: { key },
+      });
+      this.cache.delete(key);
+      this.logger.log(`Setting deleted: ${key}`);
     } catch (error) {
-      // Feature flag doesn't exist, default to false
-      return false;
+      this.logger.error(`Failed to delete setting ${key}: ${this.getErrorMessage(error)}`);
+      throw error;
     }
   }
 
   /**
-   * Update a feature flag
+   * Clear cache
    */
-  async updateFeatureFlag(
-    key: string,
-    dto: UpdateFeatureFlagDto,
-    userId: string
-  ) {
-    await this.getFeatureFlagByKey(key);
-
-    return this.prisma.featureFlag.update({
-      where: { key },
-      data: {
-        ...dto,
-        updatedBy: userId,
-        updatedAt: new Date(),
-      },
-    });
+  clearCache(): void {
+    this.cache.clear();
+    this.logger.log("System settings cache cleared");
   }
 
   /**
-   * Toggle a feature flag
+   * Get multiple settings at once
    */
-  async toggleFeatureFlag(key: string, userId: string) {
-    const flag = await this.getFeatureFlagByKey(key);
+  async getMany(keys: string[]): Promise<Record<string, string | null>> {
+    const result: Record<string, string | null> = {};
+    const uncachedKeys: string[] = [];
 
-    return this.prisma.featureFlag.update({
-      where: { key },
-      data: {
-        enabled: !flag.enabled,
-        updatedBy: userId,
-        updatedAt: new Date(),
-      },
-    });
-  }
-
-  /**
-   * Delete a feature flag
-   */
-  async deleteFeatureFlag(key: string) {
-    await this.getFeatureFlagByKey(key);
-
-    return this.prisma.featureFlag.delete({
-      where: { key },
-    });
-  }
-
-  // ==================== INITIALIZATION ====================
-
-  /**
-   * Initialize default system settings
-   */
-  async initializeDefaultSettings() {
-    const defaults = [
-      {
-        key: "site.name",
-        value: "LearnApp Platform",
-        type: "STRING" as const,
-        category: "general",
-        description: "Site name",
-        isPublic: true,
-        isEditable: true,
-      },
-      {
-        key: "site.maintenance_mode",
-        value: "false",
-        type: "BOOLEAN" as const,
-        category: "general",
-        description: "Enable maintenance mode",
-        isPublic: false,
-        isEditable: true,
-      },
-      {
-        key: "payment.min_amount",
-        value: "100",
-        type: "NUMBER" as const,
-        category: "payment",
-        description: "Minimum payment amount",
-        isPublic: false,
-        isEditable: true,
-      },
-      {
-        key: "exam.default_duration",
-        value: "60",
-        type: "NUMBER" as const,
-        category: "exam",
-        description: "Default exam duration in minutes",
-        isPublic: false,
-        isEditable: true,
-      },
-      {
-        key: "exam.max_attempts",
-        value: "3",
-        type: "NUMBER" as const,
-        category: "exam",
-        description: "Maximum exam attempts",
-        isPublic: false,
-        isEditable: true,
-      },
-    ];
-
-    const created = [];
-    for (const setting of defaults) {
-      try {
-        const existing = await this.prisma.systemSettings.findUnique({
-          where: { key: setting.key },
-        });
-
-        if (!existing) {
-          const newSetting = await this.prisma.systemSettings.create({
-            data: setting,
-          });
-          created.push(newSetting);
-        }
-      } catch (error) {
-        this.logger.error(`Failed to create setting ${setting.key}:`, error);
+    // Check cache first
+    for (const key of keys) {
+      const cached = this.cache.get(key);
+      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+        result[key] = cached.value;
+      } else {
+        uncachedKeys.push(key);
       }
     }
 
-    return {
-      created: created.length,
-      settings: created,
-    };
+    if (uncachedKeys.length === 0) {
+      return result;
+    }
+
+    // Fetch uncached keys from database
+    try {
+      const settings = await this.prisma.systemSettings.findMany({
+        where: { key: { in: uncachedKeys } },
+      });
+
+      const settingsMap = new Map(settings.map(s => [s.key, s]));
+
+      for (const key of uncachedKeys) {
+        const setting = settingsMap.get(key);
+        if (setting) {
+          result[key] = setting.value;
+          this.cache.set(key, { value: setting.value, timestamp: Date.now() });
+        } else {
+          result[key] = null;
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Failed to get multiple settings: ${this.getErrorMessage(error)}`);
+      // For uncached keys that failed, set to null
+      for (const key of uncachedKeys) {
+        result[key] = null;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Check if a setting exists
+   */
+  async has(key: string): Promise<boolean> {
+    const value = await this.get(key);
+    return value !== null;
+  }
+
+  /**
+   * Reset a setting to default (delete it)
+   */
+  async reset(key: string): Promise<void> {
+    await this.delete(key);
+  }
+
+  /**
+   * Initialize default settings
+   */
+  async initializeDefaults(defaults: Record<string, { value: string; description?: string }>): Promise<void> {
+    for (const [key, { value, description }] of Object.entries(defaults)) {
+      try {
+        await this.prisma.systemSettings.upsert({
+          where: { key },
+          update: {}, // Don't update if exists
+          create: { key, value, description },
+        });
+      } catch (error) {
+        this.logger.error(`Failed to initialize setting ${key}: ${this.getErrorMessage(error)}`);
+      }
+    }
+    this.clearCache();
+    this.logger.log("Default settings initialized");
   }
 }

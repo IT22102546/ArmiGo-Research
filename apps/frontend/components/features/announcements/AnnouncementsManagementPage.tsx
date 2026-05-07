@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -46,7 +47,11 @@ import {
   Calendar,
   Users,
   BarChart3,
+  Megaphone,
+  Activity,
 } from "lucide-react";
+import { ApiClient } from "@/lib/api/api-client";
+import { toast } from "sonner";
 
 interface Announcement {
   id: string;
@@ -186,9 +191,7 @@ const initialAnnouncements: Announcement[] = [
 ];
 
 export default function AnnouncementsManagementPage() {
-  const [announcements, setAnnouncements] =
-    useState<Announcement[]>(initialAnnouncements);
-  const [_loading, _setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -197,8 +200,6 @@ export default function AnnouncementsManagementPage() {
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
-    total: 0,
-    pages: 0,
   });
 
   // Dialog states
@@ -227,169 +228,180 @@ export default function AnnouncementsManagementPage() {
     byRole: Array<{ role: string; count: number }>;
   } | null>(null);
 
-  useEffect(() => {
-    let filtered = [...initialAnnouncements];
+  const { data: announcementsResponse, isLoading } = useQuery({
+    queryKey: [
+      "announcements",
+      searchTerm,
+      typeFilter,
+      statusFilter,
+      pagination.page,
+      pagination.limit,
+    ],
+    queryFn: () =>
+      ApiClient.get<{ items: Announcement[]; pagination: any }>("/announcements", {
+        params: {
+          search: searchTerm || undefined,
+          type: typeFilter === "ALL" ? undefined : typeFilter,
+          status: statusFilter === "ALL" ? undefined : statusFilter,
+          page: pagination.page,
+          limit: pagination.limit,
+        },
+      }),
+  });
 
-    // Filter by type
-    if (typeFilter !== "ALL") {
-      filtered = filtered.filter((a) => a.type === typeFilter);
-    }
+  const announcements = announcementsResponse?.items || [];
+  const paginationMeta = announcementsResponse?.pagination || {
+    page: pagination.page,
+    limit: pagination.limit,
+    total: 0,
+    pages: 0,
+  };
 
-    // Filter by status
-    if (statusFilter === "ACTIVE") {
-      filtered = filtered.filter((a) => a.isActive);
-    } else if (statusFilter === "INACTIVE") {
-      filtered = filtered.filter((a) => !a.isActive);
-    }
+  const announcementStats = useMemo(() => {
+    const total = paginationMeta.total || 0;
+    const active = announcements.filter((a) => a.isActive).length;
+    const inactive = announcements.length - active;
+    return { total, active, inactive };
+  }, [announcements, paginationMeta.total]);
 
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (a) =>
-          a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          a.content.toLowerCase().includes(searchTerm.toLowerCase())
+  const createMutation = useMutation({
+    mutationFn: (payload: any) => ApiClient.post("/announcements", payload),
+    onSuccess: () => {
+      toast.success("Announcement created successfully");
+      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+      setCreateDialogOpen(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to create announcement");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) =>
+      ApiClient.put(`/announcements/${id}`, payload),
+    onSuccess: () => {
+      toast.success("Announcement updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+      setEditDialogOpen(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update announcement");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => ApiClient.delete(`/announcements/${id}`),
+    onSuccess: () => {
+      toast.success("Announcement deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+      setDeleteDialogOpen(false);
+      setSelectedAnnouncement(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to delete announcement");
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      ApiClient.put(`/announcements/${id}/status`, { isActive }),
+    onSuccess: (_, variables) => {
+      toast.success(
+        `Announcement ${variables.isActive ? "activated" : "deactivated"} successfully`
       );
-    }
+      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update announcement status");
+    },
+  });
 
-    setAnnouncements(filtered);
-    setPagination((prev) => ({
-      ...prev,
-      total: filtered.length,
-      pages: Math.ceil(filtered.length / pagination.limit),
-    }));
-  }, [typeFilter, statusFilter, searchTerm, pagination.limit]);
+  const extendExpiryMutation = useMutation({
+    mutationFn: (id: string) => ApiClient.put(`/announcements/${id}/extend-expiry`, {}),
+    onSuccess: () => {
+      toast.success("Expiry extended by 30 days");
+      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to extend expiry");
+    },
+  });
 
   const handleCreate = () => {
     if (!formData.title || !formData.content) {
-      alert("Title and content are required");
+      toast.error("Title and content are required");
       return;
     }
 
-    const newAnnouncement: Announcement = {
-      id: String(Date.now()),
+    createMutation.mutate({
       title: formData.title,
       content: formData.content,
-      type: formData.type as Announcement["type"],
-      priority: formData.priority as Announcement["priority"],
+      type: formData.type,
+      priority: formData.priority,
       targetRoles: formData.targetRoles,
-      isActive: true,
-      publishedAt: formData.publishedAt || new Date().toISOString(),
-      expiresAt: formData.expiresAt || null,
-      createdAt: new Date().toISOString(),
-      _count: { reads: 0 },
-    };
-
-    initialAnnouncements.unshift(newAnnouncement);
-    setAnnouncements([newAnnouncement, ...announcements]);
-    setCreateDialogOpen(false);
-    resetForm();
-    alert("Announcement created successfully");
+      publishedAt: formData.publishedAt
+        ? new Date(formData.publishedAt).toISOString()
+        : undefined,
+      expiresAt: formData.expiresAt
+        ? new Date(formData.expiresAt).toISOString()
+        : undefined,
+    });
   };
 
   const handleEdit = () => {
     if (!selectedAnnouncement) return;
 
-    const updatedAnnouncements = initialAnnouncements.map((a) =>
-      a.id === selectedAnnouncement.id
-        ? {
-            ...a,
-            title: formData.title,
-            content: formData.content,
-            type: formData.type as Announcement["type"],
-            priority: formData.priority as Announcement["priority"],
-            targetRoles: formData.targetRoles,
-            publishedAt: formData.publishedAt || a.publishedAt,
-            expiresAt: formData.expiresAt || a.expiresAt,
-          }
-        : a
-    );
-
-    initialAnnouncements.splice(
-      0,
-      initialAnnouncements.length,
-      ...updatedAnnouncements
-    );
-    // Trigger re-filter by updating a dependency
-    setSearchTerm((prev) => prev);
-    setEditDialogOpen(false);
-    resetForm();
-    alert("Announcement updated successfully");
+    updateMutation.mutate({
+      id: selectedAnnouncement.id,
+      payload: {
+        title: formData.title,
+        content: formData.content,
+        type: formData.type,
+        priority: formData.priority,
+        targetRoles: formData.targetRoles,
+        publishedAt: formData.publishedAt
+          ? new Date(formData.publishedAt).toISOString()
+          : undefined,
+        expiresAt: formData.expiresAt
+          ? new Date(formData.expiresAt).toISOString()
+          : undefined,
+      },
+    });
   };
 
   const handleDelete = () => {
     if (!selectedAnnouncement) return;
 
-    const index = initialAnnouncements.findIndex(
-      (a) => a.id === selectedAnnouncement.id
-    );
-    if (index > -1) {
-      initialAnnouncements.splice(index, 1);
-      // Trigger re-filter by updating a dependency
-      setSearchTerm((prev) => prev);
-    }
-
-    setDeleteDialogOpen(false);
-    setSelectedAnnouncement(null);
-    alert("Announcement deleted successfully");
+    deleteMutation.mutate(selectedAnnouncement.id);
   };
 
   const handleToggleActive = (announcement: Announcement) => {
-    const updatedAnnouncements = initialAnnouncements.map((a) =>
-      a.id === announcement.id ? { ...a, isActive: !a.isActive } : a
-    );
-    initialAnnouncements.splice(
-      0,
-      initialAnnouncements.length,
-      ...updatedAnnouncements
-    );
-    // Trigger re-filter by updating a dependency
-    setSearchTerm((prev) => prev);
-    alert(
-      `Announcement ${announcement.isActive ? "deactivated" : "activated"} successfully`
-    );
+    statusMutation.mutate({
+      id: announcement.id,
+      isActive: !announcement.isActive,
+    });
   };
 
   const handleExtendExpiry = (announcement: Announcement) => {
-    const newExpiry = new Date();
-    newExpiry.setDate(newExpiry.getDate() + 30); // Extend by 30 days
-
-    const updatedAnnouncements = initialAnnouncements.map((a) =>
-      a.id === announcement.id
-        ? { ...a, expiresAt: newExpiry.toISOString() }
-        : a
-    );
-    initialAnnouncements.splice(
-      0,
-      initialAnnouncements.length,
-      ...updatedAnnouncements
-    );
-    // Trigger re-filter by updating a dependency
-    setSearchTerm((prev) => prev);
-    alert("Expiry extended by 30 days");
+    extendExpiryMutation.mutate(announcement.id);
   };
 
-  const handleViewStats = (announcement: Announcement) => {
-    const mockStats = {
-      total: announcement._count?.reads || 0,
-      unread: Math.floor((announcement._count?.reads || 0) * 0.3),
-      byRole: [
-        {
-          role: "CUSTOMER",
-          count: Math.floor((announcement._count?.reads || 0) * 0.6),
-        },
-        {
-          role: "DEALER",
-          count: Math.floor((announcement._count?.reads || 0) * 0.25),
-        },
-        {
-          role: "ADMIN",
-          count: Math.floor((announcement._count?.reads || 0) * 0.15),
-        },
-      ],
-    };
-    setReadStats(mockStats);
-    setSelectedAnnouncement(announcement);
-    setStatsDialogOpen(true);
+  const handleViewStats = async (announcement: Announcement) => {
+    try {
+      const stats = await ApiClient.get<{
+        total: number;
+        unread: number;
+        byRole: Array<{ role: string; count: number }>;
+      }>(`/announcements/${announcement.id}/stats`);
+
+      setReadStats(stats);
+      setSelectedAnnouncement(announcement);
+      setStatsDialogOpen(true);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to load announcement statistics");
+    }
   };
 
   const openEditDialog = (announcement: Announcement) => {
@@ -456,22 +468,71 @@ export default function AnnouncementsManagementPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Product Announcements</CardTitle>
-            <CardDescription>
-              Manage stock alerts, promotions, and system notifications
-            </CardDescription>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <Megaphone className="h-6 w-6 text-primary" />
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Announcement
-          </Button>
+          <div>
+            <h1 className="text-2xl font-semibold">Announcements</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage stock alerts, promotions, and system notifications
+            </p>
+          </div>
         </div>
-      </CardHeader>
-      <CardContent>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Announcement
+        </Button>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/40 dark:to-orange-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/40">
+                <Megaphone className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total</p>
+                <p className="text-2xl font-bold">{announcementStats.total}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Active (this page)</p>
+                <p className="text-2xl font-bold text-emerald-600">{announcementStats.active}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20">
+          <CardContent className="pt-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40">
+                <Users className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Inactive (this page)</p>
+                <p className="text-2xl font-bold text-rose-600">{announcementStats.inactive}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardContent className="pt-5">
         {/* Filters */}
         <div className="flex gap-4 mb-6">
           <div className="flex-1 relative">
@@ -479,11 +540,20 @@ export default function AnnouncementsManagementPage() {
             <Input
               placeholder="Search announcements..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
               className="pl-10"
             />
           </div>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <Select
+            value={typeFilter}
+            onValueChange={(value) => {
+              setTypeFilter(value);
+              setPagination((prev) => ({ ...prev, page: 1 }));
+            }}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
@@ -497,7 +567,13 @@ export default function AnnouncementsManagementPage() {
               <SelectItem value="URGENT">Urgent</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(value);
+              setPagination((prev) => ({ ...prev, page: 1 }));
+            }}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
@@ -525,10 +601,24 @@ export default function AnnouncementsManagementPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {announcements.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell colSpan={9}>
+                    <div className="h-10 rounded-lg bg-muted animate-pulse" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : announcements.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center">
-                  No announcements found
+                <TableCell colSpan={9}>
+                  <div className="py-12 flex flex-col items-center gap-2 text-muted-foreground">
+                    <div className="p-3 rounded-full bg-muted">
+                      <Megaphone className="h-6 w-6" />
+                    </div>
+                    <p className="font-medium">No announcements found</p>
+                    <p className="text-xs">Create an announcement or adjust your filters</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -584,10 +674,11 @@ export default function AnnouncementsManagementPage() {
                     </Button>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-sky-500/10 hover:text-sky-600"
                         onClick={() => {
                           setSelectedAnnouncement(announcement);
                           setViewDialogOpen(true);
@@ -597,22 +688,26 @@ export default function AnnouncementsManagementPage() {
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
                         onClick={() => openEditDialog(announcement)}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-amber-500/10 hover:text-amber-600"
                         onClick={() => handleToggleActive(announcement)}
+                        title={announcement.isActive ? "Deactivate" : "Activate"}
                       >
-                        {announcement.isActive ? "Deactivate" : "Activate"}
+                        <Activity className="h-4 w-4" />
                       </Button>
                       {announcement.expiresAt && (
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          className="h-8 w-8 p-0 hover:bg-violet-500/10 hover:text-violet-600"
                           onClick={() => handleExtendExpiry(announcement)}
                         >
                           <Calendar className="h-4 w-4" />
@@ -620,7 +715,8 @@ export default function AnnouncementsManagementPage() {
                       )}
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => {
                           setSelectedAnnouncement(announcement);
                           setDeleteDialogOpen(true);
@@ -639,13 +735,13 @@ export default function AnnouncementsManagementPage() {
         {/* Pagination */}
         <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-muted-foreground">
-            Showing {announcements.length} of {pagination.total} announcements
+            Showing {announcements.length} of {paginationMeta.total} announcements
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              disabled={pagination.page === 1}
+              disabled={paginationMeta.page === 1 || isLoading}
               onClick={() =>
                 setPagination((prev) => ({ ...prev, page: prev.page - 1 }))
               }
@@ -655,7 +751,11 @@ export default function AnnouncementsManagementPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled={pagination.page >= pagination.pages}
+              disabled={
+                paginationMeta.page >= paginationMeta.pages ||
+                paginationMeta.pages === 0 ||
+                isLoading
+              }
               onClick={() =>
                 setPagination((prev) => ({ ...prev, page: prev.page + 1 }))
               }
@@ -665,6 +765,7 @@ export default function AnnouncementsManagementPage() {
           </div>
         </div>
       </CardContent>
+      </Card>
 
       {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -1089,6 +1190,6 @@ export default function AnnouncementsManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }

@@ -73,25 +73,27 @@ export function PageHeader({
         </nav>
       )}
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start sm:items-center gap-2 sm:gap-3 min-w-0">
           {Icon && (
             <div
               className={cn(
-                "p-2 rounded-lg",
+                "p-1.5 sm:p-2 rounded-lg shrink-0",
                 variant === "gradient"
                   ? "bg-white/10"
                   : "bg-primary/10 text-primary"
               )}
             >
-              <Icon className="h-6 w-6" aria-hidden="true" />
+              <Icon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
             </div>
           )}
-          <div>
+          <div className="min-w-0">
             <h1
               className={cn(
                 "font-bold tracking-tight",
-                variant === "gradient" ? "text-3xl" : "text-2xl lg:text-3xl"
+                variant === "gradient"
+                  ? "text-2xl sm:text-3xl"
+                  : "text-xl sm:text-2xl lg:text-3xl"
               )}
             >
               {title}
@@ -111,7 +113,11 @@ export function PageHeader({
           </div>
         </div>
 
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && (
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   );

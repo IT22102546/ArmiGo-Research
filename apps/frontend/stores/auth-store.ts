@@ -108,13 +108,25 @@ export const useIsAuthenticated = () => {
 
 /**
  * Get the appropriate sign-in redirect URL based on user role
- * Admin roles redirect to /admin/sign-in, others to /sign-in
+ * Regular admins (SUPER_ADMIN, ADMIN) go to /admin
+ * Hospital admins go to /admin/sign-in
+ * Other roles go to /sign-in
  */
 export const getSignInRedirectUrl = (userRole?: string | null): string => {
   if (!userRole) return "/sign-in";
 
-  const adminRoles = ["ADMIN", "SUPER_ADMIN"];
-  return adminRoles.includes(userRole) ? "/admin/sign-in" : "/sign-in";
+  // Regular admins go to main admin dashboard
+  if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
+    return "/admin";
+  }
+  
+  // Hospital admins go to hospital admin login
+  if (userRole === "HOSPITAL_ADMIN") {
+    return "/admin/sign-in";
+  }
+  
+  // Default fallback for other roles
+  return "/sign-in";
 };
 
 /**

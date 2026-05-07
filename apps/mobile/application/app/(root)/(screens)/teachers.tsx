@@ -1,477 +1,229 @@
-import { icons } from "@/constants";
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  Image,
   ActivityIndicator,
   Alert,
+  FlatList,
   RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { apiFetch } from "@/utils/api";
-import useAuthStore from "@/stores/authStore";
 
-const Teachers = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [teachers, setTeachers] = useState([]);
+interface UnavailableDate {
+  id: string;
+  date: string;
+  reason?: string | null;
+}
+
+interface Physiotherapist {
+  id: string;
+  name: string;
+  role?: string;
+  specialization?: string;
+  phone?: string;
+  email?: string;
+  isActive?: boolean;
+  availabilityStatus?: "AVAILABLE" | "IN_WORK" | "NOT_AVAILABLE" | string | null;
+  availabilityNote?: string | null;
+  availabilityUpdatedAt?: string | null;
+  unavailableDates?: UnavailableDate[];
+}
+
+interface Child {
+  id: string;
+  firstName: string;
+  lastName: string;
+  assignedDoctor?: string | null;
+  physioAssignments?: Array<{
+    id: string;
+    physiotherapist?: Physiotherapist | null;
+  }>;
+}
+
+const statusMeta: Record<"AVAILABLE" | "IN_WORK" | "NOT_AVAILABLE", { label: string; color: string }> = {
+  AVAILABLE: { label: "Available", color: "#10b981" },
+  IN_WORK: { label: "In Work", color: "#3b82f6" },
+  NOT_AVAILABLE: { label: "Not Available", color: "#ef4444" },
+};
+
+const resolveStatus = (raw?: string | null): "AVAILABLE" | "IN_WORK" | "NOT_AVAILABLE" => {
+  if (raw === "IN_WORK" || raw === "NOT_AVAILABLE") return raw;
+  return "AVAILABLE";
+};
+
+const fmtDate = (value?: string | null): string => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const PhysiotherapistDetailsScreen = () => {
+  const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState("INTERNAL"); // ALL, INTERNAL, EXTERNAL
-  
-  // Get auth state from store
-  const { isSignedIn, refreshTokens } = useAuthStore();
 
-  // Fetch teachers from the specific endpoint
-  const fetchTeachers = async (isRefreshing = false) => {
+  const fetchChildPhysioDetails = useCallback(async (isRefresh = false) => {
     try {
-      if (!isRefreshing) setLoading(true);
-      else setRefreshing(true);
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
 
-      console.log(`🔍 Fetching teachers from /teachers/list endpoint`);
-
-      // Check if user is signed in
-      if (!isSignedIn) {
-        Alert.alert(
-          "Authentication Required",
-          "Please sign in to view teachers.",
-          [{ text: "OK" }]
-        );
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      // Using your apiFetch utility with the specific endpoint
-      const response = await apiFetch('/api/v1/classes/teachers/list', {
-        method: 'GET',
-      });
-
-      // Check if token expired and try to refresh
-      if (response.status === 401) {
-        console.log("🔐 Token expired, attempting to refresh...");
-        const refreshSuccess = await refreshTokens();
-        
-        if (refreshSuccess) {
-          console.log("🔄 Token refreshed, retrying request...");
-          return fetchTeachers(isRefreshing);
-        } else {
-          Alert.alert(
-            "Session Expired",
-            "Please sign in again.",
-            [{ text: "OK" }]
-          );
-          setLoading(false);
-          setRefreshing(false);
-          return;
-        }
-      }
+      const response = await apiFetch("/api/v1/users/my-children", { method: "GET" });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ API Error: ${response.status}`, errorText);
-        throw new Error(`Failed to load teachers: ${response.status}`);
+        throw new Error(`Failed with status ${response.status}`);
       }
 
-      const result = await response.json();
-      
-      console.log(`📊 Received teachers data:`, result);
-      
-      // Filter teachers based on filter type
-      let filteredTeachers = [];
-      if (Array.isArray(result)) {
-        filteredTeachers = result.filter(teacher => {
-          if (filter === "INTERNAL") {
-            return teacher.role === "INTERNAL_TEACHER" || 
-                   teacher.user?.role === "INTERNAL_TEACHER" ||
-                   teacher.type === "INTERNAL";
-          } 
-          return true;
-        });
-      } else if (result.data && Array.isArray(result.data)) {
-        filteredTeachers = result.data.filter(teacher => {
-           if (filter === "INTERNAL") {
-            return teacher.role === "INTERNAL_TEACHER" || 
-                   teacher.user?.role === "INTERNAL_TEACHER" ||
-                   teacher.type === "INTERNAL";
-          } 
-          return true;
-        });
-      } else {
-        console.warn("⚠️ Unexpected response format:", result);
-        filteredTeachers = [];
-      }
-      
-      // Apply search filter
-      if (searchQuery) {
-        filteredTeachers = filteredTeachers.filter(teacher => {
-          const searchLower = searchQuery.toLowerCase();
-          return (
-            (teacher.firstName?.toLowerCase() || '').includes(searchLower) ||
-            (teacher.lastName?.toLowerCase() || '').includes(searchLower) ||
-            (teacher.fullName?.toLowerCase() || '').includes(searchLower) ||
-            (teacher.name?.toLowerCase() || '').includes(searchLower) ||
-            (teacher.email?.toLowerCase() || '').includes(searchLower) ||
-            (teacher.phone?.toLowerCase() || '').includes(searchLower) ||
-            (teacher.subject?.toLowerCase() || '').includes(searchLower) ||
-            (teacher.subjects?.some((sub: string) => sub.toLowerCase().includes(searchLower)) || false)
-          );
-        });
-      }
-      
-      console.log(`✅ Displaying ${filteredTeachers.length} teachers after filtering`);
-      setTeachers(filteredTeachers);
-      
+      const json = await response.json();
+      const data: Child[] = json?.success && Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json)
+          ? json
+          : [];
+
+      setChildren(data);
     } catch (error) {
-      console.error("❌ Error fetching teachers:", error);
-      Alert.alert(
-        "Error",
-        "Failed to load teachers. Please try again.",
-        [{ text: "OK", onPress: handleRefresh }]
-      );
+      console.error("❌ Failed to load physiotherapist details:", error);
+      Alert.alert("Error", "Unable to load physiotherapist details.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  // Handle pull-to-refresh
-  const handleRefresh = () => {
-    fetchTeachers(true);
-  };
-
-  // Handle search with debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchTeachers(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, filter]);
-
-  // Initial fetch
-  useEffect(() => {
-    const initFetch = async () => {
-      // Check auth status first
-      await useAuthStore.getState().checkAuthStatus();
-      const { isSignedIn: signedIn } = useAuthStore.getState();
-      
-      if (signedIn) {
-        await fetchTeachers(false);
-      } else {
-        setLoading(false);
-        Alert.alert(
-          "Authentication Required",
-          "Please sign in to view teachers.",
-          [{ text: "OK" }]
-        );
-      }
-    };
-    
-    initFetch();
   }, []);
 
-  // Filter button component
-  const FilterButton = ({ title, value }) => (
-    <TouchableOpacity
-      style={[
-        styles.filterButton,
-        filter === value && styles.filterButtonActive,
-      ]}
-      onPress={() => setFilter(value)}
-    >
-      <Text
-        style={[
-          styles.filterButtonText,
-          filter === value && styles.filterButtonTextActive,
-        ]}
-      >
-        {title}
-      </Text>
-    </TouchableOpacity>
+  useEffect(() => {
+    fetchChildPhysioDetails(false);
+  }, [fetchChildPhysioDetails]);
+
+  const cards = useMemo(
+    () =>
+      children.map((child) => {
+        const physio = child.physioAssignments?.[0]?.physiotherapist ?? null;
+        const status = resolveStatus(physio?.availabilityStatus);
+        const nextUnavailable = physio?.unavailableDates?.[0] ?? null;
+        return { child, physio, status, nextUnavailable };
+      }),
+    [children]
   );
 
-  // Get teacher name from different possible field structures
-  const getTeacherName = (teacher) => {
-    if (teacher.fullName) return teacher.fullName;
-    if (teacher.firstName && teacher.lastName) {
-      return `${teacher.firstName} ${teacher.lastName}`;
-    }
-    if (teacher.name) return teacher.name;
-    if (teacher.user?.fullName) return teacher.user.fullName;
-    if (teacher.user?.firstName && teacher.user?.lastName) {
-      return `${teacher.user.firstName} ${teacher.user.lastName}`;
-    }
-    if (teacher.user?.name) return teacher.user.name;
-    return "Teacher";
-  };
-
-  // Get teacher email
-  const getTeacherEmail = (teacher) => {
-    return teacher.email || teacher.user?.email || "No email";
-  };
-
-  // Get teacher subjects
-  const getTeacherSubjects = (teacher) => {
-    if (teacher.subjects && Array.isArray(teacher.subjects)) {
-      return teacher.subjects;
-    }
-    if (teacher.subject) {
-      return [teacher.subject];
-    }
-    if (teacher.subjectAssignments && Array.isArray(teacher.subjectAssignments)) {
-      return teacher.subjectAssignments.map(sa => sa.subject?.name).filter(Boolean);
-    }
-    return ["No subjects assigned"];
-  };
-
-  // Get teacher type
-  const getTeacherType = (teacher) => {
-    if (teacher.role) {
-      if (teacher.role === "INTERNAL_TEACHER") return "Internal";
-      if (teacher.role === "EXTERNAL_TEACHER") return "External";
-      return teacher.role.replace("_", " ");
-    }
-    if (teacher.user?.role) {
-      if (teacher.user.role === "INTERNAL_TEACHER") return "Internal";
-      if (teacher.user.role === "EXTERNAL_TEACHER") return "External";
-      return teacher.user.role.replace("_", " ");
-    }
-    if (teacher.type) {
-      return teacher.type.charAt(0).toUpperCase() + teacher.type.slice(1);
-    }
-    return "Teacher";
-  };
-
-  // Get teacher status
-  const getTeacherStatus = (teacher) => {
-    return teacher.status || teacher.user?.status || "ACTIVE";
-  };
-
-  // Avatar component with fallback to initials
-  const Avatar = ({ teacher }) => {
-    const getInitials = () => {
-      const name = getTeacherName(teacher);
-      if (!name || name === "Teacher") return "T";
-      
-      return name
-        .split(' ')
-        .map(word => word[0])
-        .filter(char => char && char.match(/[A-Za-z]/))
-        .join('')
-        .toUpperCase()
-        .substring(0, 2);
-    };
-
-    const getAvatarColor = () => {
-      const colors = ['#005CFF', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
-      const teacherId = teacher.id || teacher._id || teacher.userId || teacher.user?.id || '';
-      if (!teacherId) return colors[0];
-      
-      const index = parseInt(teacherId, 36) % colors.length;
-      return colors[index];
-    };
-
-    if (teacher.profilePicture || teacher.avatar || teacher.user?.profilePicture) {
-      return (
-        <Image
-          source={{ uri: teacher.profilePicture || teacher.avatar || teacher.user?.profilePicture }}
-          style={styles.avatarImage}
-        />
-      );
-    }
-
+  if (loading) {
     return (
-      <View style={[
-        styles.avatarPlaceholder,
-        { backgroundColor: getAvatarColor() }
-      ]}>
-        <Text style={styles.avatarText}>
-          {getInitials()}
-        </Text>
-      </View>
-    );
-  };
-
-  // Render teacher card
-  const renderTeacherCard = ({ item }) => {
-    const teacherName = getTeacherName(item);
-    const teacherType = getTeacherType(item);
-    const subjects = getTeacherSubjects(item);
-    const primarySubject = subjects[0];
-    const status = getTeacherStatus(item);
-    
-    // Get stars/ratings (you can update this based on your actual data)
-    const stars = item.rating || item.stars || Math.floor(Math.random() * 20) + 5;
-
-    return (
-      <View style={styles.teacherCard}>
-        <View style={styles.teacherInfo}>
-          <View style={styles.avatarContainer}>
-            <Avatar teacher={item} />
-           {/*} <View style={[
-              styles.teacherTypeBadge,
-              (item.role === 'INTERNAL_TEACHER' || item.user?.role === 'INTERNAL_TEACHER') && styles.internalBadge,
-              (item.role === 'EXTERNAL_TEACHER' || item.user?.role === 'EXTERNAL_TEACHER') && styles.externalBadge,
-            ]}>
-              <Text style={styles.teacherTypeText}>{teacherType}</Text>
-            </View>*/}
-          </View>
-          
-          <View style={styles.teacherDetails}>
-            <Text style={styles.teacherName}>{teacherName}</Text>
-            
-            <Text style={styles.teacherEmail}>
-              {getTeacherEmail(item)}
-            </Text>
-            
-            <Text style={styles.teacherSubject}>{primarySubject}</Text>
-            
-            {subjects.length > 1 && (
-              <Text style={styles.additionalSubjects}>
-                +{subjects.length - 1} more subject{subjects.length > 2 ? 's' : ''}
-              </Text>
-            )}
-            
-            <View style={styles.statsContainer}>
-              <View style={styles.starsContainer}>
-                <Image source={icons.star} style={styles.starIcon} />
-                <Text style={styles.starsText}>{stars} Stars</Text>
-              </View>
-              
-              <View style={styles.statusBadge}>
-                <Text style={[
-                  styles.statusText,
-                  status === 'ACTIVE' && styles.statusActive,
-                  status === 'PENDING' && styles.statusPending,
-                  status === 'SUSPENDED' && styles.statusSuspended,
-                  status === 'INACTIVE' && styles.statusInactive,
-                ]}>
-                  {status}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-        
-        <TouchableOpacity
-          style={styles.chatButton}
-          onPress={() => {
-            Alert.alert(
-              "Start Chat",
-              `Would you like to start a chat with ${teacherName}?`,
-              [
-                { text: "Cancel", style: "cancel" },
-                { text: "Start Chat", onPress: () => {
-                  console.log(`Start chat with teacher: ${item.id}`);
-                  // Navigate to chat screen
-                  // navigation.navigate('Chat', { teacherId: item.id, teacherName })
-                }}
-              ]
-            );
-          }}
-        >
-          <Image source={icons.chatT} style={styles.chatIcon} />
-          <Text style={styles.chatButtonText}>Chat</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  // Show loading indicator
-  if (loading && teachers.length === 0) {
-    return (
-      <View style={styles.centeredContainer}>
-        <ActivityIndicator size="large" color="#005CFF" />
-        <Text style={styles.loadingText}>Loading teachers...</Text>
-      </View>
-    );
-  }
-
-  // Show auth required message
-  if (!isSignedIn && !loading) {
-    return (
-      <View style={styles.centeredContainer}>
-        <Text style={styles.authTitle}>Authentication Required</Text>
-        <Text style={styles.authText}>
-          Please sign in to view the teachers list
-        </Text>
+      <View style={styles.centerWrap}>
+        <ActivityIndicator size="large" color="#4B3AFF" />
+        <Text style={styles.loadingText}>Loading physiotherapist details…</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <LinearGradient
+        colors={["#4B3AFF", "#5C6CFF"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.hero}
+      >
+        <Text style={styles.heroTitle}>Physiotherapists</Text>
+        <Text style={styles.heroSub}>Availability and contact details for each child’s assigned therapist</Text>
+      </LinearGradient>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Image source={icons.search} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name, subject, or email"
-          placeholderTextColor="#9CA3AF"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-        />
-      </View>
-
-      {/* Stats Summary */}
-      {teachers.length > 0 && (
-        <View style={styles.statsSummary}>
-          <Text style={styles.statsText}>
-            {teachers.length} teacher{teachers.length !== 1 ? 's' : ''} found
-            {filter !== 'INTERNAL' ? ` (${filter})` : ''}
-          </Text>
-        </View>
-      )}
-
-      {/* Teachers List */}
       <FlatList
-        data={teachers}
-        renderItem={renderTeacherCard}
-        keyExtractor={(item) => 
-          item.id || 
-          item._id || 
-          item.userId || 
-          item.user?.id || 
-          Math.random().toString()
-        }
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
+        data={cards}
+        keyExtractor={(item) => item.child.id}
+        contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={["#005CFF"]}
-            tintColor="#005CFF"
+            onRefresh={() => fetchChildPhysioDetails(true)}
+            colors={["#4B3AFF"]}
+            tintColor="#4B3AFF"
           />
         }
         ListEmptyComponent={
-          !isSignedIn ? null : (
-            <View style={styles.emptyContainer}>
-              <Image source={icons.search} style={styles.emptyIcon} />
-              <Text style={styles.emptyTitle}>No Teachers Found</Text>
-              <Text style={styles.emptyText}>
-                {searchQuery 
-                  ? `No teachers match "${searchQuery}"`
-                  : filter !== 'INTERNAL'
-                  ? `No ${filter.toLowerCase()} teachers found`
-                  : "No teachers available"}
-              </Text>
-              <TouchableOpacity
-                style={styles.tryAgainButton}
-                onPress={handleRefresh}
-              >
-                <Text style={styles.tryAgainText}>Refresh</Text>
-              </TouchableOpacity>
-            </View>
-          )
+          <View style={styles.emptyWrap}>
+            <Ionicons name="people-outline" size={42} color="#94a3b8" />
+            <Text style={styles.emptyTitle}>No children found</Text>
+            <Text style={styles.emptySub}>Child-linked physiotherapist details will appear here.</Text>
+          </View>
         }
+        renderItem={({ item }) => {
+          const status = statusMeta[item.status];
+          return (
+            <View style={styles.card}>
+              <View style={styles.childHeader}>
+                <View style={styles.childAvatar}>
+                  <Ionicons name="person" size={16} color="#4B3AFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.childName}>
+                    {item.child.firstName} {item.child.lastName}
+                  </Text>
+                  <Text style={styles.childLabel}>Assigned Child</Text>
+                </View>
+                <View style={[styles.statusBadge, { borderColor: status.color, backgroundColor: `${status.color}14` }]}>
+                  <View style={[styles.statusDot, { backgroundColor: status.color }]} />
+                  <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+                </View>
+              </View>
+
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionTitle}>Therapist</Text>
+                <Text style={styles.valuePrimary}>
+                  {item.physio?.name ?? item.child.assignedDoctor ?? "Not assigned"}
+                </Text>
+                <Text style={styles.valueSecondary}>
+                  {item.physio?.specialization || item.physio?.role || "No specialization"}
+                </Text>
+              </View>
+
+              {!!item.physio && (
+                <>
+                  <View style={styles.sectionBlock}>
+                    <Text style={styles.sectionTitle}>Availability</Text>
+                    <Text style={styles.valueSecondary}>
+                      Last Updated: {item.physio.availabilityUpdatedAt ? fmtDate(item.physio.availabilityUpdatedAt) : "Not updated"}
+                    </Text>
+                    {!!item.physio.availabilityNote && (
+                      <Text style={styles.valueSecondary}>Note: {item.physio.availabilityNote}</Text>
+                    )}
+                    {!!item.nextUnavailable?.date && (
+                      <Text style={styles.valueSecondary}>
+                        Next Off: {fmtDate(item.nextUnavailable.date)}
+                        {item.nextUnavailable.reason ? ` (${item.nextUnavailable.reason})` : ""}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={styles.sectionBlock}>
+                    <Text style={styles.sectionTitle}>Contact</Text>
+                    <View style={styles.rowInline}>
+                      <Ionicons name="call-outline" size={14} color="#64748b" />
+                      <Text style={styles.valueSecondary}>{item.physio.phone || "Not available"}</Text>
+                    </View>
+                    <View style={styles.rowInline}>
+                      <Ionicons name="mail-outline" size={14} color="#64748b" />
+                      <Text style={styles.valueSecondary}>{item.physio.email || "Not available"}</Text>
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+          );
+        }}
       />
+
+      <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchChildPhysioDetails(false)}>
+        <Ionicons name="refresh" size={16} color="#fff" />
+        <Text style={styles.refreshText}>Refresh</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -479,281 +231,158 @@ const Teachers = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#f1f5f9",
+  },
+  hero: {
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 14,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
-  centeredContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    paddingHorizontal: 40,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#6B7280",
-  },
-  authTitle: {
+  heroTitle: {
     fontSize: 20,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 8,
-    textAlign: "center",
+    fontWeight: "700",
+    color: "#fff",
   },
-  authText: {
-    fontSize: 16,
-    color: "#6B7280",
-    textAlign: "center",
-    lineHeight: 24,
+  heroSub: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.92)",
   },
-  filterContainer: {
-    flexDirection: "row",
-    marginBottom: 16,
-    gap: 8,
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-  },
-  filterButtonActive: {
-    backgroundColor: "#005CFF",
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6B7280",
-  },
-  filterButtonTextActive: {
-    color: "#FFFFFF",
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
+  listContent: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
+    paddingBottom: 90,
+    paddingTop: 12,
+    gap: 10,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  searchIcon: {
-    width: 20,
-    height: 20,
-    tintColor: "#9CA3AF",
-    marginRight: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#1F2937",
-  },
-  statsSummary: {
-    backgroundColor: "#EFF6FF",
+    borderColor: "#e2e8f0",
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  statsText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#005CFF",
-    textAlign: "center",
-  },
-  listContainer: {
-    paddingBottom: 20,
-  },
-  teacherCard: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
   },
-  teacherInfo: {
+  childHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    flex: 1,
+    alignItems: "center",
+    marginBottom: 10,
+    gap: 10,
   },
-  avatarContainer: {
-    position: "relative",
-    marginRight: 12,
-  },
-  avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  childAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#EEF0FF",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
   },
-  avatarImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
-  avatarText: {
-    color: "white",
-    fontWeight: "bold",
+  childName: {
     fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
   },
-  teacherTypeBadge: {
-    position: "absolute",
-    bottom: -5,
-    right: -5,
-    backgroundColor: "#10B981",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+  childLabel: {
+    fontSize: 11,
+    color: "#64748b",
   },
-  internalBadge: {
-    backgroundColor: "#005CFF",
+  sectionBlock: {
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    paddingTop: 9,
+    marginTop: 8,
   },
-  externalBadge: {
-    backgroundColor: "#8B5CF6",
-  },
-  teacherTypeText: {
-    color: "white",
-    fontSize: 8,
-    fontWeight: "bold",
-  },
-  teacherDetails: {
-    flex: 1,
-  },
-  teacherName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginBottom: 2,
-  },
-  teacherEmail: {
+  sectionTitle: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#64748b",
+    fontWeight: "600",
     marginBottom: 4,
+    textTransform: "uppercase",
   },
-  teacherSubject: {
+  valuePrimary: {
     fontSize: 14,
-    color: "#005CFF",
-    marginBottom: 4,
+    color: "#111827",
     fontWeight: "600",
   },
-  additionalSubjects: {
+  valueSecondary: {
     fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 8,
+    color: "#64748b",
+    marginTop: 2,
   },
-  statsContainer: {
+  rowInline: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-  starsContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  starIcon: {
-    width: 15,
-    height: 15,
-    marginRight: 4,
-    tintColor: "#F59E0B",
-  },
-  starsText: {
-    fontSize: 14,
-    color: "#6B7280",
+    gap: 6,
+    marginTop: 3,
   },
   statusBadge: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 10,
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: "#F3F4F6",
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  statusActive: {
-    color: "#10B981",
-  },
-  statusPending: {
-    color: "#F59E0B",
-  },
-  statusSuspended: {
-    color: "#EF4444",
-  },
-  statusInactive: {
-    color: "#6B7280",
-  },
-  chatButton: {
-    backgroundColor: "#005CFF",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 3,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 12,
-    minWidth: 80,
+    gap: 5,
   },
-  chatButtonText: {
-    color: "white",
-    fontSize: 14,
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 11,
     fontWeight: "600",
   },
-  chatIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 6,
-    tintColor: "white",
-  },
-  emptyContainer: {
+  centerWrap: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
+    gap: 10,
+    backgroundColor: "#f8fafc",
   },
-  emptyIcon: {
-    width: 60,
-    height: 60,
-    tintColor: "#9CA3AF",
-    marginBottom: 16,
+  loadingText: {
+    color: "#64748b",
+    fontSize: 13,
+  },
+  emptyWrap: {
+    marginTop: 80,
+    alignItems: "center",
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 8,
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#334155",
   },
-  emptyText: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    marginBottom: 20,
-    paddingHorizontal: 20,
+  emptySub: {
+    marginTop: 4,
+    color: "#64748b",
+    fontSize: 12,
   },
-  tryAgainButton: {
-    backgroundColor: "#005CFF",
-    paddingHorizontal: 24,
+  refreshBtn: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
+    backgroundColor: "#4B3AFF",
+    borderRadius: 24,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    elevation: 3,
   },
-  tryAgainText: {
-    color: "white",
-    fontSize: 14,
+  refreshText: {
+    color: "#fff",
+    fontSize: 13,
     fontWeight: "600",
   },
 });
 
-export default Teachers;
+export default PhysiotherapistDetailsScreen;

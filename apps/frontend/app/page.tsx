@@ -1,20 +1,42 @@
+// app/page.tsx
 "use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthRedirect } from "@/hooks/use-auth-redirect";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function Home() {
   const router = useRouter();
-
-  // Automatically redirect authenticated users to their dashboard
-  useAuthRedirect();
+  const user = useAuthStore((state) => state.user);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   useEffect(() => {
-    // Redirect to sign-in page by default
-    router.push("/sign-in");
-  }, [router]);
+    // Wait for loading to finish
+    if (isLoading) return;
 
+    // If no user, send them to sign-in
+    if (!user) {
+      router.replace("/sign-in");
+      return;
+    }
+
+    // User is authenticated, send them to the correct dashboard
+    // This acts as a safety net.
+    switch (user.role) {
+      case "SUPER_ADMIN":
+      case "ADMIN":
+        router.replace("/admin");
+        break;
+      case "HOSPITAL_ADMIN":
+        router.replace("/admin");
+        break;
+      // ... other roles ...
+      default:
+        router.replace("/sign-in");
+    }
+  }, [isLoading, user, router]);
+
+  // Show a loading spinner
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">

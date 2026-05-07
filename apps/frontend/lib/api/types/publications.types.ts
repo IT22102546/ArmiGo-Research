@@ -31,15 +31,12 @@ export interface CreatePublicationData {
   description: string;
   shortDescription?: string;
   coverImage?: string;
-  price: number;
+  price?: number;
   discountPrice?: number;
   fileUrl: string;
   fileSize?: number;
   fileType?: string;
   previewUrl?: string;
-  gradeId?: string;
-  subjectId?: string;
-  mediumId?: string;
   author?: string;
   publisher?: string;
   status?: "DRAFT" | "PUBLISHED" | "ARCHIVED";

@@ -8,6 +8,7 @@ export interface User {
   lastName: string;
   role:
     | "SUPER_ADMIN"
+    | "HOSPITAL_ADMIN"
     | "ADMIN"
     | "INTERNAL_TEACHER"
     | "EXTERNAL_TEACHER"

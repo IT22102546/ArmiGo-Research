@@ -1,7 +1,7 @@
 {
   "name": "@learnup/shared",
   "version": "1.0.0",
-  "description": "Shared types and utilities for LearnApp platform",
+  "description": "Shared types and utilities for Armigo platform",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

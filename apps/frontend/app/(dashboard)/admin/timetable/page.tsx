@@ -1,7 +1,7 @@
 "use client";
 
-import { TimetableBuilder } from "@/components/features/timetable/TimetableBuilder";
+import TimetableManagement from "@/components/features/timetable/TimetableManagement";
 
 export default function TimetablePage() {
-  return <TimetableBuilder />;
+  return <TimetableManagement />;
 }

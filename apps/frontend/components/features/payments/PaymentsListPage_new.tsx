@@ -146,7 +146,7 @@ const initialPayments: Payment[] = [
   {
     id: "PAY-2024-003",
     userId: "user-3",
-    amount: 00,
+    amount: 0,
     currency: "LKR",
     status: "PENDING",
     method: "BANK_SLIP",
@@ -161,13 +161,13 @@ const initialPayments: Payment[] = [
       email: "saman.p@email.com",
       phone: "+94 71 234 5678",
     },
-    deviceModel: null,
+    deviceModel: undefined,
     quantity: 1,
   },
   {
     id: "PAY-2024-004",
     userId: "user-4",
-    amount: 00,
+    amount: 0,
     currency: "LKR",
     status: "COMPLETED",
     method: "DEBIT_CARD",
@@ -203,7 +203,7 @@ const initialPayments: Payment[] = [
       email: "ruwan.j@email.com",
       phone: "+94 72 456 7890",
     },
-    deviceModel: null,
+    deviceModel: undefined,
     quantity: 3,
   },
   {
@@ -230,7 +230,7 @@ const initialPayments: Payment[] = [
   {
     id: "PAY-2024-007",
     userId: "user-7",
-    amount: 00,
+    amount: 0,
     currency: "LKR",
     status: "COMPLETED",
     method: "DIGITAL_WALLET",
@@ -245,7 +245,7 @@ const initialPayments: Payment[] = [
       email: "chamara.d@email.com",
       phone: "+94 76 678 9012",
     },
-    deviceModel: null,
+    deviceModel: undefined,
     quantity: 1,
   },
   {
@@ -272,7 +272,7 @@ const initialPayments: Payment[] = [
   {
     id: "PAY-2024-009",
     userId: "user-9",
-    amount: 00,
+    amount: 0,
     currency: "LKR",
     status: "COMPLETED",
     method: "ONLINE_PAYMENT",
@@ -287,7 +287,7 @@ const initialPayments: Payment[] = [
       email: "madhavi.s@email.com",
       phone: "+94 75 890 1234",
     },
-    deviceModel: null,
+    deviceModel: undefined,
     quantity: 2,
   },
   {

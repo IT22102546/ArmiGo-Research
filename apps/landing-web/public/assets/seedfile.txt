@@ -1,0 +1,1808 @@
+/**
+ * =============================================================================
+ * LEARNUP PLATFORM - DATABASE SEED FILE
+ * =============================================================================
+ * Comprehensive seed file for the LearnUp learning management system.
+ *
+ * This creates all required seed data for development/testing:
+ * 1. Core Master Data: Academic Years, Grades (1-11), Mediums, Subjects
+ * 2. Location Hierarchy: Provinces, Districts, Zones (Sri Lanka)
+ * 3. Users: All 6 roles with proper profiles
+ * 4. Classes, Timetables, and Sessions
+ * 5. Exams with questions and attempts
+ * 6. Wallets, Payments, and Transactions
+ * 7. Publications and Course Materials
+ * 8. Seminars and Notifications
+ *
+ * Academic Year: 2026
+ *
+ * @see seed-utils.ts for utility functions
+ * =============================================================================
+ */
+
+import {
+  PrismaClient,
+  UserRole,
+  UserStatus,
+  ClassStatus,
+  ExamType,
+  ExamFormat,
+  ExamStatus,
+  ExamCategory,
+  ApprovalStatus,
+  RankingLevel,
+  PaymentStatus,
+  PaymentMethod,
+  PublicationStatus,
+  SeminarStatus,
+  SessionStatus,
+  TransactionType,
+  ChatMessageType,
+  NotificationType,
+  NotificationStatus,
+  AttendanceType,
+  EnrollmentStatus,
+  QuestionType,
+  MaterialType,
+  LogType,
+  AuditAction,
+} from "@prisma/client";
+
+import {
+  CURRENT_ACADEMIC_YEAR,
+  SEED_CONSTANTS,
+  getDefaultPasswordHash,
+  sequenceTracker,
+  log,
+  academicYearStart,
+  academicYearEnd,
+  nextAcademicYearStart,
+  nextAcademicYearEnd,
+  academicDate,
+} from "./seed-utils";
+
+const prisma = new PrismaClient();
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function logPasswordInfo(): void {
+  if (!process.env.SEED_PASSWORD) {
+    console.log("\nâš ï¸  SEED_PASSWORD environment variable not set.");
+    console.log(
+      `ðŸ“ Using default seed password: ${SEED_CONSTANTS.DEFAULT_PASSWORD}`
+    );
+    console.log("   Set SEED_PASSWORD env var for custom password.\n");
+  }
+}
+
+// ============================================================================
+// CLEANUP FUNCTION
+// ============================================================================
+
+async function cleanupExistingData(): Promise<void> {
+  log.section("CLEANUP: Removing existing seed data");
+
+  // Delete in reverse dependency order to avoid foreign key violations
+  // Order matters: child tables first, then parent tables
+
+  // Logging and Feedback
+  await prisma.feedback.deleteMany({});
+  await prisma.auditLog.deleteMany({});
+
+  // Authentication and Security
+  await prisma.passwordReset.deleteMany({});
+  await prisma.emailVerification.deleteMany({});
+  await prisma.deviceToken.deleteMany({});
+  await prisma.refreshToken.deleteMany({});
+  await prisma.authSession.deleteMany({});
+  await prisma.accountLockout.deleteMany({});
+
+  // Access and Availability
+  await prisma.temporaryAccess.deleteMany({});
+  await prisma.teacherAvailability.deleteMany({});
+
+  // Progress and Communication
+  await prisma.studentProgress.deleteMany({});
+  await prisma.chatMessage.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.scheduledNotification.deleteMany({});
+
+  // Seminars
+  await prisma.seminarRegistration.deleteMany({});
+  await prisma.seminar.deleteMany({});
+
+  // Publications
+  await prisma.publicationReview.deleteMany({});
+  await prisma.publicationPurchase.deleteMany({});
+  await prisma.publicationMedium.deleteMany({});
+  await prisma.publicationSubject.deleteMany({});
+  await prisma.publicationGrade.deleteMany({});
+  await prisma.publication.deleteMany({});
+
+  // Payments and Wallet
+  await prisma.payment.deleteMany({});
+  await prisma.walletTransaction.deleteMany({});
+  await prisma.wallet.deleteMany({});
+
+  // Exams
+  await prisma.examAnswer.deleteMany({});
+  await prisma.examAttempt.deleteMany({});
+  await prisma.examRanking.deleteMany({});
+  await prisma.examQuestion.deleteMany({});
+  await prisma.questionGroup.deleteMany({});
+  await prisma.examSection.deleteMany({});
+  await prisma.exam.deleteMany({});
+  await prisma.examTemplate.deleteMany({});
+
+  // Classes and Sessions
+  await prisma.attendance.deleteMany({});
+  await prisma.enrollment.deleteMany({});
+  await prisma.sessionParticipant.deleteMany({});
+  await prisma.recording.deleteMany({});
+  await prisma.classSession.deleteMany({});
+  await prisma.videoSession.deleteMany({});
+  await prisma.timetableChange.deleteMany({});
+  await prisma.timetable.deleteMany({});
+
+  // Course Materials
+  await prisma.courseMaterial.deleteMany({});
+
+  // Classes
+  await prisma.class.deleteMany({});
+
+  // Subject structure
+  await prisma.gradeSubjectOffering.deleteMany({});
+
+  // User-related data
+  await prisma.faceRecognition.deleteMany({});
+  await prisma.studentStarAward.deleteMany({});
+  await prisma.studentSubject.deleteMany({});
+  await prisma.studentProfile.deleteMany({});
+  await prisma.teacherSubjectAssignment.deleteMany({});
+  await prisma.teacherProfile.deleteMany({});
+  await prisma.user.deleteMany({});
+
+  // Sibling groups
+  await prisma.siblingGroup.deleteMany({});
+
+  log.success("Cleanup completed");
+}
+
+// ============================================================================
+// MAIN SEED FUNCTION
+// ============================================================================
+
+async function main() {
+  logPasswordInfo();
+
+  // Clean existing data
+  await cleanupExistingData();
+
+  // Get password hash
+  const passwordHash = await getDefaultPasswordHash();
+
+  // ========================================================================
+  // SECTION 1: CORE MASTER DATA
+  // ========================================================================
+  log.section("1. CORE MASTER DATA");
+
+  // --- Academic Years ---
+  const academicYear2026 = await prisma.academicYear.upsert({
+    where: { year: CURRENT_ACADEMIC_YEAR.toString() },
+    update: { isCurrent: true },
+    create: {
+      year: CURRENT_ACADEMIC_YEAR.toString(),
+      startDate: academicYearStart(),
+      endDate: academicYearEnd(),
+      isCurrent: true,
+    },
+  });
+
+  const academicYear2027 = await prisma.academicYear.upsert({
+    where: { year: (CURRENT_ACADEMIC_YEAR + 1).toString() },
+    update: { isCurrent: false },
+    create: {
+      year: (CURRENT_ACADEMIC_YEAR + 1).toString(),
+      startDate: nextAcademicYearStart(),
+      endDate: nextAcademicYearEnd(),
+      isCurrent: false,
+    },
+  });
+
+  log.success(
+    `Academic Years: ${CURRENT_ACADEMIC_YEAR} (current), ${CURRENT_ACADEMIC_YEAR + 1}`
+  );
+
+  // --- Mediums (Languages of Instruction) ---
+  const [mediumTamil, mediumSinhala, mediumEnglish] = await Promise.all([
+    prisma.medium.upsert({
+      where: { name: "Tamil" },
+      update: {},
+      create: { name: "Tamil", description: "Tamil Medium - à®¤à®®à®¿à®´à¯ à®®à®¾à®¤à®¿à®¯à®®à¯" },
+    }),
+    prisma.medium.upsert({
+      where: { name: "Sinhala" },
+      update: {},
+      create: {
+        name: "Sinhala",
+        description: "Sinhala Medium - à·ƒà·’à¶‚à·„à¶½ à¶¸à·à¶°à·Šâ€à¶ºà¶º",
+      },
+    }),
+    prisma.medium.upsert({
+      where: { name: "English" },
+      update: {},
+      create: { name: "English", description: "English Medium" },
+    }),
+  ]);
+
+  log.success("Mediums: Tamil, Sinhala, English");
+
+  // --- Grades (1-11 for O/L curriculum) ---
+  const grades = await Promise.all(
+    Array.from({ length: 11 }, (_, i) => {
+      const gradeNum = i + 1;
+      return prisma.grade.upsert({
+        where: { name: `Grade ${gradeNum}` },
+        update: {},
+        create: {
+          name: `Grade ${gradeNum}`,
+          sortOrder: gradeNum,
+          isActive: true,
+        },
+      });
+    })
+  );
+
+  // Quick references
+  const grade6 = grades[5];
+  const grade7 = grades[6];
+  const grade8 = grades[7];
+  const grade9 = grades[8];
+  const grade10 = grades[9];
+  const grade11 = grades[10];
+
+  log.success(`Grades: 1-11 (${grades.length} grades created)`);
+
+  // --- Subjects ---
+  const [
+    subjectMaths,
+    subjectScience,
+    subjectTamil,
+    subjectEnglish,
+    subjectHistory,
+  ] = await Promise.all([
+    prisma.subject.upsert({
+      where: { name: "Mathematics" },
+      update: {},
+      create: {
+        name: "Mathematics",
+        description: "Mathematics for Grade 6-11 (O/L Curriculum)",
+        isActive: true,
+      },
+    }),
+    prisma.subject.upsert({
+      where: { name: "Science" },
+      update: {},
+      create: {
+        name: "Science",
+        description: "Science for Grade 6-11 (O/L Curriculum)",
+        isActive: true,
+      },
+    }),
+    prisma.subject.upsert({
+      where: { name: "Tamil Language" },
+      update: {},
+      create: {
+        name: "Tamil Language",
+        description: "Tamil Language and Literature",
+        isActive: true,
+      },
+    }),
+    prisma.subject.upsert({
+      where: { name: "English Language" },
+      update: {},
+      create: {
+        name: "English Language",
+        description: "English Language for Grade 6-11",
+        isActive: true,
+      },
+    }),
+    prisma.subject.upsert({
+      where: { name: "History" },
+      update: {},
+      create: {
+        name: "History",
+        description: "History for Grade 6-11 (O/L Curriculum)",
+        isActive: true,
+      },
+    }),
+  ]);
+
+  log.success("Subjects: Mathematics, Science, Tamil, English, History");
+
+  // --- GradeSubjectOffering Links (cross-product of grade+subject+medium) ---
+  const gradeSubjectOfferingLinks = [
+    // Grade 10 - Mathematics (all 3 mediums)
+    {
+      gradeId: grade10.id,
+      subjectId: subjectMaths.id,
+      mediumId: mediumTamil.id,
+    },
+    {
+      gradeId: grade10.id,
+      subjectId: subjectMaths.id,
+      mediumId: mediumSinhala.id,
+    },
+    {
+      gradeId: grade10.id,
+      subjectId: subjectMaths.id,
+      mediumId: mediumEnglish.id,
+    },
+    // Grade 10 - Science (Tamil and English)
+    {
+      gradeId: grade10.id,
+      subjectId: subjectScience.id,
+      mediumId: mediumTamil.id,
+    },
+    {
+      gradeId: grade10.id,
+      subjectId: subjectScience.id,
+      mediumId: mediumEnglish.id,
+    },
+    // Grade 10 - English (English only)
+    {
+      gradeId: grade10.id,
+      subjectId: subjectEnglish.id,
+      mediumId: mediumEnglish.id,
+    },
+    // Grade 10 - History (Tamil and English)
+    {
+      gradeId: grade10.id,
+      subjectId: subjectHistory.id,
+      mediumId: mediumTamil.id,
+    },
+    {
+      gradeId: grade10.id,
+      subjectId: subjectHistory.id,
+      mediumId: mediumEnglish.id,
+    },
+    // Grade 11 - Mathematics (all 3 mediums)
+    {
+      gradeId: grade11.id,
+      subjectId: subjectMaths.id,
+      mediumId: mediumTamil.id,
+    },
+    {
+      gradeId: grade11.id,
+      subjectId: subjectMaths.id,
+      mediumId: mediumSinhala.id,
+    },
+    {
+      gradeId: grade11.id,
+      subjectId: subjectMaths.id,
+      mediumId: mediumEnglish.id,
+    },
+    // Grade 11 - Science (Tamil and English)
+    {
+      gradeId: grade11.id,
+      subjectId: subjectScience.id,
+      mediumId: mediumTamil.id,
+    },
+    {
+      gradeId: grade11.id,
+      subjectId: subjectScience.id,
+      mediumId: mediumEnglish.id,
+    },
+    // Grade 11 - English (English only)
+    {
+      gradeId: grade11.id,
+      subjectId: subjectEnglish.id,
+      mediumId: mediumEnglish.id,
+    },
+  ];
+
+  await Promise.all(
+    gradeSubjectOfferingLinks.map((link) =>
+      prisma.gradeSubjectOffering.upsert({
+        where: {
+          gradeId_subjectId_mediumId: {
+            gradeId: link.gradeId,
+            subjectId: link.subjectId,
+            mediumId: link.mediumId,
+          },
+        },
+        update: {},
+        create: link,
+      })
+    )
+  );
+
+  log.success("GradeSubjectOffering links created");
+
+  // ========================================================================
+  // SECTION 2: LOCATION DATA (Sri Lanka)
+  // ========================================================================
+  log.section("2. LOCATION DATA");
+
+  // Sri Lanka Administrative Structure
+  const locationData: Record<string, Record<string, string[]>> = {
+    "Northern Province": {
+      "Jaffna District": [
+        "Jaffna",
+        "Vadamarachchi",
+        "Valikamam",
+        "Thenmarachchi",
+      ],
+      "Kilinochchi District": ["Kilinochchi"],
+      "Mannar District": ["Mannar"],
+      "Mullaitivu District": ["Mullaitivu"],
+      "Vavuniya District": ["Vavuniya"],
+    },
+    "Eastern Province": {
+      "Batticaloa District": ["Batticaloa"],
+      "Ampara District": ["Ampara"],
+      "Trincomalee District": ["Trincomalee"],
+    },
+    "Western Province": {
+      "Colombo District": ["Colombo", "Homagama", "Piliyandala"],
+      "Gampaha District": ["Gampaha", "Negombo"],
+      "Kalutara District": ["Kalutara"],
+    },
+    "Central Province": {
+      "Kandy District": ["Kandy", "Gampola"],
+      "Matale District": ["Matale"],
+      "Nuwara Eliya District": ["Nuwara Eliya"],
+    },
+    "Southern Province": {
+      "Galle District": ["Galle"],
+      "Matara District": ["Matara"],
+      "Hambantota District": ["Hambantota"],
+    },
+  };
+
+  // Create location hierarchy
+  let provinceOrder = 0;
+  let districtOrder = 0;
+  let zoneOrder = 0;
+
+  // Track specific zones for later use
+  let zoneJaffna: Awaited<ReturnType<typeof prisma.zone.upsert>> | null = null;
+  let zoneVadamarachchi: Awaited<ReturnType<typeof prisma.zone.upsert>> | null =
+    null;
+  let districtJaffna: Awaited<
+    ReturnType<typeof prisma.district.upsert>
+  > | null = null;
+
+  for (const [provinceName, districts] of Object.entries(locationData)) {
+    const province = await prisma.province.upsert({
+      where: { name: provinceName },
+      update: {},
+      create: { name: provinceName, sortOrder: provinceOrder++ },
+    });
+
+    for (const [districtName, zones] of Object.entries(districts)) {
+      const district = await prisma.district.upsert({
+        where: { name: districtName },
+        update: {},
+        create: {
+          name: districtName,
+          provinceId: province.id,
+          sortOrder: districtOrder++,
+        },
+      });
+
+      if (districtName === "Jaffna District") {
+        districtJaffna = district;
+      }
+
+      for (const zoneName of zones) {
+        const zone = await prisma.zone.upsert({
+          where: { name: zoneName },
+          update: {},
+          create: {
+            name: zoneName,
+            districtId: district.id,
+            sortOrder: zoneOrder++,
+          },
+        });
+
+        if (zoneName === "Jaffna") zoneJaffna = zone;
+        if (zoneName === "Vadamarachchi") zoneVadamarachchi = zone;
+      }
+    }
+  }
+
+  log.success(
+    `Locations: ${Object.keys(locationData).length} Provinces with Districts and Zones`
+  );
+
+  // ========================================================================
+  // SECTION 3: USERS AND PROFILES
+  // ========================================================================
+  log.section("3. USERS AND PROFILES");
+
+  // --- Super Admin ---
+  const superAdmin = await prisma.user.upsert({
+    where: { email: "superadmin@learnapp.lk" },
+    update: {},
+    create: {
+      phone: "+94770000001",
+      email: "superadmin@learnapp.lk",
+      password: passwordHash,
+      firstName: "Super",
+      lastName: "Admin",
+      role: UserRole.SUPER_ADMIN,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  // --- Admin ---
+  const admin = await prisma.user.upsert({
+    where: { email: "admin@learnapp.lk" },
+    update: {},
+    create: {
+      phone: "+94770000002",
+      email: "admin@learnapp.lk",
+      password: passwordHash,
+      firstName: "Platform",
+      lastName: "Admin",
+      role: UserRole.ADMIN,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  // --- Internal Teachers ---
+  const teacherMaths = await prisma.user.upsert({
+    where: { email: "teacher.maths@learnapp.lk" },
+    update: {},
+    create: {
+      phone: "+94770000003",
+      email: "teacher.maths@learnapp.lk",
+      password: passwordHash,
+      firstName: "Kumaran",
+      lastName: "Mathematics",
+      role: UserRole.INTERNAL_TEACHER,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const teacherScience = await prisma.user.upsert({
+    where: { email: "teacher.science@learnapp.lk" },
+    update: {},
+    create: {
+      phone: "+94770000004",
+      email: "teacher.science@learnapp.lk",
+      password: passwordHash,
+      firstName: "Priya",
+      lastName: "Science",
+      role: UserRole.INTERNAL_TEACHER,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  // --- Internal Students ---
+  const studentInternal1 = await prisma.user.upsert({
+    where: { email: "student.internal1@learnapp.lk" },
+    update: {},
+    create: {
+      phone: "+94770000006",
+      email: "student.internal1@learnapp.lk",
+      password: passwordHash,
+      firstName: "Arun",
+      lastName: "Student",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const studentInternal2 = await prisma.user.upsert({
+    where: { email: "student.internal2@learnapp.lk" },
+    update: {},
+    create: {
+      phone: "+94770000007",
+      email: "student.internal2@learnapp.lk",
+      password: passwordHash,
+      firstName: "Deepa",
+      lastName: "Student",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  // --- External Student ---
+  const studentExternal = await prisma.user.upsert({
+    where: { email: "student.external@learnapp.lk" },
+    update: {},
+    create: {
+      phone: "+94770000008",
+      email: "student.external@learnapp.lk",
+      password: passwordHash,
+      firstName: "Kavi",
+      lastName: "External",
+      role: UserRole.EXTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  log.success("Users: 1 SuperAdmin, 1 Admin, 3 Teachers, 3 Students");
+
+  // --- Teacher Profiles ---
+  const teacherMathsProfile = await prisma.teacherProfile.upsert({
+    where: { userId: teacherMaths.id },
+    update: {},
+    create: {
+      userId: teacherMaths.id,
+      employeeId: "TCH-MATHS-001",
+      nic: "199012345678",
+      requiredZoneIds: [zoneJaffna!.id],
+      requiredDistrictIds: [districtJaffna!.id],
+      teachingLevel: "O/L",
+      currentSchool: "Pulamai Viththakan",
+      schoolType: "1AB",
+      department: "Mathematics",
+      specialization: "O/L & A/L Mathematics",
+      experience: 8,
+      qualifications: ["B.Ed (Mathematics)", "PGDE"],
+      canCreateExams: true,
+      canMonitorExams: true,
+      canManageClasses: true,
+      maxClassesPerWeek: 20,
+      certifications: ["National Teaching Certificate"],
+      performanceRating: 4.5,
+    },
+  });
+
+  const teacherScienceProfile = await prisma.teacherProfile.upsert({
+    where: { userId: teacherScience.id },
+    update: {},
+    create: {
+      userId: teacherScience.id,
+      employeeId: "TCH-SCI-001",
+      nic: "199112345679",
+      requiredZoneIds: [zoneJaffna!.id],
+      requiredDistrictIds: [districtJaffna!.id],
+      teachingLevel: "O/L",
+      currentSchool: "Pulamai Viththakan",
+      schoolType: "1AB",
+      department: "Science",
+      specialization: "O/L Science - Biology & Chemistry",
+      experience: 5,
+      qualifications: ["B.Ed (Science)", "BSc (Biology)"],
+      canCreateExams: true,
+      canMonitorExams: true,
+      canManageClasses: true,
+      maxClassesPerWeek: 18,
+      certifications: [],
+      performanceRating: 4.2,
+    },
+  });
+
+  log.success("Teacher Profiles: 2 profiles created");
+
+  // --- Student Profiles ---
+  // Grade 10 Internal Student
+  // A/L batch year = 2026 + (14 - 10) = 2030
+  const studentInternal1Profile = await prisma.studentProfile.upsert({
+    where: { userId: studentInternal1.id },
+    update: {},
+    create: {
+      userId: studentInternal1.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        10
+      ),
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mr. Arun's Father",
+      guardianPhone: "+94771000001",
+      guardianEmail: "guardian1@email.com",
+      guardianRelationship: "Father",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name, subjectScience.name],
+      monthlyPaymentAmount: 2500,
+      paymentDayOfMonth: 5,
+      isPaid: true,
+      lastPaymentDate: academicDate(2, 5, 10, 0),
+      paymentDueDate: academicDate(3, 5),
+    },
+  });
+
+  // Grade 11 Internal Student
+  // A/L batch year = 2026 + (14 - 11) = 2029
+  const studentInternal2Profile = await prisma.studentProfile.upsert({
+    where: { userId: studentInternal2.id },
+    update: {},
+    create: {
+      userId: studentInternal2.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        11
+      ),
+      gradeId: grade11.id,
+      mediumId: mediumEnglish.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mrs. Deepa's Mother",
+      guardianPhone: "+94771000002",
+      guardianEmail: "guardian2@email.com",
+      guardianRelationship: "Mother",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name, subjectScience.name],
+      monthlyPaymentAmount: 2500,
+      paymentDayOfMonth: 5,
+      isPaid: true,
+      lastPaymentDate: academicDate(2, 5, 10, 0),
+      paymentDueDate: academicDate(3, 5),
+    },
+  });
+
+  // Grade 10 External Student
+  // A/L batch year = 2026 + (14 - 10) = 2030
+  const studentExternalProfile = await prisma.studentProfile.upsert({
+    where: { userId: studentExternal.id },
+    update: {},
+    create: {
+      userId: studentExternal.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.EXTERNAL_STUDENT,
+        10
+      ),
+      gradeId: grade10.id,
+      mediumId: mediumEnglish.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mr. Kavi's Father",
+      guardianPhone: "+94771000003",
+      guardianEmail: "guardian3@email.com",
+      guardianRelationship: "Father",
+      schoolName: "External School A",
+      sourceInstitution: "Private Tuition Center",
+      preferredSubjects: [subjectMaths.name],
+    },
+  });
+
+  // ------------------------------------------------
+  // ADDITIONAL DUMMY STUDENTS - Grade 10 (5 students)
+  // ------------------------------------------------
+  const grade10Student1 = await prisma.user.upsert({
+    where: { phone: "+94771234001" },
+    update: {},
+    create: {
+      phone: "+94771234001",
+      email: "grade10.student1@learnapp.lk",
+      password: passwordHash,
+      firstName: "Ashan",
+      lastName: "Perera",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade10StudentProfile1 = await prisma.studentProfile.upsert({
+    where: { userId: grade10Student1.id },
+    update: {},
+    create: {
+      userId: grade10Student1.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        10,
+        "PV"
+      ),
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mr. Perera",
+      guardianPhone: "+94771234011",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name, subjectScience.name],
+    },
+  });
+
+  const grade10Student2 = await prisma.user.upsert({
+    where: { phone: "+94771234002" },
+    update: {},
+    create: {
+      phone: "+94771234002",
+      email: "grade10.student2@learnapp.lk",
+      password: passwordHash,
+      firstName: "Nisha",
+      lastName: "Fernando",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade10StudentProfile2 = await prisma.studentProfile.upsert({
+    where: { userId: grade10Student2.id },
+    update: {},
+    create: {
+      userId: grade10Student2.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        10,
+        "PV"
+      ),
+      gradeId: grade10.id,
+      mediumId: mediumEnglish.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mrs. Fernando",
+      guardianPhone: "+94771234012",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name, subjectScience.name],
+    },
+  });
+
+  const grade10Student3 = await prisma.user.upsert({
+    where: { phone: "+94771234003" },
+    update: {},
+    create: {
+      phone: "+94771234003",
+      email: "grade10.student3@learnapp.lk",
+      password: passwordHash,
+      firstName: "Kamal",
+      lastName: "Silva",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade10StudentProfile3 = await prisma.studentProfile.upsert({
+    where: { userId: grade10Student3.id },
+    update: {},
+    create: {
+      userId: grade10Student3.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        10,
+        "PV"
+      ),
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mr. Silva",
+      guardianPhone: "+94771234013",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name],
+    },
+  });
+
+  const grade10Student4 = await prisma.user.upsert({
+    where: { phone: "+94771234004" },
+    update: {},
+    create: {
+      phone: "+94771234004",
+      email: "grade10.student4@learnapp.lk",
+      password: passwordHash,
+      firstName: "Priya",
+      lastName: "Rajendran",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade10StudentProfile4 = await prisma.studentProfile.upsert({
+    where: { userId: grade10Student4.id },
+    update: {},
+    create: {
+      userId: grade10Student4.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        10,
+        "PV"
+      ),
+      gradeId: grade10.id,
+      mediumId: mediumEnglish.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Dr. Rajendran",
+      guardianPhone: "+94771234014",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name, subjectScience.name],
+    },
+  });
+
+  const grade10Student5 = await prisma.user.upsert({
+    where: { phone: "+94771234005" },
+    update: {},
+    create: {
+      phone: "+94771234005",
+      email: "grade10.student5@learnapp.lk",
+      password: passwordHash,
+      firstName: "Dinesh",
+      lastName: "Wijesinghe",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade10StudentProfile5 = await prisma.studentProfile.upsert({
+    where: { userId: grade10Student5.id },
+    update: {},
+    create: {
+      userId: grade10Student5.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        10,
+        "PV"
+      ),
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mr. Wijesinghe",
+      guardianPhone: "+94771234015",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectScience.name],
+    },
+  });
+
+  // ------------------------------------------------
+  // ADDITIONAL DUMMY STUDENTS - Grade 11 (5 students)
+  // ------------------------------------------------
+  const grade11Student1 = await prisma.user.upsert({
+    where: { phone: "+94771235001" },
+    update: {},
+    create: {
+      phone: "+94771235001",
+      email: "grade11.student1@learnapp.lk",
+      password: passwordHash,
+      firstName: "Sachini",
+      lastName: "Gunawardena",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade11StudentProfile1 = await prisma.studentProfile.upsert({
+    where: { userId: grade11Student1.id },
+    update: {},
+    create: {
+      userId: grade11Student1.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        11,
+        "PV"
+      ),
+      gradeId: grade11.id,
+      mediumId: mediumEnglish.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mrs. Gunawardena",
+      guardianPhone: "+94771235011",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name],
+    },
+  });
+
+  const grade11Student2 = await prisma.user.upsert({
+    where: { phone: "+94771235002" },
+    update: {},
+    create: {
+      phone: "+94771235002",
+      email: "grade11.student2@learnapp.lk",
+      password: passwordHash,
+      firstName: "Roshan",
+      lastName: "Jayasinghe",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade11StudentProfile2 = await prisma.studentProfile.upsert({
+    where: { userId: grade11Student2.id },
+    update: {},
+    create: {
+      userId: grade11Student2.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        11,
+        "PV"
+      ),
+      gradeId: grade11.id,
+      mediumId: mediumTamil.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mr. Jayasinghe",
+      guardianPhone: "+94771235012",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name],
+    },
+  });
+
+  const grade11Student3 = await prisma.user.upsert({
+    where: { phone: "+94771235003" },
+    update: {},
+    create: {
+      phone: "+94771235003",
+      email: "grade11.student3@learnapp.lk",
+      password: passwordHash,
+      firstName: "Lakshmi",
+      lastName: "Wickramasinghe",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade11StudentProfile3 = await prisma.studentProfile.upsert({
+    where: { userId: grade11Student3.id },
+    update: {},
+    create: {
+      userId: grade11Student3.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        11,
+        "PV"
+      ),
+      gradeId: grade11.id,
+      mediumId: mediumEnglish.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Dr. Wickramasinghe",
+      guardianPhone: "+94771235013",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name],
+    },
+  });
+
+  const grade11Student4 = await prisma.user.upsert({
+    where: { phone: "+94771235004" },
+    update: {},
+    create: {
+      phone: "+94771235004",
+      email: "grade11.student4@learnapp.lk",
+      password: passwordHash,
+      firstName: "Thilak",
+      lastName: "Samaraweera",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade11StudentProfile4 = await prisma.studentProfile.upsert({
+    where: { userId: grade11Student4.id },
+    update: {},
+    create: {
+      userId: grade11Student4.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        11,
+        "PV"
+      ),
+      gradeId: grade11.id,
+      mediumId: mediumTamil.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mrs. Samaraweera",
+      guardianPhone: "+94771235014",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name],
+    },
+  });
+
+  const grade11Student5 = await prisma.user.upsert({
+    where: { phone: "+94771235005" },
+    update: {},
+    create: {
+      phone: "+94771235005",
+      email: "grade11.student5@learnapp.lk",
+      password: passwordHash,
+      firstName: "Amara",
+      lastName: "Dias",
+      role: UserRole.INTERNAL_STUDENT,
+      status: UserStatus.ACTIVE,
+      districtId: districtJaffna!.id,
+      twoFactorEnabled: false,
+      twoFactorBackupCodes: [],
+      passwordHistory: [],
+    },
+  });
+
+  const grade11StudentProfile5 = await prisma.studentProfile.upsert({
+    where: { userId: grade11Student5.id },
+    update: {},
+    create: {
+      userId: grade11Student5.id,
+      studentId: sequenceTracker.getNextRegistrationNumber(
+        UserRole.INTERNAL_STUDENT,
+        11,
+        "PV"
+      ),
+      gradeId: grade11.id,
+      mediumId: mediumEnglish.id,
+      academicYear: academicYear2026.year,
+      guardianName: "Mr. Dias",
+      guardianPhone: "+94771235015",
+      schoolName: "Pulamai Viththakan",
+      preferredSubjects: [subjectMaths.name],
+    },
+  });
+
+  console.log("âœ… Created 5 Grade 10 dummy students");
+  console.log("âœ… Created 5 Grade 11 dummy students");
+
+  // StudentSubject links (with mediumId matching GradeSubjectOfferings)
+  await Promise.all([
+    // Student Internal 1 (Grade 10, Tamil Medium) - Maths & Science
+    prisma.studentSubject.upsert({
+      where: {
+        studentProfileId_subjectId_academicYearId: {
+          studentProfileId: studentInternal1Profile.id,
+          subjectId: subjectMaths.id,
+          academicYearId: academicYear2026.id,
+        },
+      },
+      update: {},
+      create: {
+        studentProfileId: studentInternal1Profile.id,
+        subjectId: subjectMaths.id,
+        mediumId: mediumTamil.id,
+        academicYearId: academicYear2026.id,
+        isActive: true,
+      },
+    }),
+    prisma.studentSubject.upsert({
+      where: {
+        studentProfileId_subjectId_academicYearId: {
+          studentProfileId: studentInternal1Profile.id,
+          subjectId: subjectScience.id,
+          academicYearId: academicYear2026.id,
+        },
+      },
+      update: {},
+      create: {
+        studentProfileId: studentInternal1Profile.id,
+        subjectId: subjectScience.id,
+        mediumId: mediumTamil.id,
+        academicYearId: academicYear2026.id,
+        isActive: true,
+      },
+    }),
+    // Student Internal 2 (Grade 11, English Medium) - Maths & Science
+    prisma.studentSubject.upsert({
+      where: {
+        studentProfileId_subjectId_academicYearId: {
+          studentProfileId: studentInternal2Profile.id,
+          subjectId: subjectMaths.id,
+          academicYearId: academicYear2026.id,
+        },
+      },
+      update: {},
+      create: {
+        studentProfileId: studentInternal2Profile.id,
+        subjectId: subjectMaths.id,
+        mediumId: mediumEnglish.id,
+        academicYearId: academicYear2026.id,
+        isActive: true,
+      },
+    }),
+    prisma.studentSubject.upsert({
+      where: {
+        studentProfileId_subjectId_academicYearId: {
+          studentProfileId: studentInternal2Profile.id,
+          subjectId: subjectScience.id,
+          academicYearId: academicYear2026.id,
+        },
+      },
+      update: {},
+      create: {
+        studentProfileId: studentInternal2Profile.id,
+        subjectId: subjectScience.id,
+        mediumId: mediumEnglish.id,
+        academicYearId: academicYear2026.id,
+        isActive: true,
+      },
+    }),
+    // External Student (Grade 10, English Medium) - Maths
+    prisma.studentSubject.upsert({
+      where: {
+        studentProfileId_subjectId_academicYearId: {
+          studentProfileId: studentExternalProfile.id,
+          subjectId: subjectMaths.id,
+          academicYearId: academicYear2026.id,
+        },
+      },
+      update: {},
+      create: {
+        studentProfileId: studentExternalProfile.id,
+        subjectId: subjectMaths.id,
+        mediumId: mediumEnglish.id,
+        academicYearId: academicYear2026.id,
+        isActive: true,
+      },
+    }),
+  ]);
+
+  log.success("StudentSubject enrollments created (with mediumId)");
+
+  // ========================================================================
+  // SECTION 4: TEACHER ASSIGNMENTS
+  // ========================================================================
+  log.section("4. TEACHER ASSIGNMENTS");
+
+  const mathsAssignment = await prisma.teacherSubjectAssignment.upsert({
+    where: {
+      teacherProfileId_subjectId_gradeId_mediumId_academicYearId: {
+        teacherProfileId: teacherMathsProfile.id,
+        subjectId: subjectMaths.id,
+        gradeId: grade10.id,
+        mediumId: mediumTamil.id,
+        academicYearId: academicYear2026.id,
+      },
+    },
+    update: {},
+    create: {
+      teacherProfileId: teacherMathsProfile.id,
+      subjectId: subjectMaths.id,
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      academicYearId: academicYear2026.id,
+      isActive: true,
+      canCreateExams: true,
+      maxStudents: 200,
+      paymentRate: 5000,
+      paymentRateType: "PER_CLASS",
+      paymentCurrency: "LKR",
+    },
+  });
+
+  const scienceAssignment = await prisma.teacherSubjectAssignment.upsert({
+    where: {
+      teacherProfileId_subjectId_gradeId_mediumId_academicYearId: {
+        teacherProfileId: teacherScienceProfile.id,
+        subjectId: subjectScience.id,
+        gradeId: grade10.id,
+        mediumId: mediumTamil.id,
+        academicYearId: academicYear2026.id,
+      },
+    },
+    update: {},
+    create: {
+      teacherProfileId: teacherScienceProfile.id,
+      subjectId: subjectScience.id,
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      academicYearId: academicYear2026.id,
+      isActive: true,
+      canCreateExams: true,
+      maxStudents: 150,
+      paymentRate: 4500,
+      paymentRateType: "PER_CLASS",
+      paymentCurrency: "LKR",
+    },
+  });
+
+  log.success("Teacher Assignments: 2 assignments created");
+
+  // ========================================================================
+  // SECTION 5: CLASSES AND TIMETABLES
+  // ========================================================================
+  log.section("5. CLASSES AND TIMETABLES");
+
+  const mathsClass = await prisma.class.create({
+    data: {
+      name: "Grade 10 Mathematics - Batch 01",
+      description: "Online class for Grade 10 Mathematics (Tamil Medium)",
+      status: ClassStatus.ACTIVE,
+      maxStudents: 200,
+      isPublic: true,
+      requiresApproval: true,
+      isLive: false,
+      teacherId: teacherMaths.id,
+      subjectId: subjectMaths.id,
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      teacherAssignmentId: mathsAssignment.id,
+    },
+  });
+
+  const scienceClass = await prisma.class.create({
+    data: {
+      name: "Grade 10 Science - Batch 01",
+      description: "Online class for Grade 10 Science (Tamil Medium)",
+      status: ClassStatus.DRAFT,
+      maxStudents: 150,
+      isPublic: false,
+      requiresApproval: true,
+      isLive: false,
+      teacherId: teacherScience.id,
+      subjectId: subjectScience.id,
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      teacherAssignmentId: scienceAssignment.id,
+    },
+  });
+
+  log.success("Classes: 2 classes created");
+
+  // --- Timetables ---
+  const mathsTimetable = await prisma.timetable.create({
+    data: {
+      teacherId: teacherMaths.id,
+      subjectId: subjectMaths.id,
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      teacherAssignmentId: mathsAssignment.id,
+      classLink: `https://${SEED_CONSTANTS.VIDEO_DOMAIN}/grade10-maths`,
+      classId: mathsClass.id,
+      dayOfWeek: 6, // Saturday
+      startTime: "10:00",
+      endTime: "12:00",
+      validFrom: academicYearStart(),
+      validUntil: academicYearEnd(),
+      recurring: true,
+      active: true,
+      academicYearId: academicYear2026.id,
+      term: 1,
+      color: "#4F46E5",
+      notes: "Weekly Mathematics class for Grade 10",
+      createdBy: admin.id,
+    },
+  });
+
+  const scienceTimetable = await prisma.timetable.create({
+    data: {
+      teacherId: teacherScience.id,
+      subjectId: subjectScience.id,
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      teacherAssignmentId: scienceAssignment.id,
+      classLink: `https://${SEED_CONSTANTS.VIDEO_DOMAIN}/grade10-science`,
+      classId: scienceClass.id,
+      dayOfWeek: 0, // Sunday
+      startTime: "08:00",
+      endTime: "10:00",
+      validFrom: academicYearStart(),
+      validUntil: academicYearEnd(),
+      recurring: true,
+      active: true,
+      academicYearId: academicYear2026.id,
+      term: 1,
+      color: "#10B981",
+      notes: "Weekly Science class for Grade 10",
+      createdBy: admin.id,
+    },
+  });
+
+  log.success("Timetables: 2 timetables created");
+
+  // --- Video Session and Class Session ---
+  const sessionDate = academicDate(2, 7, 10, 0); // Feb 7, 2026, 10:00 AM
+
+  const videoSession = await prisma.videoSession.create({
+    data: {
+      classId: mathsClass.id,
+      hostId: teacherMaths.id,
+      title: "Grade 10 Maths - Live Class",
+      description: "Algebra and Linear Equations - Week 1",
+      status: SessionStatus.SCHEDULED,
+      scheduledStartTime: sessionDate,
+      durationMinutes: 120,
+      videoRoomName: `grade10-maths-${CURRENT_ACADEMIC_YEAR}-02-07`,
+      videoDomain: SEED_CONSTANTS.VIDEO_DOMAIN,
+      maxParticipants: 200,
+      recordSession: true,
+      createdById: teacherMaths.id,
+    },
+  });
+
+  const classSession = await prisma.classSession.create({
+    data: {
+      classId: mathsClass.id,
+      timetableId: mathsTimetable.id,
+      date: sessionDate,
+      startTime: sessionDate,
+      endTime: academicDate(2, 7, 12, 0),
+      status: SessionStatus.SCHEDULED,
+      videoSessionId: videoSession.id,
+    },
+  });
+
+  log.success("Sessions: 1 VideoSession and 1 ClassSession created");
+
+  // --- Enrollments ---
+  await prisma.enrollment.create({
+    data: {
+      classId: mathsClass.id,
+      studentId: studentInternal1.id,
+      status: EnrollmentStatus.ACTIVE,
+      progress: 25,
+      isPaid: true,
+    },
+  });
+
+  await prisma.enrollment.create({
+    data: {
+      classId: mathsClass.id,
+      studentId: studentExternal.id,
+      status: EnrollmentStatus.ACTIVE,
+      progress: 10,
+      isPaid: true,
+    },
+  });
+
+  log.success("Enrollments: 2 enrollments created");
+
+  // ========================================================================
+  // SECTION 6: EXAMS
+  // ========================================================================
+  log.section("6. EXAMS AND QUESTIONS");
+
+  const mathsExam = await prisma.exam.create({
+    data: {
+      title: "Grade 10 Maths - Algebra Test",
+      description:
+        "Unit test covering algebraic expressions and linear equations",
+      type: ExamType.MIXED,
+      category: ExamCategory.UNIT_EXAM,
+      format: ExamFormat.FULL_ONLINE,
+      status: ExamStatus.PENDING_APPROVAL,
+      approvalStatus: ApprovalStatus.PENDING,
+      duration: 60,
+      totalMarks: 100,
+      passingMarks: 40,
+      attemptsAllowed: 1,
+      part1Marks: 50,
+      part2Marks: 50,
+      allowFileUpload: false,
+      allowedFileTypes: [],
+      enableRanking: true,
+      rankingLevels: [
+        RankingLevel.NATIONAL,
+        RankingLevel.DISTRICT,
+        RankingLevel.ZONAL,
+      ],
+      startTime: academicDate(2, 14, 9, 0),
+      endTime: academicDate(2, 14, 10, 0),
+      timeZone: SEED_CONSTANTS.TIMEZONE,
+      classId: mathsClass.id,
+      createdById: teacherMaths.id,
+      subjectId: subjectMaths.id,
+      gradeId: grade10.id,
+      mediumId: mediumTamil.id,
+      academicYearId: academicYear2026.id,
+      instructions:
+        "Answer all questions. Camera must be on. No calculators for Part I.",
+      allowedResources:
+        "Pen, paper, calculator (non-programmable) for Part II only",
+    },
+  });
+
+  log.success("Exams: 1 exam created");
+
+  // --- Exam Questions ---
+  await prisma.examQuestion.create({
+    data: {
+      examId: mathsExam.id,
+      type: QuestionType.MULTIPLE_CHOICE,
+      question: "What is 2 + 3?",
+      options: JSON.stringify(["3", "4", "5", "6"]),
+      correctAnswer: "5",
+      points: 5,
+      order: 1,
+      examPart: 1,
+      section: "PART_I",
+    },
+  });
+
+  await prisma.examQuestion.create({
+    data: {
+      examId: mathsExam.id,
+      type: QuestionType.MULTIPLE_CHOICE,
+      question: "Solve for x: 2x + 5 = 15",
+      options: JSON.stringify(["3", "4", "5", "10"]),
+      correctAnswer: "5",
+      points: 5,
+      order: 2,
+      examPart: 1,
+      section: "PART_I",
+    },
+  });
+
+  await prisma.examQuestion.create({
+    data: {
+      examId: mathsExam.id,
+      type: QuestionType.TRUE_FALSE,
+      question: "The equation xÂ² = 4 has exactly two solutions.",
+      options: JSON.stringify(["True", "False"]),
+      correctAnswer: "True",
+      points: 5,
+      order: 3,
+      examPart: 1,
+      section: "PART_I",
+    },
+  });
+
+  log.success("Exam Questions: 3 questions created");
+
+  // ========================================================================
+  // SECTION 7: WALLETS AND PAYMENTS
+  // ========================================================================
+  log.section("7. WALLETS AND PAYMENTS");
+
+  const studentWallet = await prisma.wallet.create({
+    data: {
+      userId: studentInternal1.id,
+      balance: 5000,
+      creditBalance: 50,
+      totalCredits: 100,
+      totalDebits: 50,
+    },
+  });
+
+  await prisma.walletTransaction.create({
+    data: {
+      walletId: studentWallet.id,
+      amount: 5000,
+      credits: 50,
+      type: TransactionType.CREDIT,
+      balanceBefore: 0,
+      balanceAfter: 5000,
+      description: "Initial wallet top-up",
+      referenceType: "TOPUP",
+    },
+  });
+
+  log.success("Wallets: 1 wallet with transaction created");
+
+  // --- Payment ---
+  await prisma.payment.create({
+    data: {
+      userId: studentInternal1.id,
+      amount: 2500,
+      currency: "LKR",
+      status: PaymentStatus.COMPLETED,
+      method: PaymentMethod.BANK_TRANSFER,
+      description: "Monthly fee payment - February 2026",
+      processedAt: academicDate(2, 5, 10, 0),
+    },
+  });
+
+  log.success("Payments: 1 payment created");
+
+  // ========================================================================
+  // SECTION 8: PUBLICATIONS AND MATERIALS
+  // ========================================================================
+  log.section("8. PUBLICATIONS AND MATERIALS");
+
+  const publication = await prisma.publication.create({
+    data: {
+      title: "Grade 10 Mathematics Guide",
+      description: "Comprehensive guide for O/L Mathematics",
+      shortDescription: "Complete O/L Maths guide",
+      price: 1500,
+      discountPrice: 1200,
+      fileUrl: "https://files.learnapp.local/publications/g10-maths-guide.pdf",
+      fileSize: 5000000,
+      fileType: "application/pdf",
+      status: PublicationStatus.PUBLISHED,
+      publishedAt: academicDate(1, 15),
+      createdById: teacherMaths.id,
+    },
+  });
+
+  // Link publication to grade and subject
+  await prisma.publicationGrade.create({
+    data: { publicationId: publication.id, gradeId: grade10.id },
+  });
+
+  await prisma.publicationSubject.create({
+    data: { publicationId: publication.id, subjectId: subjectMaths.id },
+  });
+
+  await prisma.publicationMedium.create({
+    data: { publicationId: publication.id, mediumId: mediumTamil.id },
+  });
+
+  log.success("Publications: 1 publication created");
+
+  // --- Course Materials ---
+  await prisma.courseMaterial.create({
+    data: {
+      classId: mathsClass.id,
+      gradeId: grade10.id,
+      subjectId: subjectMaths.id,
+      title: "Algebra Notes - Chapter 1",
+      description: "Introduction to algebraic expressions",
+      type: MaterialType.NOTES,
+      fileUrl: "https://files.learnapp.local/materials/g10-maths-ch1.pdf",
+      fileSize: 2500000,
+      fileType: "application/pdf",
+      isPublic: false,
+      uploadedById: teacherMaths.id,
+    },
+  });
+
+  log.success("Course Materials: 1 material created");
+
+  // ========================================================================
+  // SECTION 9: SEMINARS
+  // ========================================================================
+  log.section("9. SEMINARS");
+
+  await prisma.seminar.create({
+    data: {
+      title: "O/L Exam Preparation Workshop",
+      description: "Tips and strategies for O/L exam success",
+      speakerName: "Mr. Kumaran",
+      topic: "Exam Preparation",
+      targetAudience: ["Grade 10", "Grade 11"],
+      scheduledAt: academicDate(3, 1, 14, 0),
+      duration: 120,
+      meetingLink: `https://${SEED_CONSTANTS.VIDEO_DOMAIN}/seminar-ol-prep`,
+      isPublic: true,
+      requiresSignup: true,
+      maxParticipants: 500,
+      status: SeminarStatus.SCHEDULED,
+      createdById: admin.id,
+    },
+  });
+
+  log.success("Seminars: 1 seminar created");
+
+  // ========================================================================
+  // SECTION 10: NOTIFICATIONS AND CHAT
+  // ========================================================================
+  log.section("10. NOTIFICATIONS AND CHAT");
+
+  await prisma.notification.create({
+    data: {
+      userId: studentInternal1.id,
+      type: NotificationType.CLASS_UPDATE,
+      status: NotificationStatus.UNREAD,
+      title: "New Class Scheduled",
+      message:
+        "Grade 10 Mathematics class has been scheduled for Saturday 10:00 AM",
+      sentAt: new Date(),
+    },
+  });
+
+  await prisma.chatMessage.create({
+    data: {
+      fromId: teacherMaths.id,
+      toId: studentInternal1.id,
+      messageType: ChatMessageType.DIRECT,
+      content: "Welcome to Grade 10 Mathematics class!",
+      attachments: [],
+    },
+  });
+
+  log.success("Notifications: 1 notification, 1 chat message created");
+
+  // ========================================================================
+  // SECTION 11: AUDIT LOGS
+  // ========================================================================
+  log.section("11. AUDIT LOGS");
+
+  await prisma.auditLog.create({
+    data: {
+      logType: LogType.AUDIT,
+      userId: admin.id,
+      action: AuditAction.CREATE,
+      entity: "CLASS",
+      entityId: mathsClass.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "seed-script",
+      endpoint: "/api/admin/classes",
+      httpMethod: "POST",
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      logType: LogType.SECURITY,
+      userId: admin.id,
+      action: AuditAction.LOGIN_SUCCESS,
+      entity: "AUTH",
+      entityId: "seed-login",
+      ipAddress: "127.0.0.1",
+      userAgent: "seed-script",
+      success: true,
+    },
+  });
+
+  log.success("Audit Logs: 2 log entries created");
+
+  // ========================================================================
+  // COMPLETION
+  // ========================================================================
+  log.section("SEED COMPLETED SUCCESSFULLY");
+
+  console.log(`
+ðŸ“Š Summary:
+   - Academic Years: 2 (${CURRENT_ACADEMIC_YEAR}, ${CURRENT_ACADEMIC_YEAR + 1})
+   - Grades: 11 (Grade 1-11)
+   - Mediums: 3 (Tamil, Sinhala, English)
+   - Subjects: 5
+   - Provinces/Districts/Zones: Sri Lanka hierarchy
+   - Users: 8 (2 Admins, 3 Teachers, 3 Students)
+   - Classes: 2
+   - Exams: 1 with 3 questions
+   - Publications: 1
+   - Seminars: 1
+
+ðŸ” Login Credentials:
+   Email: superadmin@learnapp.lk
+   Password: ${SEED_CONSTANTS.DEFAULT_PASSWORD}
+
+ðŸ“ Registration Numbers Generated:
+   - Internal Student (Grade 10): PV/IN/2030/001
+   - Internal Student (Grade 11): PV/IN/2029/001
+   - External Student (Grade 10): PV/EX/2030/001
+
+ðŸ“‹ StudentSubject Links:
+   - All enrollments include mediumId matching GradeSubjectOfferings
+   - Payment dates configured for internal students
+`);
+}
+
+// ============================================================================
+// EXECUTE
+// ============================================================================
+
+main()
+  .catch((e) => {
+    console.error("âŒ Seed failed:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

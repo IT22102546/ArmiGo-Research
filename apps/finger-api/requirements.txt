@@ -1,0 +1,13 @@
+# Core
+flask==3.0.3
+gunicorn==22.0.0
+
+# ML inference — use tflite-runtime (tiny, ~5 MB) instead of full TensorFlow
+# On Hostinger VPS: pip install tflite-runtime
+# On Hostinger shared hosting (Python via hPanel): same command in SSH terminal
+tflite-runtime==2.14.0
+
+# Preprocessing
+scikit-learn==1.4.2
+numpy==1.26.4
+joblib==1.4.2

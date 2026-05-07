@@ -1,257 +1,228 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   Put,
-  Delete,
-  Body,
-  Param,
   Query,
-  UseGuards,
   Request,
-  HttpCode,
-  HttpStatus,
-  UseInterceptors,
   UploadedFile,
+  UseInterceptors,
 } from "@nestjs/common";
-import { PublicationsService } from "./publications.service";
-import { StorageService } from "../../infrastructure/storage/storage.service";
-import { JwtAuthGuard } from "@common/guards";
-import { RolesGuard } from "@common/guards";
-import { Roles } from "@common/decorators";
-import { UserRole } from "@prisma/client";
-import {
-  CreatePublicationDto,
-  UpdatePublicationDto,
-  PublicationQueryDto,
-  CreateReviewDto,
-} from "./dto/publication.dto";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { AppException } from "@common/errors/app-exception";
-import { ErrorCode } from "@common/errors/error-codes.enum";
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { UsersService } from "@modules/users/users.service";
+import { StorageService } from "@infrastructure/storage/storage.service";
+import { PublicationsService } from "./publications.service";
+import { CreatePublicationDto, UpdatePublicationDto } from "./dtos/publication.dto";
 
+@ApiTags("Publications")
 @Controller("publications")
+@ApiBearerAuth()
 export class PublicationsController {
   constructor(
     private readonly publicationsService: PublicationsService,
+    private readonly usersService: UsersService,
     private readonly storageService: StorageService
   ) {}
 
-  /**
-   * Create publication (Admin/Teacher only)
-   */
-  @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(
-    UserRole.ADMIN,
-    UserRole.SUPER_ADMIN,
-    UserRole.INTERNAL_TEACHER,
-    UserRole.EXTERNAL_TEACHER
-  )
-  create(
-    @Body() createPublicationDto: CreatePublicationDto,
-    @Request() req: { user: { id: string } }
-  ) {
-    return this.publicationsService.create(createPublicationDto, req.user.id);
+  private async resolveScopedHospitalId(req: any): Promise<string | undefined> {
+    const roles = Array.isArray(req?.user?.roles)
+      ? req.user.roles
+      : [req?.user?.role].filter(Boolean);
+
+    const isHospitalScopedUser =
+      roles.includes("HOSPITAL_ADMIN") && req?.user?.email !== "armigo@gmail.com";
+
+    if (!isHospitalScopedUser) {
+      return undefined;
+    }
+
+    const userId = req?.user?.id || req?.user?.sub;
+    if (!userId) {
+      return undefined;
+    }
+
+    const user = await this.usersService.findById(userId);
+    return user?.hospitalProfile?.hospitalId || undefined;
   }
 
-  /**
-   * Upload file for publication (cover image or publication file)
-   * Integrated with S3 storage
-   */
-  @Post("upload")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(
-    UserRole.ADMIN,
-    UserRole.SUPER_ADMIN,
-    UserRole.INTERNAL_TEACHER,
-    UserRole.EXTERNAL_TEACHER
-  )
-  @UseInterceptors(FileInterceptor("file"))
-  async uploadFile(
-    @UploadedFile() file: Express.Multer.File,
-    @Body() body: { type?: string }
+  @Get()
+  @ApiOperation({ summary: "Get publications" })
+  async getAll(
+    @Request() req: any,
+    @Query("search") search?: string,
+    @Query("status") status?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string
   ) {
-    if (!file) {
-      throw AppException.badRequest(
-        ErrorCode.UPLOAD_FAILED,
-        "No file uploaded"
-      );
-    }
-
-    // Validate file type based on upload type
-    if (body.type === "publication") {
-      const allowedTypes = ["application/pdf", "application/epub+zip"];
-      if (!allowedTypes.includes(file.mimetype)) {
-        throw AppException.badRequest(
-          ErrorCode.INVALID_FILE_TYPE,
-          "Only PDF and EPUB files are allowed for publications"
-        );
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        throw AppException.badRequest(
-          ErrorCode.FILE_TOO_LARGE,
-          "Publication file too large. Max 50MB"
-        );
-      }
-    } else if (body.type === "cover") {
-      const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-      if (!allowedTypes.includes(file.mimetype)) {
-        throw AppException.badRequest(
-          ErrorCode.INVALID_FILE_TYPE,
-          "Only JPEG, PNG, and WebP images are allowed for covers"
-        );
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        throw AppException.badRequest(
-          ErrorCode.FILE_TOO_LARGE,
-          "Cover image too large. Max 5MB"
-        );
-      }
-    }
-
-    // Upload to S3 using StorageService
-    const folder = body.type === "publication" ? "publications" : "covers";
-    const result = await this.storageService.uploadFile(
-      file.buffer,
-      file.originalname,
-      file.mimetype,
-      folder
-    );
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const data = await this.publicationsService.getAll({
+      userId: req?.user?.id,
+      role: req?.user?.role,
+      scopedHospitalId,
+      search,
+      status,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+    });
 
     return {
-      url: result.url,
-      key: result.key,
-      bucket: result.bucket,
-      filename: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype,
+      success: true,
+      data,
     };
   }
 
-  /**
-   * Get all publications with filtering
-   */
-  @Get()
-  findAll(
-    @Query() query: PublicationQueryDto,
-    @Request() req: { user?: { id: string } }
-  ) {
-    // Pass userId if authenticated
-    return this.publicationsService.findAll(query);
-  }
-
-  /**
-   * Get publication by ID
-   */
   @Get(":id")
-  findOne(
-    @Param("id") id: string,
-    @Request() req: { user?: { userId: string } }
-  ) {
-    const userId = req.user?.userId;
-    return this.publicationsService.findOne(id, userId);
+  @ApiOperation({ summary: "Get publication by id" })
+  async getById(@Request() req: any, @Param("id") id: string) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const data = await this.publicationsService.getById(id, {
+      userId: req?.user?.id,
+      role: req?.user?.role,
+      scopedHospitalId,
+    });
+
+    return {
+      success: true,
+      data,
+    };
   }
 
-  /**
-   * Update publication (Admin/Teacher only)
-   */
+  @Post()
+  @ApiOperation({ summary: "Create publication" })
+  async create(@Request() req: any, @Body() body: CreatePublicationDto) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const data = await this.publicationsService.create(body, {
+      userId: req?.user?.id,
+      scopedHospitalId,
+    });
+
+    return {
+      success: true,
+      data,
+      message: "Publication created successfully",
+    };
+  }
+
   @Put(":id")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(
-    UserRole.ADMIN,
-    UserRole.SUPER_ADMIN,
-    UserRole.INTERNAL_TEACHER,
-    UserRole.EXTERNAL_TEACHER
-  )
-  update(
+  @ApiOperation({ summary: "Update publication" })
+  async update(
+    @Request() req: any,
     @Param("id") id: string,
-    @Body() updatePublicationDto: UpdatePublicationDto
+    @Body() body: UpdatePublicationDto
   ) {
-    return this.publicationsService.update(id, updatePublicationDto);
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const data = await this.publicationsService.update(id, body, {
+      userId: req?.user?.id,
+      role: req?.user?.role,
+      scopedHospitalId,
+    });
+
+    return {
+      success: true,
+      data,
+      message: "Publication updated successfully",
+    };
   }
 
-  /**
-   * Purchase publication
-   */
-  @Post(":id/purchase")
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  purchase(@Param("id") id: string, @Request() req: { user: { id: string } }) {
-    return this.publicationsService.purchase(id, req.user.id);
-  }
-
-  /**
-   * Get download URL for purchased publication
-   */
-  @Get(":id/download")
-  @UseGuards(JwtAuthGuard)
-  getDownloadUrl(
-    @Param("id") id: string,
-    @Request() req: { user: { id: string } }
-  ) {
-    return this.publicationsService.getDownloadUrl(id, req.user.id);
-  }
-
-  /**
-   * Create or update review
-   */
-  @Post(":id/review")
-  @UseGuards(JwtAuthGuard)
-  createReview(
-    @Param("id") id: string,
-    @Body() createReviewDto: CreateReviewDto,
-    @Request() req: { user: { id: string } }
-  ) {
-    return this.publicationsService.createReview(
-      id,
-      req.user.id,
-      createReviewDto
-    );
-  }
-
-  /**
-   * Get user's purchases
-   */
-  @Get("user/purchases")
-  @UseGuards(JwtAuthGuard)
-  getUserPurchases(
-    @Request() req: { user: { id: string } },
-    @Query("page") page?: number,
-    @Query("limit") limit?: number
-  ) {
-    return this.publicationsService.getUserPurchases(req.user.id, page, limit);
-  }
-
-  /**
-   * Get publication purchasers (Admin only)
-   */
-  @Get(":id/purchasers")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  getPublicationPurchasers(
-    @Param("id") id: string,
-    @Query("page") page?: number,
-    @Query("limit") limit?: number
-  ) {
-    return this.publicationsService.getPublicationPurchasers(id, page, limit);
-  }
-
-  /**
-   * Delete publication (Admin/Teacher)
-   */
   @Delete(":id")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(
-    UserRole.ADMIN,
-    UserRole.SUPER_ADMIN,
-    UserRole.INTERNAL_TEACHER,
-    UserRole.EXTERNAL_TEACHER
-  )
-  remove(
-    @Param("id") id: string,
-    @Request() req: { user: { id: string; role: UserRole } }
+  @ApiOperation({ summary: "Delete publication" })
+  async delete(@Request() req: any, @Param("id") id: string) {
+    const scopedHospitalId = await this.resolveScopedHospitalId(req);
+    const result = await this.publicationsService.delete(id, {
+      userId: req?.user?.id,
+      role: req?.user?.role,
+      scopedHospitalId,
+    });
+
+    return {
+      success: true,
+      message: result.message,
+    };
+  }
+
+  @Post("upload")
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        file: {
+          type: "string",
+          format: "binary",
+        },
+        type: {
+          type: "string",
+          enum: ["publication", "cover"],
+          default: "publication",
+        },
+      },
+      required: ["file"],
+    },
+  })
+  @ApiOperation({ summary: "Upload publication file" })
+  @UseInterceptors(FileInterceptor("file"))
+  async uploadFile(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File,
+    @Body("type") type?: "publication" | "cover"
   ) {
-    return this.publicationsService.remove(id, req.user);
+    if (!file) {
+      throw new BadRequestException("No file uploaded");
+    }
+
+    const uploadType = type === "cover" ? "cover" : "publication";
+
+    const allowedPublicationTypes = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+
+    const allowedCoverTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
+    if (
+      uploadType === "publication" &&
+      !allowedPublicationTypes.includes(file.mimetype)
+    ) {
+      throw new BadRequestException("Only PDF, DOC, and DOCX files are allowed");
+    }
+
+    if (uploadType === "cover" && !allowedCoverTypes.includes(file.mimetype)) {
+      throw new BadRequestException("Only image files are allowed for cover");
+    }
+
+    const uploaded = await this.storageService.uploadFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      "publication",
+      {
+        fileName: file.originalname,
+        fileType: file.mimetype,
+        fileSize: file.size,
+        userId: req?.user?.id,
+        category: "publication",
+        maxSize: 50 * 1024 * 1024,
+        allowedMimeTypes:
+          uploadType === "publication" ? allowedPublicationTypes : allowedCoverTypes,
+      }
+    );
+
+    return {
+      success: true,
+      data: {
+        url: uploaded.url,
+        key: uploaded.key,
+        bucket: uploaded.bucket,
+        filename: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+      },
+    };
   }
 }

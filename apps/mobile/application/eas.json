@@ -29,13 +29,14 @@
     },
     "production": {
       "android": {
-        "buildType": "aapp-bundle",
-        "gradleCommand": ":pp:bundleRelease"
+       "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
         
       },
       "env": {
-        "EXPO_PUBLIC_NODE_STORAGE_URL": "https://learnappbc.obtaste.com/uploads",
-        "EXPO_PUBLIC_API_KEY": "https://learnappbc.obtaste.com"
+        "EXPO_PUBLIC_API_KEY":"https://api.armigorehab.com",
+        "EXPO_PUBLIC_NODE_STORAGE_URL":"https://api.armigorehab.com/uploads",
+        "EXPO_PUBLIC_API_URL":"https://api.armigorehab.com"
       },
       "autoIncrement": true
     }

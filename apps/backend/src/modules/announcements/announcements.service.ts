@@ -1,516 +1,258 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "@database/prisma.service";
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '@database/prisma.service';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import {
-  UserRole,
-  AnnouncementPriority,
-  AnnouncementType,
-} from "@prisma/client";
-import { AppException } from "../../common/errors/app-exception";
-import { ErrorCode } from "../../common/errors/error-codes.enum";
-import {
+  AnnouncementListQueryDto,
   CreateAnnouncementDto,
   UpdateAnnouncementDto,
-  AnnouncementFiltersDto,
-} from "./dto";
+} from './dtos/announcement.dto';
 
 @Injectable()
 export class AnnouncementsService {
   private readonly logger = new Logger(AnnouncementsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
-  async create(dto: CreateAnnouncementDto, createdById: string) {
-    const announcement = await this.prisma.announcement.create({
+  async getAnnouncements(query: AnnouncementListQueryDto) {
+    const page = Number(query?.page || 1);
+    const limit = Number(query?.limit || 20);
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    const andConditions: any[] = [];
+
+    if (query?.type && query.type !== 'ALL') {
+      where.type = query.type;
+    }
+
+    if (query?.status === 'ACTIVE') {
+      where.isActive = true;
+    } else if (query?.status === 'INACTIVE') {
+      where.isActive = false;
+    }
+
+    if (query?.search?.trim()) {
+      const search = query.search.trim();
+      andConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { content: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // Filter by targetRoles if role is specified (e.g. CUSTOMER from mobile app)
+    if (query?.role?.trim()) {
+      const role = query.role.trim().toUpperCase();
+      andConditions.push({
+        OR: [
+          { targetRoles: { has: role } },
+          { targetRoles: { has: 'ALL' } },
+          { targetRoles: { isEmpty: true } },
+        ],
+      });
+      // Exclude expired announcements for role-based queries
+      andConditions.push({
+        OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
+    }
+
+    const [rows, total] = await Promise.all([
+      this.prisma.announcement.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ createdAt: 'desc' }],
+      }),
+      this.prisma.announcement.count({ where }),
+    ]);
+
+    return {
+      items: rows.map((item) => this.toAnnouncementResponse(item)),
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getAnnouncementById(id: string) {
+    const row = await this.prisma.announcement.findUnique({ where: { id } });
+    if (!row) {
+      throw new NotFoundException(`Announcement with ID ${id} not found`);
+    }
+
+    return this.toAnnouncementResponse(row);
+  }
+
+  async createAnnouncement(body: CreateAnnouncementDto) {
+    const row = await this.prisma.announcement.create({
       data: {
-        title: dto.title,
-        content: dto.content,
-        type: dto.type,
-        priority: dto.priority,
-        targetRoles: dto.targetRoles || [],
-        publishedAt: dto.publishedAt ? new Date(dto.publishedAt) : new Date(),
-        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
-        attachments: dto.attachments || [],
-        metadata: dto.metadata || {},
-        createdById,
+        title: body.title,
+        content: body.content,
+        type: body.type || 'GENERAL',
+        priority: body.priority || 'NORMAL',
+        targetRoles: body.targetRoles || [],
         isActive: true,
-      },
-      include: {
-        creator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        grades: {
-          include: {
-            grade: true,
-          },
-        },
+        publishedAt: body.publishedAt ? new Date(body.publishedAt) : new Date(),
+        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
       },
     });
 
-    // Create grade associations if provided
-    if (dto.targetGrades && dto.targetGrades.length > 0) {
-      await this.prisma.announcementGrade.createMany({
-        data: dto.targetGrades.map((gradeId) => ({
-          announcementId: announcement.id,
-          gradeId,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    this.logger.log(`Announcement created: ${announcement.id}`);
-    return announcement;
-  }
-
-  async getAll(filters: AnnouncementFiltersDto) {
-    const {
-      page = 1,
-      limit = 20,
-      type,
-      isActive,
-      search,
-      priorityMin,
-      targetRole,
-    } = filters;
-    const skip = (page - 1) * limit;
-
-    const where: any = {};
-
-    if (type) {
-      where.type = type;
-    }
-
-    if (isActive !== undefined) {
-      where.isActive = isActive;
-    }
-
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: "insensitive" } },
-        { content: { contains: search, mode: "insensitive" } },
-      ];
-    }
-
-    if (targetRole) {
-      where.targetRoles = { has: targetRole };
-    }
-
-    const [announcements, total] = await Promise.all([
-      this.prisma.announcement.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: [{ priority: "desc" }, { publishedAt: "desc" }],
-        include: {
-          creator: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          grades: {
-            include: {
-              grade: true,
-            },
-          },
-          _count: {
-            select: {
-              reads: true,
-            },
-          },
-        },
-      }),
-      this.prisma.announcement.count({ where }),
-    ]);
-
-    return {
-      data: announcements,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  async getUserAnnouncements(
-    userId: string,
-    userRole: UserRole,
-    filters: AnnouncementFiltersDto
-  ) {
-    const { page = 1, limit = 20 } = filters;
-    const skip = (page - 1) * limit;
-    const now = new Date();
-
-    // Get user's grade if they are a student
-    let userGradeId: string | null = null;
-    if (
-      userRole === UserRole.INTERNAL_STUDENT ||
-      userRole === UserRole.EXTERNAL_STUDENT
-    ) {
-      const studentProfile = await this.prisma.studentProfile.findFirst({
-        where: { userId },
-        select: { gradeId: true },
-      });
-      userGradeId = studentProfile?.gradeId || null;
-    }
-
-    const where: any = {
-      isActive: true,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      AND: [
-        {
-          OR: [{ publishedAt: null }, { publishedAt: { lte: now } }],
-        },
-        {
-          OR: [
-            { targetRoles: { isEmpty: true } },
-            { targetRoles: { has: userRole } },
-          ],
-        },
-      ],
-    };
-
-    // Add grade filter for students
-    if (userGradeId) {
-      where.AND.push({
-        OR: [
-          { grades: { none: {} } },
-          { grades: { some: { gradeId: userGradeId } } },
-        ],
-      });
-    }
-
-    const [announcements, total] = await Promise.all([
-      this.prisma.announcement.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: [{ priority: "desc" }, { publishedAt: "desc" }],
-        include: {
-          creator: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          reads: {
-            where: { userId },
-            select: { readAt: true },
-          },
-        },
-      }),
-      this.prisma.announcement.count({ where }),
-    ]);
-
-    return {
-      data: announcements.map((a) => ({
-        ...a,
-        isRead: a.reads.length > 0,
-        readAt: a.reads[0]?.readAt || null,
-      })),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  async getUnreadCount(userId: string) {
-    // Get user's role and grade
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        role: true,
-        studentProfile: {
-          select: { gradeId: true },
-        },
-      },
+    // Send push notifications for customer-targeted announcements
+    this.notifyAnnouncementRecipients(row).catch((err) => {
+      this.logger.warn(`Failed to send announcement push notifications: ${err?.message}`);
     });
 
-    if (!user) {
-      return { unreadCount: 0 };
-    }
-
-    const now = new Date();
-    const userGradeId = user.studentProfile?.gradeId;
-
-    const where: any = {
-      isActive: true,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      AND: [
-        {
-          OR: [{ publishedAt: null }, { publishedAt: { lte: now } }],
-        },
-        {
-          OR: [
-            { targetRoles: { isEmpty: true } },
-            { targetRoles: { has: user.role } },
-          ],
-        },
-        {
-          reads: {
-            none: { userId },
-          },
-        },
-      ],
-    };
-
-    if (userGradeId) {
-      where.AND.push({
-        OR: [
-          { grades: { none: {} } },
-          { grades: { some: { gradeId: userGradeId } } },
-        ],
-      });
-    }
-
-    const unreadCount = await this.prisma.announcement.count({ where });
-
-    return { unreadCount };
+    return this.toAnnouncementResponse(row);
   }
 
-  async getDetail(id: string) {
-    const announcement = await this.prisma.announcement.findUnique({
-      where: { id },
-      include: {
-        creator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        grades: {
-          include: {
-            grade: true,
-          },
-        },
-        _count: {
-          select: {
-            reads: true,
-          },
-        },
-      },
-    });
+  /**
+   * Send push notifications to users whose roles match the announcement's targetRoles.
+   * If targetRoles is empty, sends to PARENT users (mobile app customers).
+   */
+  private async notifyAnnouncementRecipients(announcement: any) {
+    const roles = (announcement.targetRoles || []).map((r: string) =>
+      r.toUpperCase(),
+    );
+    const targetCustomer =
+      roles.length === 0 ||
+      roles.some((r: string) => ['CUSTOMER', 'PARENT', 'ALL'].includes(r));
 
-    if (!announcement) {
-      throw AppException.notFound(
-        ErrorCode.ANNOUNCEMENT_NOT_FOUND,
-        "Announcement not found"
-      );
-    }
+    if (!targetCustomer) return;
 
-    return announcement;
-  }
-
-  async getStatistics(id: string) {
-    const announcement = await this.prisma.announcement.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            reads: true,
-          },
-        },
-      },
-    });
-
-    if (!announcement) {
-      throw AppException.notFound(
-        ErrorCode.ANNOUNCEMENT_NOT_FOUND,
-        "Announcement not found"
-      );
-    }
-
-    // Get target user count
-    const targetCount = await this.getTargetUserCount(announcement);
-
-    return {
-      id: announcement.id,
-      title: announcement.title,
-      readCount: announcement._count.reads,
-      targetCount,
-      readPercentage:
-        targetCount > 0
-          ? Math.round((announcement._count.reads / targetCount) * 100)
-          : 0,
-    };
-  }
-
-  private async getTargetUserCount(announcement: any): Promise<number> {
-    const where: any = {};
-
-    if (announcement.targetRoles && announcement.targetRoles.length > 0) {
-      where.role = { in: announcement.targetRoles };
-    }
-
-    return this.prisma.user.count({ where });
-  }
-
-  async markAsRead(announcementId: string, userId: string) {
-    const announcement = await this.prisma.announcement.findUnique({
-      where: { id: announcementId },
-    });
-
-    if (!announcement) {
-      throw AppException.notFound(
-        ErrorCode.ANNOUNCEMENT_NOT_FOUND,
-        "Announcement not found"
-      );
-    }
-
-    await this.prisma.announcementRead.upsert({
+    // Find all active parent users
+    const parents = await this.prisma.user.findMany({
       where: {
-        announcementId_userId: {
-          announcementId,
-          userId,
-        },
+        role: 'PARENT',
+        status: 'ACTIVE',
       },
-      create: {
-        announcementId,
-        userId,
-      },
-      update: {
-        readAt: new Date(),
-      },
+      select: { id: true },
     });
 
-    return { success: true };
+    if (!parents.length) return;
+
+    // Create a notification record for each parent and send push
+    await Promise.allSettled(
+      parents.map((parent) =>
+        this.notificationsService.createNotification({
+          userId: parent.id,
+          title: `📢 ${announcement.title}`,
+          message: announcement.content,
+          type: 'ANNOUNCEMENT',
+          metadata: {
+            announcementId: announcement.id,
+            priority: announcement.priority,
+          },
+        }),
+      ),
+    );
   }
 
-  async update(id: string, dto: UpdateAnnouncementDto) {
-    const announcement = await this.prisma.announcement.findUnique({
-      where: { id },
-    });
+  async updateAnnouncement(id: string, body: UpdateAnnouncementDto) {
+    await this.ensureExists(id);
 
-    if (!announcement) {
-      throw AppException.notFound(
-        ErrorCode.ANNOUNCEMENT_NOT_FOUND,
-        "Announcement not found"
-      );
-    }
-
-    const updated = await this.prisma.announcement.update({
+    const row = await this.prisma.announcement.update({
       where: { id },
       data: {
-        title: dto.title,
-        content: dto.content,
-        type: dto.type,
-        priority: dto.priority,
-        targetRoles: dto.targetRoles,
-        isActive: dto.isActive,
-        publishedAt: dto.publishedAt ? new Date(dto.publishedAt) : undefined,
-        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
-        attachments: dto.attachments,
-        metadata: dto.metadata,
-      },
-      include: {
-        creator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
+        ...(body.title !== undefined ? { title: body.title } : {}),
+        ...(body.content !== undefined ? { content: body.content } : {}),
+        ...(body.type !== undefined ? { type: body.type } : {}),
+        ...(body.priority !== undefined ? { priority: body.priority } : {}),
+        ...(body.targetRoles !== undefined ? { targetRoles: body.targetRoles } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        ...(body.publishedAt !== undefined
+          ? { publishedAt: body.publishedAt ? new Date(body.publishedAt) : null }
+          : {}),
+        ...(body.expiresAt !== undefined
+          ? { expiresAt: body.expiresAt ? new Date(body.expiresAt) : null }
+          : {}),
       },
     });
 
-    // Update grade associations if provided
-    if (dto.targetGrades !== undefined) {
-      await this.prisma.announcementGrade.deleteMany({
-        where: { announcementId: id },
-      });
-
-      if (dto.targetGrades.length > 0) {
-        await this.prisma.announcementGrade.createMany({
-          data: dto.targetGrades.map((gradeId) => ({
-            announcementId: id,
-            gradeId,
-          })),
-        });
-      }
-    }
-
-    this.logger.log(`Announcement updated: ${id}`);
-    return updated;
+    return this.toAnnouncementResponse(row);
   }
 
-  async delete(id: string) {
-    const announcement = await this.prisma.announcement.findUnique({
+  async updateAnnouncementStatus(id: string, isActive: boolean) {
+    await this.ensureExists(id);
+
+    const row = await this.prisma.announcement.update({
       where: { id },
+      data: { isActive },
     });
 
-    if (!announcement) {
-      throw AppException.notFound(
-        ErrorCode.ANNOUNCEMENT_NOT_FOUND,
-        "Announcement not found"
-      );
-    }
-
-    // Delete related reads and grades
-    await this.prisma.announcementRead.deleteMany({
-      where: { announcementId: id },
-    });
-    await this.prisma.announcementGrade.deleteMany({
-      where: { announcementId: id },
-    });
-
-    await this.prisma.announcement.delete({
-      where: { id },
-    });
-
-    this.logger.log(`Announcement deleted: ${id}`);
-    return { success: true };
+    return this.toAnnouncementResponse(row);
   }
 
-  async deactivate(id: string) {
-    const announcement = await this.prisma.announcement.findUnique({
+  async extendAnnouncementExpiry(id: string, days = 30) {
+    await this.ensureExists(id);
+
+    const baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() + days);
+
+    const row = await this.prisma.announcement.update({
       where: { id },
+      data: { expiresAt: baseDate },
     });
 
-    if (!announcement) {
-      throw AppException.notFound(
-        ErrorCode.ANNOUNCEMENT_NOT_FOUND,
-        "Announcement not found"
-      );
-    }
-
-    const updated = await this.prisma.announcement.update({
-      where: { id },
-      data: { isActive: false },
-    });
-
-    this.logger.log(`Announcement deactivated: ${id}`);
-    return updated;
+    return this.toAnnouncementResponse(row);
   }
 
-  async extendExpiry(id: string, expiresAt: Date) {
-    const announcement = await this.prisma.announcement.findUnique({
-      where: { id },
-    });
+  async deleteAnnouncement(id: string) {
+    await this.ensureExists(id);
 
-    if (!announcement) {
-      throw AppException.notFound(
-        ErrorCode.ANNOUNCEMENT_NOT_FOUND,
-        "Announcement not found"
-      );
+    await this.prisma.announcement.delete({ where: { id } });
+    return { message: 'Announcement deleted successfully' };
+  }
+
+  async getAnnouncementStats(id: string) {
+    const row = await this.prisma.announcement.findUnique({ where: { id } });
+    if (!row) {
+      throw new NotFoundException(`Announcement with ID ${id} not found`);
     }
 
-    const updated = await this.prisma.announcement.update({
+    return {
+      total: 0,
+      unread: 0,
+      byRole: (row.targetRoles || []).map((role) => ({ role, count: 0 })),
+    };
+  }
+
+  private async ensureExists(id: string) {
+    const exists = await this.prisma.announcement.findUnique({
       where: { id },
-      data: { expiresAt: new Date(expiresAt) },
+      select: { id: true },
     });
 
-    this.logger.log(`Announcement expiry extended: ${id}`);
-    return updated;
+    if (!exists) {
+      throw new NotFoundException(`Announcement with ID ${id} not found`);
+    }
+  }
+
+  private toAnnouncementResponse(item: any) {
+    return {
+      id: item.id,
+      title: item.title,
+      content: item.content,
+      type: item.type,
+      priority: item.priority,
+      targetRoles: item.targetRoles || [],
+      isActive: item.isActive,
+      publishedAt: item.publishedAt,
+      expiresAt: item.expiresAt,
+      createdAt: item.createdAt,
+      _count: {
+        reads: 0,
+      },
+    };
   }
 }

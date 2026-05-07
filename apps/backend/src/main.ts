@@ -66,7 +66,7 @@ async function bootstrap() {
   const allowedOrigins =
     configService.get<string>("NODE_ENV") === "production"
       ? [frontendUrl]
-      : [frontendUrl, "http://localhost:3000", "http://localhost:3001"];
+      : [frontendUrl, "http://localhost:3000", "http://localhost:3001", "http://localhost:5173"];
 
   app.enableCors({
     origin: allowedOrigins,
@@ -99,6 +99,9 @@ async function bootstrap() {
     }
     app.useStaticAssets(uploadsDir, {
       prefix: "/uploads/",
+      setHeaders: (res) => {
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      },
     });
     logger.log(`📁 Static file serving enabled for: ${uploadsDir}`);
   }

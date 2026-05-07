@@ -36,8 +36,9 @@ export function useLoginMutation() {
       // Update Zustand store with user data
       setUser(response.user);
 
-      // Invalidate user-related queries
-      queryClient.invalidateQueries({ queryKey: ["user"] });
+      // Invalidate ALL cached queries so every page re-fetches fresh data
+      // after login (prevents stale data from a previous session being shown)
+      queryClient.invalidateQueries();
 
       logger.log("✅ Login successful:", response.user);
     },
@@ -101,6 +102,10 @@ export function useLogoutMutation() {
     const adminRoles = ["ADMIN", "SUPER_ADMIN"];
     if (adminRoles.includes(user.role)) {
       return "/admin/sign-in";
+    }
+
+    if (user.role === "HOSPITAL_ADMIN") {
+      return "/hospital/sign-in";
     }
 
     // Teachers and students redirect to regular sign-in

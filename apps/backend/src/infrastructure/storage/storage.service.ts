@@ -65,7 +65,9 @@ export class StorageService {
     // Local storage configuration
     this.localUploadDir = path.join(process.cwd(), "uploads");
     this.baseUrl =
-      this.configService.get<string>("API_BASE_URL") || "http://localhost:5000";
+      this.configService.get<string>("API_BASE_URL") ||
+      this.configService.get<string>("API_URL") ||
+      "http://localhost:5000";
 
     // Ensure local upload directory exists
     if (!this.useS3) {

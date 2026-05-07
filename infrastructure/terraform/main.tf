@@ -1,5 +1,5 @@
 # ========================================
-# LearnApp Platform - Terraform Main Configuration
+# Armigo Platform - Terraform Main Configuration
 # ========================================
 # This file orchestrates all AWS resources
 

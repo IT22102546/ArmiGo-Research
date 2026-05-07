@@ -1184,6 +1184,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter-SemiBold",
   },
   bottomSpacer: {
-    height: 40,
+    height: 110,
   },
 });

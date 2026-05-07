@@ -1,11 +1,29 @@
-// In your utils/api.ts or wherever apiFetch is defined
 import useAuthStore from "../stores/authStore";
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+const configuredBaseUrl =
+  process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_KEY || "";
+
+const normalizeBaseUrl = (value?: string) =>
+  (value || "").trim().replace(/\/+$/, "");
+
+const buildCandidateBaseUrls = (): string[] => {
+  const fromEnv = normalizeBaseUrl(configuredBaseUrl);
+  const candidates = [
+    fromEnv,
+    "http://10.0.2.2:5000",
+    "http://localhost:5000",
+  ].filter(Boolean);
+  return [...new Set(candidates)];
+};
 
 export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
   // Get token directly from the auth store
   const authState = useAuthStore.getState();
-    const url = `${API_BASE_URL}${endpoint}`;
+  const baseUrls = buildCandidateBaseUrls();
+
+  if (!baseUrls.length) {
+    throw new Error("No API base URL configured. Set EXPO_PUBLIC_API_URL or EXPO_PUBLIC_API_KEY.");
+  }
 
   // Try different ways to get the token
   let token = null;
@@ -23,11 +41,14 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     endpoint: endpoint
   });
 
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-client-type': 'mobile',
-    ...options.headers,
   };
+
+  if (options.headers && typeof options.headers === "object") {
+    Object.assign(headers, options.headers as Record<string, string>);
+  }
 
   // ADD Authorization header if token exists
   if (token) {
@@ -36,11 +57,24 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     console.warn('⚠️ [API FETCH] No token available for request to:', endpoint);
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let lastError: unknown = null;
 
-  console.log('📡 Response for', endpoint, ':', response.status);
-  return response;
+  for (const baseUrl of baseUrls) {
+    const url = `${baseUrl}${endpoint}`;
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
+      console.log('📡 Response for', endpoint, 'from', baseUrl, ':', response.status);
+      return response;
+    } catch (error) {
+      lastError = error;
+      console.warn('⚠️ [API FETCH] Network failed for', url);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Network request failed for all API base URLs');
 };

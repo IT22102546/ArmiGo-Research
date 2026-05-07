@@ -46,18 +46,11 @@ const Layout = () => {
           headerShown: false,
         }}
       >
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="welcome" options={{ headerShown: false }} />
-        <Stack.Screen name="sign-up" options={{ headerShown: false }} />
-        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-        <Stack.Screen name="selectSignIn" options={{ headerShown: false }} />
+        {/* ArmiGo Parent App — onboarding + sign-in only */}
         <Stack.Screen name="onBoard1" options={{ headerShown: false }} />
         <Stack.Screen name="onBoard2" options={{ headerShown: false }} />
         <Stack.Screen name="onBoard3" options={{ headerShown: false }} />
-        <Stack.Screen name="forgetpassword" options={{ headerShown: false }} />
-        <Stack.Screen name="otprequest" options={{ headerShown: false }} />
-        <Stack.Screen name="resetpassword" options={{ headerShown: false }} />
-        <Stack.Screen name="success" options={{ headerShown: false }} />
+        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
     </SafeAreaProvider>

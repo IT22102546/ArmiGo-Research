@@ -1,0 +1,9 @@
+PassengerEnabled On
+PassengerAppRoot /home/your_username/finger-api
+PassengerStartupFile passenger_wsgi.py
+PassengerPython /home/your_username/virtualenv/finger-api/3.10/bin/python
+
+# Route all requests through the WSGI app
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ passenger_wsgi.py/$1 [QSA,L]
