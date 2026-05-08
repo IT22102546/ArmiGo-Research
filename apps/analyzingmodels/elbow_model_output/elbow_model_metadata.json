@@ -1,0 +1,33 @@
+{
+  "status_classes": [
+    "Bad",
+    "Healthy",
+    "Moderate"
+  ],
+  "display_labels": {
+    "Bad": "Bad",
+    "Healthy": "Healthy",
+    "Moderate": "Moderate"
+  },
+  "sensor_features": [
+    "AccelX",
+    "AccelY",
+    "AccelZ",
+    "GyroX",
+    "GyroY",
+    "GyroZ",
+    "AngleX",
+    "AngleY",
+    "AngleZ",
+    "ElbowAngle",
+    "ForearmAngle"
+  ],
+  "n_features": 11,
+  "sequence_length": 20,
+  "step_size": 5,
+  "hand": "Left",
+  "test_accuracy": 0.8303248882293701,
+  "kfold_mean": 0.649072015285492,
+  "kfold_std": 0.013648904827216183,
+  "created_at": "2026-05-08T03:09:39.054909"
+}

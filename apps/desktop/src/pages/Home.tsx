@@ -4,6 +4,7 @@ import {
   Video, Activity, ClipboardList, Users, BookOpen, Bell,
   ChevronRight, Calendar, Clock, MapPin, User as UserIcon,
   Play, Timer, Hand, Dumbbell, TrendingUp, Heart,
+  Trophy, RotateCcw, Layers, Gamepad2,
 } from 'lucide-react';
 
 import useAuthStore from '../stores/authStore';
@@ -58,6 +59,7 @@ export default function Home() {
   const [childName, setChildName] = useState('');
   const [childId, setChildId] = useState<string | null>(null);
   const [childDetail, setChildDetail] = useState<ChildDetail | null>(null);
+  const [gameSummary, setGameSummary] = useState<any>(null);
   const [onlineSessions, setOnlineSessions] = useState<SessionItem[]>([]);
   const [physicalSessions, setPhysicalSessions] = useState<SessionItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
@@ -114,11 +116,12 @@ export default function Home() {
 
       useNotificationStore.getState().fetchUnreadCount();
 
-      const [onlineRes, physicalRes, assignRes, childrenRes] = await Promise.all([
+      const [onlineRes, physicalRes, assignRes, childrenRes, gameRes] = await Promise.all([
         apiFetch(`/api/v1/users/my-online-sessions?childId=${encodeURIComponent(cid)}`, { method: 'GET' }).catch(() => null),
         apiFetch(`/api/v1/users/my-admission-trackings?childId=${encodeURIComponent(cid)}`, { method: 'GET' }).catch(() => null),
         apiFetch(`/api/v1/users/my-assignments?childId=${encodeURIComponent(cid)}`, { method: 'GET' }).catch(() => null),
         apiFetch('/api/v1/users/my-children', { method: 'GET' }).catch(() => null),
+        apiFetch(`/api/v1/game/patient/by-child/${encodeURIComponent(cid)}/summary`, { method: 'GET' }).catch(() => null),
       ]);
 
       if (onlineRes?.ok) {
@@ -148,6 +151,13 @@ export default function Home() {
           if (match) { setChildDetail(match); childDetailFetched.current = true; }
         } catch {}
       }
+      if (gameRes?.ok) {
+        try {
+          const json = await gameRes.json();
+          const raw = extractData(json);
+          setGameSummary(raw?.data ?? raw ?? null);
+        } catch {}
+      }
     } catch {} finally { setLoading(false); }
   }, [currentUser, isSignedIn, resolveChildId]);
 
@@ -171,7 +181,32 @@ export default function Home() {
   const physio = childDetail?.physioAssignments?.[0]?.physiotherapist || null;
   const assignedDoctorFallback = !physio && childDetail?.assignedDoctor ? childDetail.assignedDoctor as string : null;
   const availConfig = physio?.availabilityStatus ? AVAILABILITY_CONFIG[physio.availabilityStatus] : null;
-  const enabledExercises = EXERCISE_CONFIG.filter((e) => !!(childDetail as any)?.[e.key]);
+  // Normalize game byExerciseType keys (lowercase, no separators) and merge duplicates
+  const normGame: Record<string, { sessions: number; avgScore: number; totalReps: number }> = {};
+  if (gameSummary?.byExerciseType) {
+    for (const [k, v] of Object.entries(gameSummary.byExerciseType as Record<string, any>)) {
+      const norm = k.toLowerCase().replace(/[\s_-]/g, '');
+      if (!normGame[norm]) normGame[norm] = { sessions: v.sessions, avgScore: v.avgScore, totalReps: v.totalReps };
+      else {
+        normGame[norm].sessions += v.sessions;
+        normGame[norm].totalReps += v.totalReps;
+        normGame[norm].avgScore = Math.round((normGame[norm].avgScore + v.avgScore) / 2);
+      }
+    }
+  }
+  const EXERCISE_NORM_KEYS: Record<string, string[]> = {
+    exerciseFingers: ['fingers', 'finger'],
+    exerciseWrist: ['wrist'],
+    exerciseElbow: ['elbow'],
+    exerciseShoulder: ['shoulder'],
+  };
+  const getGameStats = (exKey: string) =>
+    (EXERCISE_NORM_KEYS[exKey] ?? []).map((k) => normGame[k]).find(Boolean) ?? null;
+
+  // Show card if patient is assigned OR game has data for it
+  const visibleExercises = EXERCISE_CONFIG.filter(
+    (e) => !!(childDetail as any)?.[e.key] || !!getGameStats(e.key)
+  );
 
   const quickAccess = [
     { icon: Video, label: 'Online Sessions', color: '#6366F1', bg: '#eef2ff', path: '/online-sessions' },
@@ -233,40 +268,65 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Progress bar */}
-        {enabledExercises.length > 0 && (
+        {/* Progress & Gameplay */}
+        {visibleExercises.length > 0 && (
           <div className="mt-6 bg-white/[0.08] backdrop-blur-sm rounded-xl p-4 border border-white/[0.06]">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <TrendingUp size={14} className="text-white/60" />
-                <span className="text-sm font-semibold text-white/80">Overall Progress</span>
+                <span className="text-sm font-semibold text-white/80">Progress &amp; Gameplay</span>
               </div>
               <span className="text-sm font-bold text-emerald-400">
                 {Math.round(childDetail?.progressTracker?.currentProgress ?? 0)}%
               </span>
-             
             </div>
             <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-300 rounded-full transition-all duration-500"
                    style={{ width: `${Math.min(100, Math.max(0, childDetail?.progressTracker?.currentProgress ?? 0))}%` }} />
             </div>
+            {/* Per-exercise chips */}
             <div className="grid grid-cols-4 gap-3 mt-4">
-              {enabledExercises.map((ex) => {
+              {visibleExercises.map((ex) => {
                 const progKey = ex.key === 'exerciseFingers' ? 'fingerProgress'
                   : ex.key === 'exerciseWrist' ? 'wristProgress'
                   : ex.key === 'exerciseElbow' ? 'elbowProgress' : 'shoulderProgress';
-                const val = childDetail?.progressTracker?.[progKey] ?? 0;
+                const isAssigned = !!(childDetail as any)?.[ex.key];
+                const val = isAssigned ? (childDetail?.progressTracker?.[progKey] ?? 0) : 0;
+                const gStats = getGameStats(ex.key);
                 return (
                   <div key={ex.key} className="text-center">
                     <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center mx-auto mb-1.5">
                       <ex.icon size={15} style={{ color: ex.color }} />
                     </div>
                     <p className="text-[11px] text-white/50">{ex.label}</p>
-                    <p className="text-xs font-bold text-white">{Math.round(val)}%</p>
+                    {isAssigned
+                      ? <p className="text-xs font-bold text-white">{Math.round(val)}%</p>
+                      : <p className="text-[10px] text-white/40 italic">game only</p>
+                    }
+                    {gStats && (
+                      <p className="text-[10px] text-emerald-300 mt-0.5">{gStats.sessions}× · {gStats.totalReps} reps</p>
+                    )}
                   </div>
                 );
               })}
             </div>
+            {/* Game summary row */}
+            {gameSummary && gameSummary.totalGameResults > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-white/[0.08]">
+                <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-3 py-1.5">
+                  <Trophy size={11} className="text-white/60" />
+                  <span className="text-xs text-white/80 font-semibold">Avg {gameSummary.avgScore} pts</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-3 py-1.5">
+                  <Layers size={11} className="text-white/60" />
+                  <span className="text-xs text-white/80 font-semibold">{gameSummary.totalSessions} sessions</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-3 py-1.5">
+                  <RotateCcw size={11} className="text-white/60" />
+                  <span className="text-xs text-white/80 font-semibold">{gameSummary.totalReps} reps</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -477,29 +537,69 @@ export default function Home() {
           </div>
         )}
 
-        {/* Active Exercises */}
-        {enabledExercises.length > 0 && (
+        {/* Active Exercises + Game Data */}
+        {visibleExercises.length > 0 && (
           <div>
-            <h3 className="text-base font-bold text-slate-900 tracking-tight mb-1">Active Exercises</h3>
-            <p className="text-xs text-slate-500 mb-4">Your personalized routine</p>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-base font-bold text-slate-900 tracking-tight">Exercises &amp; Gameplay</h3>
+              {gameSummary && gameSummary.totalGameResults > 0 && (
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                  <Gamepad2 size={10} /> Live data
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Progress &amp; game performance</p>
             <div className="grid grid-cols-2 gap-3">
-              {enabledExercises.map((ex) => {
+              {visibleExercises.map((ex) => {
                 const progKey = ex.key === 'exerciseFingers' ? 'fingerProgress'
                   : ex.key === 'exerciseWrist' ? 'wristProgress'
                   : ex.key === 'exerciseElbow' ? 'elbowProgress' : 'shoulderProgress';
-                const val = childDetail?.progressTracker?.[progKey] ?? 0;
+                const isAssigned = !!(childDetail as any)?.[ex.key];
+                const val = isAssigned ? (childDetail?.progressTracker?.[progKey] ?? 0) : 0;
+                const gStats = getGameStats(ex.key);
                 return (
-                  <div key={ex.key} className="bg-white rounded-2xl p-5 card-shadow border border-slate-100 text-center hover-lift">
-                    <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style={{ backgroundColor: ex.bg }}>
-                      <ex.icon size={26} style={{ color: ex.color }} />
-                    </div>
-                    <p className="text-sm font-semibold text-slate-900 mb-2">{ex.label}</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, val)}%`, backgroundColor: ex.color }} />
+                  <div key={ex.key} className="bg-white rounded-2xl p-5 card-shadow border border-slate-100 hover-lift">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: ex.bg }}>
+                        <ex.icon size={22} style={{ color: ex.color }} />
                       </div>
-                      <span className="text-xs font-bold text-slate-600">{Math.round(val)}%</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{ex.label}</p>
+                        {!isAssigned && (
+                          <span className="text-[10px] text-indigo-500 font-medium">From game data</span>
+                        )}
+                      </div>
+                      {isAssigned && (
+                        <span className="text-sm font-bold" style={{ color: ex.color }}>{Math.round(val)}%</span>
+                      )}
                     </div>
+                    {isAssigned && (
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, val)}%`, backgroundColor: ex.color }} />
+                        </div>
+                      </div>
+                    )}
+                    {gStats ? (
+                      <div className="flex gap-2 pt-2 border-t border-slate-100">
+                        <div className="flex-1 text-center">
+                          <p className="text-xs font-bold text-slate-800">{gStats.sessions}</p>
+                          <p className="text-[10px] text-slate-400">sessions</p>
+                        </div>
+                        <div className="w-px bg-slate-100" />
+                        <div className="flex-1 text-center">
+                          <p className="text-xs font-bold text-slate-800">{gStats.totalReps}</p>
+                          <p className="text-[10px] text-slate-400">reps</p>
+                        </div>
+                        <div className="w-px bg-slate-100" />
+                        <div className="flex-1 text-center">
+                          <p className="text-xs font-bold" style={{ color: ex.color }}>{gStats.avgScore}</p>
+                          <p className="text-[10px] text-slate-400">avg pts</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic pt-2 border-t border-slate-100">No game data yet</p>
+                    )}
                   </div>
                 );
               })}
@@ -509,10 +609,16 @@ export default function Home() {
                 <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
                   <Timer size={18} className="text-indigo-600" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="text-xs text-indigo-500 font-medium">Total Practice Time</p>
                   <p className="text-sm font-bold text-slate-900">{childDetail?.playHours ?? 0}h ({childDetail?.playTimeMinutes ?? 0} min)</p>
                 </div>
+                {gameSummary && gameSummary.totalGameResults > 0 && (
+                  <div className="text-right">
+                    <p className="text-xs text-indigo-500 font-medium">{gameSummary.totalGameResults} rounds played</p>
+                    <p className="text-sm font-bold text-slate-900">Avg {gameSummary.avgScore} pts</p>
+                  </div>
+                )}
               </div>
             )}
           </div>

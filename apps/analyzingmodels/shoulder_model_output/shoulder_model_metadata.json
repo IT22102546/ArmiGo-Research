@@ -10,16 +10,6 @@
     "Moderate": "Moderate"
   },
   "sensor_features": [
-    "Thumb",
-    "Index",
-    "Middle",
-    "Ring",
-    "Pinky",
-    "AngleThumb",
-    "AngleIndex",
-    "AngleMiddle",
-    "AngleRing",
-    "AnglePinky",
     "AccelX",
     "AccelY",
     "AccelZ",
@@ -29,15 +19,23 @@
     "AngleX",
     "AngleY",
     "AngleZ",
+    "FlexionAngle",
     "AbductionAngle",
     "RotationAngle",
+    "ShoulderElevation",
     "MovementMagnitude"
   ],
-  "n_features": 22,
+  "n_features": 14,
   "sequence_length": 20,
   "step_size": 5,
-  "test_accuracy": 0.5439533591270447,
-  "kfold_mean": 0.5359505772590637,
-  "kfold_std": 0.006138181309516937,
-  "created_at": "2026-05-08T02:49:38.832702"
+  "hand": "Left",
+  "test_accuracy": 0.7782101035118103,
+  "kfold_mean": 0.6908408164978027,
+  "kfold_std": 0.06845710831955888,
+  "class_weight": {
+    "0": 3.084084084084084,
+    "1": 0.42525879917184267,
+    "2": 3.084084084084084
+  },
+  "created_at": "2026-05-08T07:39:22.163875"
 }
