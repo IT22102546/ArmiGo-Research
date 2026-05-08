@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\ArmiGo-Research\\\\apps\\\\landing-web\\\\public\\\\domain\" -Recurse -Force)",
+      "Bash(Select-Object FullName, Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\ArmiGo-Research\\\\apps\\\\landing-web\\\\public\\\\domain\" -Recurse -Force | ForEach-Object { [PSCustomObject]@{ Name = $_.Name; FullPath = $_.FullName; Type = if \\($_.PSIsContainer\\) { \"Directory\" } else { \"File\" }; Extension = $_.Extension } } | Format-List)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

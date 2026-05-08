@@ -1,0 +1,13 @@
+1.3 Research Problem 
+
+Children with hemiplegia in Sri Lanka and similar low-resource settings lack access to an affordable, engaging, and clinically effective multi-joint upper limb rehabilitation system capable of delivering high-repetition therapeutic exercise across the shoulder, elbow, wrist, and finger joints, providing real-time intelligent movement classification, and supporting continuous remote therapist oversight — all within a home-deployable platform accessible to families regardless of geographic or economic barriers. 
+
+This problem manifests through four interconnected sub-problems: 
+
+The absence of a complete wearable sensor suite covering all four upper limb joints in a single integrated, child-comfortable, low-cost system capable of real-time kinematic capture in both clinical and home environments. 
+
+The lack of validated LSTM models for real-time, embedded classification of therapeutic movements for each joint — shoulder, elbow, wrist, and fingers — deployed within a VR game engine at interactive frame rates without dependency on cloud inference. 
+
+The non-existence of a multi-game VR rehabilitation ecosystem that maps each joint's therapeutic movement repertoire to distinct engaging in-game actions, providing immediate multi-sensory feedback that motivates sustained high-repetition practice in children. 
+
+The unavailability of a unified multi-level monitoring infrastructure that connects all four joint therapy components to a shared cloud database, therapist dashboard, and parent mobile application, enabling continuous remote clinical oversight across all joints simultaneously. 

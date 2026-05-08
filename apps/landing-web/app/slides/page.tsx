@@ -7,18 +7,21 @@ import { Section } from "@/components/shared/Section";
 import { motion } from "framer-motion";
 import { Monitor } from "lucide-react";
 
-function toSlug(title: string): string {
-  return title.toLowerCase().replace(/\s+/g, "-");
-}
-
 const slides = [
   {
-    title: "Project Proposal Presentation",
-    description: "Presentation slides from the initial project proposal review.",
+    title: "Proposal Presentation",
+    description: "Presentation slides from the initial project proposal review, covering research background, problem statement, and proposed approach.",
+    filePath: "/uploads/slides/proposal presentation.pptx",
   },
   {
-    title: "Final Presentation",
-    description: "Final defence presentation slides covering the complete research outcomes.",
+    title: "Progress Presentation 1 (PP1)",
+    description: "PP1 slides covering literature review, system architecture design, and early hardware and software prototypes.",
+    filePath: "/uploads/slides/pp1.pptx",
+  },
+  {
+    title: "Progress Presentation 2 (PP2)",
+    description: "PP2 slides covering completed joint modules, system integration, VR game development, and testing results.",
+    filePath: "/uploads/slides/pp2.pptx",
   },
 ];
 
@@ -49,16 +52,16 @@ export default function SlidesPage() {
       <main className="flex-1 container-custom pb-20 max-w-3xl mx-auto w-full px-4">
         <Section
           title="Presentation Slides"
-          subtitle={`${slides.length} slide decks available`}
+          subtitle={`${slides.length} slide decks available for download`}
           accent
         >
-          <div className="space-y-4">
+          <div className="space-y-3">
             {slides.map((slide, i) => (
               <FileCard
-                key={slide.title}
+                key={slide.filePath}
                 title={slide.title}
                 description={slide.description}
-                filePath={`/uploads/slides/${toSlug(slide.title)}.pdf`}
+                filePath={slide.filePath}
                 index={i}
               />
             ))}
@@ -70,10 +73,10 @@ export default function SlidesPage() {
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="mt-6 flex items-start gap-3 bg-purple-50 border border-purple-100 rounded-xl px-5 py-4 text-sm text-purple-700"
+          className="mt-4 flex items-start gap-3 bg-purple-50 border border-purple-100 rounded-xl px-5 py-4 text-sm text-purple-700"
         >
           <Monitor className="w-5 h-5 shrink-0 mt-0.5" />
-          <p>Slides are provided as PDF exports. If a file is unavailable, it may not have been published yet.</p>
+          <p>Slides are provided as PowerPoint (.pptx) files. Open with Microsoft PowerPoint, Google Slides, or LibreOffice Impress.</p>
         </motion.div>
       </main>
 
