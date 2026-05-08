@@ -244,6 +244,30 @@ def main():
     print(f"Saved confusion-matrix plot: {results_png}")
 
     print("\n" + "=" * 70)
+    print("SAVE PRIMARY ARTIFACTS (before K-Fold to avoid clear_session() side-effects)")
+    print("=" * 70)
+    h5_path = os.path.join(OUTPUT_DIR, "shoulder_model.h5")
+    scaler_path = os.path.join(OUTPUT_DIR, "shoulder_scaler.pkl")
+    le_path = os.path.join(OUTPUT_DIR, "shoulder_label_encoder.pkl")
+    tflite_path = os.path.join(OUTPUT_DIR, "shoulder_model.tflite")
+
+    model.save(h5_path)
+    joblib.dump(scaler, scaler_path)
+    joblib.dump(le, le_path)
+
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.target_spec.supported_ops = [
+        tf.lite.OpsSet.TFLITE_BUILTINS,
+        tf.lite.OpsSet.SELECT_TF_OPS,
+    ]
+    converter._experimental_lower_tensor_list_ops = False
+    tflite_bytes = converter.convert()
+    with open(tflite_path, "wb") as f:
+        f.write(tflite_bytes)
+    print(f"TFLite: {len(tflite_bytes) / 1024:.1f} KB")
+
+    print("\n" + "=" * 70)
     print(f"{CONFIG['n_splits']}-FOLD CROSS VALIDATION")
     print("=" * 70)
     kfold = StratifiedKFold(n_splits=CONFIG["n_splits"], shuffle=True, random_state=42)
@@ -287,29 +311,9 @@ def main():
     print(f"K-Fold Std  : {np.std(fold_accs) * 100:.2f}%")
 
     print("\n" + "=" * 70)
-    print("SAVE ARTIFACTS")
+    print("WRITE METADATA")
     print("=" * 70)
-    h5_path = os.path.join(OUTPUT_DIR, "shoulder_model.h5")
-    scaler_path = os.path.join(OUTPUT_DIR, "shoulder_scaler.pkl")
-    le_path = os.path.join(OUTPUT_DIR, "shoulder_label_encoder.pkl")
     meta_path = os.path.join(OUTPUT_DIR, "shoulder_model_metadata.json")
-    tflite_path = os.path.join(OUTPUT_DIR, "shoulder_model.tflite")
-
-    model.save(h5_path)
-    joblib.dump(scaler, scaler_path)
-    joblib.dump(le, le_path)
-
-    converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.target_spec.supported_ops = [
-        tf.lite.OpsSet.TFLITE_BUILTINS,
-        tf.lite.OpsSet.SELECT_TF_OPS,
-    ]
-    converter._experimental_lower_tensor_list_ops = False
-    tflite_bytes = converter.convert()
-    with open(tflite_path, "wb") as f:
-        f.write(tflite_bytes)
-    print(f"TFLite: {len(tflite_bytes) / 1024:.1f} KB")
 
     metadata = {
         "status_classes": list(le.classes_),
